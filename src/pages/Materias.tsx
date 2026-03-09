@@ -5,20 +5,24 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, BookOpen, Loader2, Pencil, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useInstitucion } from "@/hooks/useInstitucion";
 import { toast } from "@/hooks/use-toast";
 
 export default function Materias() {
   const { user } = useAuth();
+  const { instituciones, institucionActiva } = useInstitucion();
   const [loading, setLoading] = useState(true);
   const [materias, setMaterias] = useState<any[]>([]);
   const [clases, setClases] = useState<any[]>([]);
   const [grupos, setGrupos] = useState<Record<string, string>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [nombre, setNombre] = useState("");
+  const [institucionId, setInstitucionId] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [editingMateria, setEditingMateria] = useState<any | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
@@ -44,12 +48,14 @@ export default function Materias() {
   const openCreate = () => {
     setEditingMateria(null);
     setNombre("");
+    setInstitucionId(institucionActiva?.id || "");
     setDialogOpen(true);
   };
 
   const openEdit = (materia: any) => {
     setEditingMateria(materia);
     setNombre(materia.nombre);
+    setInstitucionId(materia.institucion_id || "");
     setDialogOpen(true);
   };
 
@@ -58,7 +64,7 @@ export default function Materias() {
     setSaving(true);
 
     if (editingMateria) {
-      const { error } = await supabase.from("materias").update({ nombre: nombre.trim() }).eq("id", editingMateria.id);
+      const { error } = await supabase.from("materias").update({ nombre: nombre.trim(), institucion_id: institucionId || null }).eq("id", editingMateria.id);
       setSaving(false);
       if (error) {
         toast({ title: "Error", description: "No se pudo actualizar la materia.", variant: "destructive" });
@@ -66,7 +72,7 @@ export default function Materias() {
       }
       toast({ title: "Materia actualizada", description: `"${nombre.trim()}" fue actualizada correctamente.` });
     } else {
-      const { error } = await supabase.from("materias").insert({ nombre: nombre.trim(), user_id: user.id });
+      const { error } = await supabase.from("materias").insert({ nombre: nombre.trim(), user_id: user.id, institucion_id: institucionId || null });
       setSaving(false);
       if (error) {
         toast({ title: "Error", description: "No se pudo crear la materia.", variant: "destructive" });
@@ -121,6 +127,11 @@ export default function Materias() {
                     <BookOpen className="h-5 w-5 text-primary" />
                     <h3 className="font-display font-bold text-lg">{materia.nombre}</h3>
                     <Badge variant="secondary">{clasesMateria.length} clases</Badge>
+                    {materia.institucion_id && (
+                      <Badge variant="outline" className="text-xs">
+                        {instituciones.find(i => i.id === materia.institucion_id)?.nombre || "Institución"}
+                      </Badge>
+                    )}
                     <div className="ml-auto flex gap-1">
                       <Button variant="ghost" size="icon" onClick={() => openEdit(materia)}>
                         <Pencil className="h-4 w-4" />
@@ -157,6 +168,19 @@ export default function Materias() {
             <div className="space-y-2">
               <Label htmlFor="materia-nombre">Nombre de la materia</Label>
               <Input id="materia-nombre" placeholder="Ej: Matemáticas" value={nombre} onChange={e => setNombre(e.target.value)} onKeyDown={e => e.key === "Enter" && handleSave()} />
+            </div>
+            <div className="space-y-2">
+              <Label>Institución</Label>
+              <Select value={institucionId} onValueChange={setInstitucionId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar institución" />
+                </SelectTrigger>
+                <SelectContent>
+                  {instituciones.map(inst => (
+                    <SelectItem key={inst.id} value={inst.id}>{inst.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>

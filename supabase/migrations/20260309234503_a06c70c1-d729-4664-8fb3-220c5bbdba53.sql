@@ -1,0 +1,1 @@
+ALTER TABLE public.materias ADD COLUMN institucion_id uuid REFERENCES public.instituciones(id);
