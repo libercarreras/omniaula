@@ -207,6 +207,7 @@ export default function Instituciones() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Editar institución</DialogTitle>
+            <DialogDescription>Modificá los datos de la institución.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
