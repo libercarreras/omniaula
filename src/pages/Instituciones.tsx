@@ -109,7 +109,12 @@ export default function Instituciones() {
     navigate("/");
   };
 
-  if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  const initialLoadDone = useRef(false);
+  useEffect(() => {
+    if (!loading) initialLoadDone.current = true;
+  }, [loading]);
+
+  if (loading && !initialLoadDone.current) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
