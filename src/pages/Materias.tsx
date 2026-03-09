@@ -48,12 +48,14 @@ export default function Materias() {
   const openCreate = () => {
     setEditingMateria(null);
     setNombre("");
+    setInstitucionId(institucionActiva?.id || "");
     setDialogOpen(true);
   };
 
   const openEdit = (materia: any) => {
     setEditingMateria(materia);
     setNombre(materia.nombre);
+    setInstitucionId(materia.institucion_id || "");
     setDialogOpen(true);
   };
 
