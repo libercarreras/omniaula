@@ -437,28 +437,64 @@ export type Database = {
           },
         ]
       }
+      plan_limits: {
+        Row: {
+          analisis_completo: boolean
+          comentarios_ia: boolean
+          exportacion: boolean
+          informes_avanzados: boolean
+          max_estudiantes_por_grupo: number
+          max_grupos: number
+          plan: string
+        }
+        Insert: {
+          analisis_completo?: boolean
+          comentarios_ia?: boolean
+          exportacion?: boolean
+          informes_avanzados?: boolean
+          max_estudiantes_por_grupo: number
+          max_grupos: number
+          plan: string
+        }
+        Update: {
+          analisis_completo?: boolean
+          comentarios_ia?: boolean
+          exportacion?: boolean
+          informes_avanzados?: boolean
+          max_estudiantes_por_grupo?: number
+          max_grupos?: number
+          plan?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
+          avatar_url: string | null
           created_at: string
           email: string | null
           id: string
           nombre: string
+          plan: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          avatar_url?: string | null
           created_at?: string
           email?: string | null
           id?: string
           nombre?: string
+          plan?: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          avatar_url?: string | null
           created_at?: string
           email?: string | null
           id?: string
           nombre?: string
+          plan?: string
           updated_at?: string
           user_id?: string
         }
