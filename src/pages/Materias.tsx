@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, BookOpen, Loader2 } from "lucide-react";
+import { Plus, BookOpen, Loader2, Pencil, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +20,8 @@ export default function Materias() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [nombre, setNombre] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editingMateria, setEditingMateria] = useState<any | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
 
   const fetchData = async () => {
     if (!user) return;
@@ -38,19 +41,56 @@ export default function Materias() {
 
   useEffect(() => { fetchData(); }, [user]);
 
-  const handleCreate = async () => {
+  const openCreate = () => {
+    setEditingMateria(null);
+    setNombre("");
+    setDialogOpen(true);
+  };
+
+  const openEdit = (materia: any) => {
+    setEditingMateria(materia);
+    setNombre(materia.nombre);
+    setDialogOpen(true);
+  };
+
+  const handleSave = async () => {
     if (!user || !nombre.trim()) return;
     setSaving(true);
-    const { error } = await supabase.from("materias").insert({ nombre: nombre.trim(), user_id: user.id });
-    setSaving(false);
-    if (error) {
-      toast({ title: "Error", description: "No se pudo crear la materia.", variant: "destructive" });
-      return;
+
+    if (editingMateria) {
+      const { error } = await supabase.from("materias").update({ nombre: nombre.trim() }).eq("id", editingMateria.id);
+      setSaving(false);
+      if (error) {
+        toast({ title: "Error", description: "No se pudo actualizar la materia.", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Materia actualizada", description: `"${nombre.trim()}" fue actualizada correctamente.` });
+    } else {
+      const { error } = await supabase.from("materias").insert({ nombre: nombre.trim(), user_id: user.id });
+      setSaving(false);
+      if (error) {
+        toast({ title: "Error", description: "No se pudo crear la materia.", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Materia creada", description: `"${nombre.trim()}" fue agregada correctamente.` });
     }
-    toast({ title: "Materia creada", description: `"${nombre.trim()}" fue agregada correctamente.` });
+
     setNombre("");
+    setEditingMateria(null);
     setDialogOpen(false);
     fetchData();
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    const { error } = await supabase.from("materias").delete().eq("id", deleteTarget.id);
+    if (error) {
+      toast({ title: "Error", description: "No se pudo eliminar la materia. Verificá que no tenga clases asociadas.", variant: "destructive" });
+    } else {
+      toast({ title: "Materia eliminada", description: `"${deleteTarget.nombre}" fue eliminada.` });
+      fetchData();
+    }
+    setDeleteTarget(null);
   };
 
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -59,7 +99,7 @@ export default function Materias() {
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-display font-bold">Materias</h1>
-        <Button size="lg" className="gap-2" onClick={() => setDialogOpen(true)}><Plus className="h-4 w-4" /> Nueva materia</Button>
+        <Button size="lg" className="gap-2" onClick={openCreate}><Plus className="h-4 w-4" /> Nueva materia</Button>
       </div>
 
       {materias.length === 0 ? (
@@ -67,7 +107,7 @@ export default function Materias() {
           <CardContent className="p-8 text-center space-y-3">
             <BookOpen className="h-12 w-12 text-muted-foreground mx-auto" />
             <p className="text-muted-foreground">No tienes materias creadas aún.</p>
-            <Button variant="outline" onClick={() => setDialogOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> Crear materia</Button>
+            <Button variant="outline" onClick={openCreate} className="gap-2"><Plus className="h-4 w-4" /> Crear materia</Button>
           </CardContent>
         </Card>
       ) : (
@@ -81,6 +121,14 @@ export default function Materias() {
                     <BookOpen className="h-5 w-5 text-primary" />
                     <h3 className="font-display font-bold text-lg">{materia.nombre}</h3>
                     <Badge variant="secondary">{clasesMateria.length} clases</Badge>
+                    <div className="ml-auto flex gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(materia)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(materia)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     {clasesMateria.map(clase => (
@@ -103,23 +151,40 @@ export default function Materias() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Nueva materia</DialogTitle>
+            <DialogTitle>{editingMateria ? "Editar materia" : "Nueva materia"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label htmlFor="materia-nombre">Nombre de la materia</Label>
-              <Input id="materia-nombre" placeholder="Ej: Matemáticas" value={nombre} onChange={e => setNombre(e.target.value)} onKeyDown={e => e.key === "Enter" && handleCreate()} />
+              <Input id="materia-nombre" placeholder="Ej: Matemáticas" value={nombre} onChange={e => setNombre(e.target.value)} onKeyDown={e => e.key === "Enter" && handleSave()} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCreate} disabled={!nombre.trim() || saving}>
+            <Button onClick={handleSave} disabled={!nombre.trim() || saving}>
               {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              Crear materia
+              {editingMateria ? "Guardar cambios" : "Crear materia"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar materia?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará "{deleteTarget?.nombre}". Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
