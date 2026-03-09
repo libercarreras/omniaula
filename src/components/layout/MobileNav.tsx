@@ -1,7 +1,7 @@
 import { NavLink as RouterNavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Users, UserCheck, ClipboardCheck, MoreHorizontal,
-  Eye, BookText, Calendar, FileBarChart, BarChart3, GraduationCap, BookOpen, Shield,
+  Eye, BookText, Calendar, FileBarChart, BarChart3, GraduationCap, BookOpen, Shield, Building2,
 } from "lucide-react";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -10,15 +10,16 @@ import { useAuth } from "@/hooks/useAuth";
 
 const mainTabs = [
   { title: "Panel", url: "/", icon: LayoutDashboard },
+  { title: "Instituciones", url: "/instituciones", icon: Building2 },
   { title: "Grupos", url: "/grupos", icon: Users },
   { title: "Asistencia", url: "/asistencia", icon: UserCheck },
-  { title: "Evaluaciones", url: "/evaluaciones", icon: ClipboardCheck },
   { title: "Más", url: "#more", icon: MoreHorizontal },
 ];
 
 const moreItems = [
   { title: "Materias", url: "/materias", icon: BookOpen },
   { title: "Estudiantes", url: "/estudiantes", icon: GraduationCap },
+  { title: "Evaluaciones", url: "/evaluaciones", icon: ClipboardCheck },
   { title: "Seguimiento", url: "/seguimiento", icon: Eye },
   { title: "Diario de Clase", url: "/diario", icon: BookText },
   { title: "Planificación", url: "/planificacion", icon: Calendar },

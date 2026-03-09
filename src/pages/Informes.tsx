@@ -1,19 +1,18 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  FileText, Download, Users, User, Sparkles, Loader2,
-  Printer, Copy,
-} from "lucide-react";
+import { FileText, Sparkles, Loader2, Printer, Copy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useInstitucion } from "@/hooks/useInstitucion";
 import { toast } from "sonner";
 
 export default function Informes() {
   const { user } = useAuth();
+  const { institucionActiva } = useInstitucion();
   const [loading, setLoading] = useState(true);
   const [clases, setClases] = useState<any[]>([]);
   const [materias, setMaterias] = useState<Record<string, string>>({});
@@ -23,28 +22,32 @@ export default function Informes() {
   const [estudianteSeleccionado, setEstudianteSeleccionado] = useState("");
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !institucionActiva) return;
     const fetch = async () => {
       setLoading(true);
-      const [clsRes, matRes, grpRes, estRes] = await Promise.all([
-        supabase.from("clases").select("*"),
+      const { data: grpData } = await supabase.from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
+      const grupoIds = (grpData || []).map(g => g.id);
+      const gm: Record<string, string> = {};
+      (grpData || []).forEach(g => { gm[g.id] = g.nombre; });
+      setGrupos(gm);
+
+      if (grupoIds.length === 0) { setClases([]); setEstudiantes([]); setLoading(false); return; }
+
+      const [clsRes, matRes, estRes] = await Promise.all([
+        supabase.from("clases").select("*").in("grupo_id", grupoIds),
         supabase.from("materias").select("id, nombre"),
-        supabase.from("grupos").select("id, nombre"),
-        supabase.from("estudiantes").select("id, nombre_completo, grupo_id"),
+        supabase.from("estudiantes").select("id, nombre_completo, grupo_id").in("grupo_id", grupoIds),
       ]);
       setClases(clsRes.data || []);
       const mm: Record<string, string> = {};
       (matRes.data || []).forEach(m => { mm[m.id] = m.nombre; });
       setMaterias(mm);
-      const gm: Record<string, string> = {};
-      (grpRes.data || []).forEach(g => { gm[g.id] = g.nombre; });
-      setGrupos(gm);
       setEstudiantes(estRes.data || []);
       if (clsRes.data?.length) setClaseSeleccionada(clsRes.data[0].id);
       setLoading(false);
     };
     fetch();
-  }, [user]);
+  }, [user, institucionActiva]);
 
   useEffect(() => {
     if (!claseSeleccionada) return;

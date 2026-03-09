@@ -198,6 +198,7 @@ export type Database = {
       }
       estudiantes: {
         Row: {
+          apellido: string | null
           created_at: string
           foto_url: string | null
           grupo_id: string
@@ -209,6 +210,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          apellido?: string | null
           created_at?: string
           foto_url?: string | null
           grupo_id: string
@@ -220,6 +222,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          apellido?: string | null
           created_at?: string
           foto_url?: string | null
           grupo_id?: string
@@ -324,6 +327,7 @@ export type Database = {
           anio: string | null
           created_at: string
           id: string
+          institucion_id: string
           nombre: string
           turno: string | null
           updated_at: string
@@ -333,6 +337,7 @@ export type Database = {
           anio?: string | null
           created_at?: string
           id?: string
+          institucion_id: string
           nombre: string
           turno?: string | null
           updated_at?: string
@@ -342,8 +347,47 @@ export type Database = {
           anio?: string | null
           created_at?: string
           id?: string
+          institucion_id?: string
           nombre?: string
           turno?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grupos_institucion_id_fkey"
+            columns: ["institucion_id"]
+            isOneToOne: false
+            referencedRelation: "instituciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      instituciones: {
+        Row: {
+          ciudad: string | null
+          created_at: string
+          direccion: string | null
+          id: string
+          nombre: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ciudad?: string | null
+          created_at?: string
+          direccion?: string | null
+          id?: string
+          nombre: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ciudad?: string | null
+          created_at?: string
+          direccion?: string | null
+          id?: string
+          nombre?: string
           updated_at?: string
           user_id?: string
         }
@@ -502,6 +546,38 @@ export type Database = {
         }
         Relationships: []
       }
+      profesor_institucion: {
+        Row: {
+          created_at: string
+          id: string
+          institucion_id: string
+          rol: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          institucion_id: string
+          rol?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          institucion_id?: string
+          rol?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profesor_institucion_institucion_id_fkey"
+            columns: ["institucion_id"]
+            isOneToOne: false
+            referencedRelation: "instituciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -608,6 +684,10 @@ export type Database = {
       }
       is_grupo_colaborador: {
         Args: { _grupo_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_institucion_member: {
+        Args: { _institucion_id: string; _user_id: string }
         Returns: boolean
       }
     }

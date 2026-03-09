@@ -11,10 +11,12 @@ import {
 import { Plus, Sparkles, Loader2, BookOpen } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useInstitucion } from "@/hooks/useInstitucion";
 import { toast } from "sonner";
 
 export default function DiarioClase() {
   const { user } = useAuth();
+  const { institucionActiva } = useInstitucion();
   const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState<any[]>([]);
   const [clases, setClases] = useState<any[]>([]);
@@ -30,28 +32,34 @@ export default function DiarioClase() {
   const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !institucionActiva) return;
     const fetch = async () => {
       setLoading(true);
-      const [diarioRes, clsRes, matRes, grpRes] = await Promise.all([
-        supabase.from("diario_clase").select("*").order("fecha", { ascending: false }),
-        supabase.from("clases").select("*"),
+      const { data: grpData } = await supabase.from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
+      const grupoIds = (grpData || []).map(g => g.id);
+      const gm: Record<string, string> = {};
+      (grpData || []).forEach(g => { gm[g.id] = g.nombre; });
+      setGrupos(gm);
+
+      if (grupoIds.length === 0) { setClases([]); setEntries([]); setLoading(false); return; }
+
+      const [clsRes, matRes, diarioRes] = await Promise.all([
+        supabase.from("clases").select("*").in("grupo_id", grupoIds),
         supabase.from("materias").select("id, nombre"),
-        supabase.from("grupos").select("id, nombre"),
+        supabase.from("diario_clase").select("*").order("fecha", { ascending: false }),
       ]);
-      setEntries(diarioRes.data || []);
-      setClases(clsRes.data || []);
+      const clsData = clsRes.data || [];
+      setClases(clsData);
       const mm: Record<string, string> = {};
       (matRes.data || []).forEach(m => { mm[m.id] = m.nombre; });
       setMaterias(mm);
-      const gm: Record<string, string> = {};
-      (grpRes.data || []).forEach(g => { gm[g.id] = g.nombre; });
-      setGrupos(gm);
-      if (clsRes.data && clsRes.data.length > 0) setClaseId(clsRes.data[0].id);
+      const claseIds = new Set(clsData.map(c => c.id));
+      setEntries((diarioRes.data || []).filter(e => claseIds.has(e.clase_id)));
+      if (clsData.length > 0) setClaseId(clsData[0].id);
       setLoading(false);
     };
     fetch();
-  }, [user]);
+  }, [user, institucionActiva]);
 
   const getClaseLabel = (id: string) => {
     const c = clases.find(cl => cl.id === id);
@@ -78,19 +86,16 @@ export default function DiarioClase() {
   const guardarEntrada = async () => {
     if (!user || !claseId) return;
     const { error } = await supabase.from("diario_clase").insert({
-      clase_id: claseId,
-      tema_trabajado: tema,
-      actividad_realizada: actividad,
-      observaciones: resumen || null,
-      user_id: user.id,
+      clase_id: claseId, tema_trabajado: tema, actividad_realizada: actividad,
+      observaciones: resumen || null, user_id: user.id,
     });
     if (error) { toast.error("Error al guardar"); return; }
     toast.success("Entrada guardada en el diario");
     setDialogOpen(false);
     setTema(""); setActividad(""); setResumen("");
-    // Refresh
     const { data } = await supabase.from("diario_clase").select("*").order("fecha", { ascending: false });
-    setEntries(data || []);
+    const claseIds = new Set(clases.map(c => c.id));
+    setEntries((data || []).filter(e => claseIds.has(e.clase_id)));
   };
 
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;

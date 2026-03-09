@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, UserX, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useInstitucion } from "@/hooks/useInstitucion";
 import { toast } from "@/hooks/use-toast";
 
 interface EstudianteDB {
@@ -24,6 +25,7 @@ interface GrupoDB {
 
 export default function Estudiantes() {
   const { user } = useAuth();
+  const { institucionActiva } = useInstitucion();
   const [loading, setLoading] = useState(true);
   const [estudiantes, setEstudiantes] = useState<EstudianteDB[]>([]);
   const [grupos, setGrupos] = useState<GrupoDB[]>([]);
@@ -35,18 +37,19 @@ export default function Estudiantes() {
   const [saving, setSaving] = useState(false);
 
   const fetchData = async () => {
-    if (!user) return;
+    if (!user || !institucionActiva) return;
     setLoading(true);
-    const [estRes, grpRes] = await Promise.all([
-      supabase.from("estudiantes").select("id, nombre_completo, grupo_id, numero_lista"),
-      supabase.from("grupos").select("id, nombre"),
-    ]);
-    setEstudiantes(estRes.data || []);
-    setGrupos(grpRes.data || []);
+    const { data: grpData } = await supabase.from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
+    const grps = grpData || [];
+    setGrupos(grps);
+    const grupoIds = grps.map(g => g.id);
+    if (grupoIds.length === 0) { setEstudiantes([]); setLoading(false); return; }
+    const { data: estData } = await supabase.from("estudiantes").select("id, nombre_completo, grupo_id, numero_lista").in("grupo_id", grupoIds);
+    setEstudiantes(estData || []);
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, [user]);
+  useEffect(() => { fetchData(); }, [user, institucionActiva]);
 
   const handleCreate = async () => {
     if (!user || !nombre.trim() || !grupoId) return;
@@ -63,9 +66,7 @@ export default function Estudiantes() {
       return;
     }
     toast({ title: "Estudiante agregado", description: `"${nombre.trim()}" fue registrado correctamente.` });
-    setNombre("");
-    setGrupoId("");
-    setNumeroLista("");
+    setNombre(""); setGrupoId(""); setNumeroLista("");
     setDialogOpen(false);
     fetchData();
   };
@@ -80,7 +81,10 @@ export default function Estudiantes() {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-display font-bold">Estudiantes</h1>
+        <div>
+          <h1 className="text-2xl font-display font-bold">Estudiantes</h1>
+          {institucionActiva && <p className="text-sm text-muted-foreground">{institucionActiva.nombre}</p>}
+        </div>
         <div className="flex items-center gap-3">
           <Select value={filtroGrupo} onValueChange={setFiltroGrupo}>
             <SelectTrigger className="w-40"><SelectValue placeholder="Filtrar grupo" /></SelectTrigger>

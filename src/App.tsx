@@ -5,6 +5,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
+import { InstitucionProvider } from "@/hooks/useInstitucion";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AppLayout } from "@/components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
@@ -21,6 +22,7 @@ import Materias from "./pages/Materias";
 import ModoClase from "./pages/ModoClase";
 import Perfil from "./pages/Perfil";
 import Administracion from "./pages/Administracion";
+import Instituciones from "./pages/Instituciones";
 import Login from "./pages/auth/Login";
 import RecoverPassword from "./pages/auth/RecoverPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
@@ -36,6 +38,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
         <AuthProvider>
+        <InstitucionProvider>
           <Routes>
             {/* Public auth routes */}
             <Route path="/login" element={<Login />} />
@@ -45,6 +48,7 @@ const App = () => (
             {/* Protected routes */}
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/instituciones" element={<Instituciones />} />
               <Route path="/materias" element={<Materias />} />
               <Route path="/grupos" element={<Grupos />} />
               <Route path="/estudiantes" element={<Estudiantes />} />
@@ -62,6 +66,7 @@ const App = () => (
 
             <Route path="*" element={<NotFound />} />
           </Routes>
+        </InstitucionProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
