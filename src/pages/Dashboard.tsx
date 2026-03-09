@@ -58,13 +58,17 @@ export default function Dashboard() {
           {clasesDelDia.map((cd, i) => {
             const clase = getClase(cd.claseId);
             return (
-              <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+              <Link
+                key={i}
+                to={`/clase/${cd.claseId}`}
+                className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+              >
                 <div>
                   <p className="font-semibold">{getClaseLabel(cd.claseId)}</p>
                   <p className="text-sm text-muted-foreground">{clase?.aula}</p>
                 </div>
                 <span className="text-sm font-medium text-primary">{cd.horario}</span>
-              </div>
+              </Link>
             );
           })}
         </CardContent>
