@@ -28,6 +28,8 @@ export default function Dashboard() {
   const [estudiantesEnRiesgo] = useState(0);
   const [materias, setMaterias] = useState<Record<string, string>>({});
   const [grupos, setGrupos] = useState<Record<string, string>>({});
+  const [totalMaterias, setTotalMaterias] = useState(0);
+  const [totalGrupos, setTotalGrupos] = useState(0);
 
   useEffect(() => {
     if (!user || !institucionActiva) { setLoading(false); return; }
@@ -40,6 +42,7 @@ export default function Dashboard() {
       const grpMap: Record<string, string> = {};
       (gruposData || []).forEach(g => { grpMap[g.id] = g.nombre; });
       setGrupos(grpMap);
+      setTotalGrupos(grupoIds.length);
 
       if (grupoIds.length === 0) {
         setClases([]); setTotalEstudiantes(0); setTotalEvaluaciones(0);
@@ -58,6 +61,7 @@ export default function Dashboard() {
       const matMap: Record<string, string> = {};
       (materiasRes.data || []).forEach(m => { matMap[m.id] = m.nombre; });
       setMaterias(matMap);
+      setTotalMaterias((materiasRes.data || []).length);
 
       const clasesInst = clasesRes.data || [];
       setClases(clasesInst);
@@ -82,7 +86,9 @@ export default function Dashboard() {
     return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
-  const hasData = clases.length > 0;
+  const isNewUser = totalMaterias === 0 && totalGrupos === 0;
+  const hasMateriasOrGrupos = totalMaterias > 0 || totalGrupos > 0;
+  const hasClases = clases.length > 0;
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -96,7 +102,7 @@ export default function Dashboard() {
 
       <InvitacionesPendientes />
 
-      {!hasData ? (
+      {isNewUser ? (
         <Card className="border-dashed">
           <CardContent className="p-8 text-center space-y-4">
             <BookOpen className="h-12 w-12 text-muted-foreground mx-auto" />
@@ -116,6 +122,53 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
+      ) : !hasClases ? (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Card className="bg-primary/5 border-primary/20">
+              <CardContent className="p-4 flex flex-col items-center text-center">
+                <BookOpen className="h-6 w-6 text-primary mb-1" />
+                <span className="text-2xl font-bold text-primary">{totalMaterias}</span>
+                <span className="text-xs text-muted-foreground">Materias</span>
+              </CardContent>
+            </Card>
+            <Card className="bg-accent/5 border-accent/20">
+              <CardContent className="p-4 flex flex-col items-center text-center">
+                <Users className="h-6 w-6 text-accent mb-1" />
+                <span className="text-2xl font-bold text-accent">{totalGrupos}</span>
+                <span className="text-xs text-muted-foreground">Grupos</span>
+              </CardContent>
+            </Card>
+            <Card className="bg-muted/5 border-muted/20">
+              <CardContent className="p-4 flex flex-col items-center text-center">
+                <ClipboardCheck className="h-6 w-6 text-muted-foreground mb-1" />
+                <span className="text-2xl font-bold text-muted-foreground">{totalEstudiantes}</span>
+                <span className="text-xs text-muted-foreground">Estudiantes</span>
+              </CardContent>
+            </Card>
+            <Card className="bg-muted/5 border-muted/20">
+              <CardContent className="p-4 flex flex-col items-center text-center">
+                <Users className="h-6 w-6 text-muted-foreground mb-1" />
+                <span className="text-2xl font-bold text-muted-foreground">0</span>
+                <span className="text-xs text-muted-foreground">Clases</span>
+              </CardContent>
+            </Card>
+          </div>
+          <Card className="border-dashed">
+            <CardContent className="p-8 text-center space-y-4">
+              <ClipboardCheck className="h-12 w-12 text-primary mx-auto" />
+              <div>
+                <h2 className="text-lg font-semibold">Ya tenés materias y grupos</h2>
+                <p className="text-muted-foreground text-sm mt-1">
+                  Ahora creá una clase para vincular una materia con un grupo y empezar a trabajar.
+                </p>
+              </div>
+              <Link to="/grupos">
+                <Button className="gap-2"><Plus className="h-4 w-4" /> Crear clase</Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
