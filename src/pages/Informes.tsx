@@ -6,9 +6,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   FileText, Download, Users, User, Sparkles, Loader2,
-  Printer, ClipboardCheck, UserCheck, MessageSquare, BookOpen,
+  Printer, ClipboardCheck, UserCheck, MessageSquare, BookOpen, Copy,
 } from "lucide-react";
-import { clases, estudiantes, getClaseLabel, getClase, grupos } from "@/data/mockData";
+import { clases, estudiantes, getClaseLabel, getClase } from "@/data/mockData";
 import { mockEstudianteReporte, mockGrupoReporte } from "@/data/mockAnalytics";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
@@ -42,13 +42,13 @@ export default function Informes() {
       </div>
 
       <Tabs defaultValue="individual" className="w-full">
-        <TabsList className="w-full grid grid-cols-3">
+        <TabsList className="w-full grid grid-cols-4">
           <TabsTrigger value="individual">Individual</TabsTrigger>
           <TabsTrigger value="grupo">Grupo</TabsTrigger>
           <TabsTrigger value="boletin">Boletín IA</TabsTrigger>
+          <TabsTrigger value="informe-ia">Informe IA</TabsTrigger>
         </TabsList>
 
-        {/* ---- TAB: Individual ---- */}
         <TabsContent value="individual" className="space-y-4 mt-4">
           <Select value={estudianteSeleccionado} onValueChange={setEstudianteSeleccionado}>
             <SelectTrigger className="w-full md:w-64">
@@ -60,16 +60,13 @@ export default function Informes() {
               ))}
             </SelectContent>
           </Select>
-
           <StudentReportCard claseLabel={getClaseLabel(claseSeleccionada)} />
         </TabsContent>
 
-        {/* ---- TAB: Grupo ---- */}
         <TabsContent value="grupo" className="space-y-4 mt-4">
           <GroupReportCard claseLabel={getClaseLabel(claseSeleccionada)} />
         </TabsContent>
 
-        {/* ---- TAB: Boletín IA ---- */}
         <TabsContent value="boletin" className="space-y-4 mt-4">
           <Select value={estudianteSeleccionado} onValueChange={setEstudianteSeleccionado}>
             <SelectTrigger className="w-full md:w-64">
@@ -81,8 +78,25 @@ export default function Informes() {
               ))}
             </SelectContent>
           </Select>
-
           <BulletinCommentGenerator
+            studentId={estudianteSeleccionado}
+            claseLabel={getClaseLabel(claseSeleccionada)}
+          />
+        </TabsContent>
+
+        {/* New: Informe IA tab */}
+        <TabsContent value="informe-ia" className="space-y-4 mt-4">
+          <Select value={estudianteSeleccionado} onValueChange={setEstudianteSeleccionado}>
+            <SelectTrigger className="w-full md:w-64">
+              <SelectValue placeholder="Seleccionar estudiante" />
+            </SelectTrigger>
+            <SelectContent>
+              {estudiantesClase.map((e) => (
+                <SelectItem key={e.id} value={e.id}>{e.apellido}, {e.nombre}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <AIFullReport
             studentId={estudianteSeleccionado}
             claseLabel={getClaseLabel(claseSeleccionada)}
           />
@@ -95,35 +109,22 @@ export default function Informes() {
 /* ---- Student Report Card ---- */
 function StudentReportCard({ claseLabel }: { claseLabel: string }) {
   const data = mockEstudianteReporte;
-  const reportRef = useRef<HTMLDivElement>(null);
-
-  const handlePrint = () => {
-    window.print();
-  };
-
+  const handlePrint = () => window.print();
   const handleExportCSV = () => {
     const rows = [
-      ["Estudiante", data.nombre],
-      ["Clase", claseLabel],
-      ["Asistencia", `${data.asistencia}%`],
-      ["Promedio", data.promedio.toString()],
-      ["Participación", data.participacion],
-      ["Tareas", `${data.tareasEntregadas}/${data.tareasTotal}`],
-      [""],
-      ["Evaluación", "Nota", "Fecha"],
+      ["Estudiante", data.nombre], ["Clase", claseLabel],
+      ["Asistencia", `${data.asistencia}%`], ["Promedio", data.promedio.toString()],
+      ["Participación", data.participacion], ["Tareas", `${data.tareasEntregadas}/${data.tareasTotal}`],
+      [""], ["Evaluación", "Nota", "Fecha"],
       ...data.evaluaciones.map((e) => [e.nombre, e.nota.toString(), e.fecha]),
-      [""],
-      ["Observaciones"],
-      ...data.observaciones.map((o) => [o]),
+      [""], ["Observaciones"], ...data.observaciones.map((o) => [o]),
     ];
     const csv = rows.map((r) => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
+    const a = document.createElement("a"); a.href = url;
     a.download = `informe_${data.nombre.replace(/ /g, "_")}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    a.click(); URL.revokeObjectURL(url);
     toast.success("Informe exportado como CSV");
   };
 
@@ -137,8 +138,7 @@ function StudentReportCard({ claseLabel }: { claseLabel: string }) {
           <Download className="h-4 w-4" /> Exportar CSV
         </Button>
       </div>
-
-      <div ref={reportRef} className="space-y-4 print:space-y-2">
+      <div className="space-y-4 print:space-y-2">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
@@ -167,7 +167,6 @@ function StudentReportCard({ claseLabel }: { claseLabel: string }) {
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -186,7 +185,6 @@ function StudentReportCard({ claseLabel }: { claseLabel: string }) {
             ))}
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -211,13 +209,10 @@ function StudentReportCard({ claseLabel }: { claseLabel: string }) {
 /* ---- Group Report Card ---- */
 function GroupReportCard({ claseLabel }: { claseLabel: string }) {
   const data = mockGrupoReporte;
-
   const handlePrint = () => window.print();
-
   const handleExportCSV = () => {
     const rows = [
-      ["Clase", data.clase],
-      ["Período", data.periodo],
+      ["Clase", data.clase], ["Período", data.periodo],
       ["Total estudiantes", data.totalEstudiantes.toString()],
       ["Promedio general", data.promedioGeneral.toString()],
       ["Asistencia promedio", `${data.asistenciaPromedio}%`],
@@ -229,11 +224,9 @@ function GroupReportCard({ claseLabel }: { claseLabel: string }) {
     const csv = rows.map((r) => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
+    const a = document.createElement("a"); a.href = url;
     a.download = `informe_grupo_${data.clase.replace(/ /g, "_")}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    a.click(); URL.revokeObjectURL(url);
     toast.success("Informe del grupo exportado como CSV");
   };
 
@@ -247,7 +240,6 @@ function GroupReportCard({ claseLabel }: { claseLabel: string }) {
           <Download className="h-4 w-4" /> Exportar CSV
         </Button>
       </div>
-
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
@@ -267,7 +259,6 @@ function GroupReportCard({ claseLabel }: { claseLabel: string }) {
           </div>
         </CardContent>
       </Card>
-
       <Card>
         <CardContent className="p-4">
           <div className="flex items-start gap-2">
@@ -298,13 +289,7 @@ function StatBox({ label, value, color }: { label: string; value: string | numbe
 }
 
 /* ---- Bulletin Comment Generator ---- */
-function BulletinCommentGenerator({
-  studentId,
-  claseLabel,
-}: {
-  studentId: string;
-  claseLabel: string;
-}) {
+function BulletinCommentGenerator({ studentId, claseLabel }: { studentId: string; claseLabel: string }) {
   const [comment, setComment] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const student = estudiantes.find((e) => e.id === studentId);
@@ -314,38 +299,23 @@ function BulletinCommentGenerator({
     if (!student) return;
     setIsGenerating(true);
     setComment("");
-
     try {
       const response = await supabase.functions.invoke("generate-bulletin-comment", {
         body: {
           studentName: `${student.nombre} ${student.apellido}`,
-          claseLabel,
-          asistencia: data.asistencia,
-          promedio: data.promedio,
-          participacion: data.participacion,
-          observaciones: data.observaciones,
-          tareasEntregadas: data.tareasEntregadas,
-          tareasTotal: data.tareasTotal,
+          claseLabel, asistencia: data.asistencia, promedio: data.promedio,
+          participacion: data.participacion, observaciones: data.observaciones,
+          tareasEntregadas: data.tareasEntregadas, tareasTotal: data.tareasTotal,
         },
       });
-
-      if (response.error) {
-        throw new Error(response.error.message || "Error al generar comentario");
-      }
-
+      if (response.error) throw new Error(response.error.message);
       setComment(response.data?.comment || "No se pudo generar el comentario.");
-    } catch (error: any) {
-      console.error("Error generating comment:", error);
-      // Fallback: generate a local comment
+    } catch {
       setComment(
-        `${student.nombre} ${student.apellido} presenta un desempeño ${
-          data.promedio >= 7 ? "satisfactorio" : "que requiere mejora"
-        } en ${claseLabel}. ` +
+        `${student.nombre} ${student.apellido} presenta un desempeño ${data.promedio >= 7 ? "satisfactorio" : "que requiere mejora"} en ${claseLabel}. ` +
         `Su asistencia es del ${data.asistencia}% y su participación es ${data.participacion.toLowerCase()}. ` +
         `Ha entregado ${data.tareasEntregadas} de ${data.tareasTotal} tareas asignadas. ` +
-        (data.observaciones.length > 0
-          ? `Observaciones: ${data.observaciones.join(". ")}.`
-          : "")
+        (data.observaciones.length > 0 ? `Observaciones: ${data.observaciones.join(". ")}.` : "")
       );
       toast.info("Comentario generado localmente (IA no disponible)");
     } finally {
@@ -368,13 +338,12 @@ function BulletinCommentGenerator({
               <p className="font-medium text-sm">Generador de comentarios con IA</p>
               <p className="text-xs text-muted-foreground mt-1">
                 Genera automáticamente un comentario para el boletín basado en las notas,
-                asistencia, participación y observaciones del estudiante. Puedes editarlo antes de usarlo.
+                asistencia, participación y observaciones del estudiante.
               </p>
             </div>
           </div>
         </CardContent>
       </Card>
-
       {student && (
         <Card>
           <CardContent className="p-4">
@@ -382,58 +351,113 @@ function BulletinCommentGenerator({
               Estudiante: <span className="text-primary">{student.apellido}, {student.nombre}</span>
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-              <div className="bg-muted/50 p-2 rounded text-center">
-                <p className="font-bold">{data.asistencia}%</p>
-                <p className="text-muted-foreground">Asistencia</p>
-              </div>
-              <div className="bg-muted/50 p-2 rounded text-center">
-                <p className="font-bold">{data.promedio}</p>
-                <p className="text-muted-foreground">Promedio</p>
-              </div>
-              <div className="bg-muted/50 p-2 rounded text-center">
-                <p className="font-bold">{data.participacion}</p>
-                <p className="text-muted-foreground">Participación</p>
-              </div>
-              <div className="bg-muted/50 p-2 rounded text-center">
-                <p className="font-bold">{data.tareasEntregadas}/{data.tareasTotal}</p>
-                <p className="text-muted-foreground">Tareas</p>
-              </div>
+              <div className="bg-muted/50 p-2 rounded text-center"><p className="font-bold">{data.asistencia}%</p><p className="text-muted-foreground">Asistencia</p></div>
+              <div className="bg-muted/50 p-2 rounded text-center"><p className="font-bold">{data.promedio}</p><p className="text-muted-foreground">Promedio</p></div>
+              <div className="bg-muted/50 p-2 rounded text-center"><p className="font-bold">{data.participacion}</p><p className="text-muted-foreground">Participación</p></div>
+              <div className="bg-muted/50 p-2 rounded text-center"><p className="font-bold">{data.tareasEntregadas}/{data.tareasTotal}</p><p className="text-muted-foreground">Tareas</p></div>
             </div>
           </CardContent>
         </Card>
       )}
-
-      <Button
-        className="w-full gap-2"
-        size="lg"
-        onClick={generateComment}
-        disabled={isGenerating}
-      >
-        {isGenerating ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" /> Generando comentario...
-          </>
-        ) : (
-          <>
-            <Sparkles className="h-4 w-4" /> Generar comentario para boletín
-          </>
-        )}
+      <Button className="w-full gap-2" size="lg" onClick={generateComment} disabled={isGenerating}>
+        {isGenerating ? <><Loader2 className="h-4 w-4 animate-spin" /> Generando...</> : <><Sparkles className="h-4 w-4" /> Generar comentario para boletín</>}
       </Button>
-
       {comment && (
         <div className="space-y-3">
-          <Textarea
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            className="min-h-[120px] text-sm"
-            placeholder="El comentario aparecerá aquí..."
-          />
+          <Textarea value={comment} onChange={(e) => setComment(e.target.value)} className="min-h-[120px] text-sm" />
           <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleCopy}><FileText className="h-4 w-4" /> Copiar</Button>
+            <Button size="sm" className="gap-1.5" onClick={() => toast.success("Comentario guardado")}>Guardar</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---- AI Full Report Generator ---- */
+function AIFullReport({ studentId, claseLabel }: { studentId: string; claseLabel: string }) {
+  const [report, setReport] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const student = estudiantes.find((e) => e.id === studentId);
+  const data = mockEstudianteReporte;
+
+  const generateReport = async () => {
+    if (!student) return;
+    setIsGenerating(true);
+    setReport("");
+    try {
+      const response = await supabase.functions.invoke("generate-student-report", {
+        body: {
+          studentName: `${student.nombre} ${student.apellido}`,
+          claseLabel, asistencia: data.asistencia, promedio: data.promedio,
+          participacion: data.participacion, observaciones: data.observaciones,
+          tareasEntregadas: data.tareasEntregadas, tareasTotal: data.tareasTotal,
+          evaluaciones: data.evaluaciones,
+        },
+      });
+      if (response.error) throw new Error(response.error.message);
+      setReport(response.data?.report || "");
+      toast.success("Informe generado con IA");
+    } catch {
+      setReport(
+        `Informe de ${student.nombre} ${student.apellido} — ${claseLabel}\n\n` +
+        `El estudiante presenta un desempeño ${data.promedio >= 7 ? "satisfactorio" : "que requiere atención"} durante el período evaluado. ` +
+        `Su asistencia es del ${data.asistencia}%, con una participación ${data.participacion.toLowerCase()} en las actividades de clase.\n\n` +
+        `En cuanto al rendimiento académico, mantiene un promedio de ${data.promedio} y ha entregado ${data.tareasEntregadas} de ${data.tareasTotal} tareas asignadas. ` +
+        (data.observaciones.length > 0 ? `\n\nObservaciones: ${data.observaciones.join(". ")}.` : "") +
+        `\n\nSe recomienda continuar con el seguimiento del progreso académico y fomentar la participación activa en clase.`
+      );
+      toast.info("Informe generado localmente (IA no disponible)");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(report);
+    toast.success("Informe copiado al portapapeles");
+  };
+
+  const handlePrint = () => window.print();
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-accent/20 bg-accent/5">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <Sparkles className="h-5 w-5 text-accent shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium text-sm">Informe completo con IA</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Genera un informe narrativo detallado del estudiante con análisis de fortalezas,
+                áreas de mejora y recomendaciones. Puedes editarlo antes de exportar.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Button className="w-full gap-2" size="lg" onClick={generateReport} disabled={isGenerating}>
+        {isGenerating ? <><Loader2 className="h-4 w-4 animate-spin" /> Generando informe...</> : <><Sparkles className="h-4 w-4" /> Generar informe completo</>}
+      </Button>
+
+      {report && (
+        <div className="space-y-3">
+          <Textarea
+            value={report}
+            onChange={(e) => setReport(e.target.value)}
+            className="min-h-[250px] text-sm"
+          />
+          <div className="flex gap-2 flex-wrap">
             <Button variant="outline" size="sm" className="gap-1.5" onClick={handleCopy}>
-              <FileText className="h-4 w-4" /> Copiar
+              <Copy className="h-4 w-4" /> Copiar
             </Button>
-            <Button size="sm" className="gap-1.5" onClick={() => toast.success("Comentario guardado")}>
-              Guardar comentario
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={handlePrint}>
+              <Printer className="h-4 w-4" /> Imprimir / PDF
+            </Button>
+            <Button size="sm" className="gap-1.5" onClick={() => toast.success("Informe guardado")}>
+              Guardar informe
             </Button>
           </div>
         </div>

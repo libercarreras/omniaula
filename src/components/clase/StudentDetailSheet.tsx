@@ -3,15 +3,17 @@ import {
 } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  estudiantes, observaciones, evaluaciones, getClaseLabel,
+  estudiantes, observaciones, getClaseLabel,
 } from "@/data/mockData";
 import {
   UserCheck, ClipboardCheck, MessageSquare, Calendar,
-  Check, X, Clock,
+  Check, X, Clock, Copy,
 } from "lucide-react";
+import { toast } from "sonner";
 
 interface StudentDetailSheetProps {
   studentId: string | null;
@@ -20,7 +22,6 @@ interface StudentDetailSheetProps {
   onClose: () => void;
 }
 
-// Mock historical data for the student
 const mockAsistenciaHistorial = [
   { fecha: "2026-03-07", estado: "presente" },
   { fecha: "2026-03-06", estado: "presente" },
@@ -47,6 +48,23 @@ export function StudentDetailSheet({ studentId, claseId, open, onClose }: Studen
     tarde: <Clock className="h-3.5 w-3.5 text-warning" />,
   };
 
+  const promedioNotas = mockNotasHistorial.reduce((s, n) => s + n.nota, 0) / mockNotasHistorial.length;
+  const asistenciaPct = 85;
+
+  const copiarResumen = () => {
+    const resumen = [
+      `📋 Resumen del estudiante`,
+      `Nombre: ${student.apellido}, ${student.nombre}`,
+      `Grupo: ${student.grupoNombre}`,
+      `Asistencia: ${asistenciaPct}%`,
+      `Promedio: ${promedioNotas.toFixed(1)}`,
+      `Observaciones: ${studentObs.length > 0 ? studentObs.map((o) => o.nota).join("; ") : "Sin observaciones"}`,
+    ].join("\n");
+
+    navigator.clipboard.writeText(resumen);
+    toast.success("Resumen copiado al portapapeles");
+  };
+
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-y-auto">
@@ -57,15 +75,25 @@ export function StudentDetailSheet({ studentId, claseId, open, onClose }: Studen
                 {student.nombre[0]}{student.apellido[0]}
               </AvatarFallback>
             </Avatar>
-            <div>
+            <div className="flex-1">
               <SheetTitle className="text-left">
                 {student.apellido}, {student.nombre}
               </SheetTitle>
               <p className="text-sm text-muted-foreground">{student.grupoNombre}</p>
             </div>
-            {student.enRiesgo && (
-              <Badge variant="destructive" className="ml-auto">En riesgo</Badge>
-            )}
+            <div className="flex items-center gap-2">
+              {student.enRiesgo && (
+                <Badge variant="destructive">En riesgo</Badge>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={copiarResumen}
+              >
+                <Copy className="h-3.5 w-3.5" /> Copiar
+              </Button>
+            </div>
           </div>
         </SheetHeader>
 
@@ -89,7 +117,7 @@ export function StudentDetailSheet({ studentId, claseId, open, onClose }: Studen
             <div className="grid grid-cols-3 gap-3 mb-4">
               <Card>
                 <CardContent className="p-3 text-center">
-                  <p className="text-2xl font-bold text-success">85%</p>
+                  <p className="text-2xl font-bold text-success">{asistenciaPct}%</p>
                   <p className="text-xs text-muted-foreground">Asistencia</p>
                 </CardContent>
               </Card>
@@ -120,7 +148,7 @@ export function StudentDetailSheet({ studentId, claseId, open, onClose }: Studen
           <TabsContent value="notas" className="mt-4 space-y-2">
             <Card className="mb-4">
               <CardContent className="p-3 text-center">
-                <p className="text-2xl font-bold text-primary">7.2</p>
+                <p className="text-2xl font-bold text-primary">{promedioNotas.toFixed(1)}</p>
                 <p className="text-xs text-muted-foreground">Promedio general</p>
               </CardContent>
             </Card>
@@ -165,11 +193,11 @@ export function StudentDetailSheet({ studentId, claseId, open, onClose }: Studen
                 <CardContent className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Asistencia total</span>
-                    <span className="font-medium">85%</span>
+                    <span className="font-medium">{asistenciaPct}%</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Promedio notas</span>
-                    <span className="font-medium">7.2</span>
+                    <span className="font-medium">{promedioNotas.toFixed(1)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Participación</span>
