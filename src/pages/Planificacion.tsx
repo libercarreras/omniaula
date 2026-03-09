@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus } from "lucide-react";
-import { planificaciones } from "@/data/mockData";
+import { planificaciones, getClaseLabel } from "@/data/mockData";
 
 const estadoConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" }> = {
   pendiente: { label: "Pendiente", variant: "secondary" },
@@ -25,7 +25,7 @@ export default function Planificacion() {
             <CardContent className="p-4">
               <div className="flex items-start justify-between mb-2">
                 <div>
-                  <p className="font-semibold">{plan.grupoNombre} — {plan.periodo}</p>
+                  <p className="font-semibold">{getClaseLabel(plan.claseId)} — {plan.periodo}</p>
                   <p className="text-sm text-muted-foreground mt-1">{plan.objetivo}</p>
                 </div>
                 <Badge variant={estadoConfig[plan.estado].variant}>

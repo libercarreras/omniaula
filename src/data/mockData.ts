@@ -1,10 +1,21 @@
+export interface Materia {
+  id: string;
+  nombre: string;
+  color: string;
+}
+
 export interface Grupo {
   id: string;
   nombre: string;
-  materia: string;
-  horario: string;
   cantidadEstudiantes: number;
-  color: string;
+}
+
+export interface Clase {
+  id: string;
+  materiaId: string;
+  grupoId: string;
+  horario: string;
+  aula?: string;
 }
 
 export interface Estudiante {
@@ -19,8 +30,7 @@ export interface Estudiante {
 export interface Evaluacion {
   id: string;
   titulo: string;
-  grupoId: string;
-  grupoNombre: string;
+  claseId: string;
   fecha: string;
   tipo: "parcial" | "trabajo" | "oral" | "tarea";
 }
@@ -29,6 +39,7 @@ export interface Observacion {
   id: string;
   estudianteId: string;
   estudianteNombre: string;
+  claseId: string;
   fecha: string;
   tipo: "comportamiento" | "academico" | "positivo";
   nota: string;
@@ -36,8 +47,7 @@ export interface Observacion {
 
 export interface DiarioClase {
   id: string;
-  grupoId: string;
-  grupoNombre: string;
+  claseId: string;
   fecha: string;
   descripcion: string;
   temas: string[];
@@ -45,18 +55,31 @@ export interface DiarioClase {
 
 export interface Planificacion {
   id: string;
-  grupoId: string;
-  grupoNombre: string;
+  claseId: string;
   periodo: string;
   objetivo: string;
   estado: "pendiente" | "en_curso" | "completada";
 }
 
+// --- Datos mock ---
+
+export const materias: Materia[] = [
+  { id: "m1", nombre: "Matemáticas", color: "bg-primary" },
+  { id: "m2", nombre: "Física", color: "bg-warning" },
+];
+
 export const grupos: Grupo[] = [
-  { id: "g1", nombre: "3°A", materia: "Matemáticas", horario: "Lun/Mié/Vie 8:00", cantidadEstudiantes: 28, color: "bg-primary" },
-  { id: "g2", nombre: "3°B", materia: "Matemáticas", horario: "Mar/Jue 9:00", cantidadEstudiantes: 25, color: "bg-accent" },
-  { id: "g3", nombre: "2°A", materia: "Física", horario: "Lun/Mié 10:00", cantidadEstudiantes: 30, color: "bg-warning" },
-  { id: "g4", nombre: "4°C", materia: "Matemáticas", horario: "Mar/Jue 11:00", cantidadEstudiantes: 22, color: "bg-destructive" },
+  { id: "g1", nombre: "3°A", cantidadEstudiantes: 28 },
+  { id: "g2", nombre: "3°B", cantidadEstudiantes: 25 },
+  { id: "g3", nombre: "2°A", cantidadEstudiantes: 30 },
+  { id: "g4", nombre: "4°C", cantidadEstudiantes: 22 },
+];
+
+export const clases: Clase[] = [
+  { id: "c1", materiaId: "m1", grupoId: "g1", horario: "Lun/Mié/Vie 8:00", aula: "Aula 12" },
+  { id: "c2", materiaId: "m1", grupoId: "g2", horario: "Mar/Jue 9:00", aula: "Aula 8" },
+  { id: "c3", materiaId: "m2", grupoId: "g3", horario: "Lun/Mié 10:00", aula: "Lab. 3" },
+  { id: "c4", materiaId: "m1", grupoId: "g4", horario: "Mar/Jue 11:00", aula: "Aula 5" },
 ];
 
 export const estudiantes: Estudiante[] = [
@@ -71,37 +94,51 @@ export const estudiantes: Estudiante[] = [
 ];
 
 export const evaluaciones: Evaluacion[] = [
-  { id: "ev1", titulo: "Parcial Ecuaciones", grupoId: "g1", grupoNombre: "3°A", fecha: "2026-03-12", tipo: "parcial" },
-  { id: "ev2", titulo: "Trabajo Práctico Funciones", grupoId: "g2", grupoNombre: "3°B", fecha: "2026-03-15", tipo: "trabajo" },
-  { id: "ev3", titulo: "Oral Cinemática", grupoId: "g3", grupoNombre: "2°A", fecha: "2026-03-18", tipo: "oral" },
-  { id: "ev4", titulo: "Tarea Derivadas", grupoId: "g4", grupoNombre: "4°C", fecha: "2026-03-10", tipo: "tarea" },
+  { id: "ev1", titulo: "Parcial Ecuaciones", claseId: "c1", fecha: "2026-03-12", tipo: "parcial" },
+  { id: "ev2", titulo: "Trabajo Práctico Funciones", claseId: "c2", fecha: "2026-03-15", tipo: "trabajo" },
+  { id: "ev3", titulo: "Oral Cinemática", claseId: "c3", fecha: "2026-03-18", tipo: "oral" },
+  { id: "ev4", titulo: "Tarea Derivadas", claseId: "c4", fecha: "2026-03-10", tipo: "tarea" },
 ];
 
 export const observaciones: Observacion[] = [
-  { id: "o1", estudianteId: "e2", estudianteNombre: "Martín López", fecha: "2026-03-07", tipo: "academico", nota: "Dificultades con ecuaciones de segundo grado" },
-  { id: "o2", estudianteId: "e4", estudianteNombre: "Santiago Martínez", fecha: "2026-03-06", tipo: "comportamiento", nota: "Distracción frecuente en clase" },
-  { id: "o3", estudianteId: "e1", estudianteNombre: "Lucía García", fecha: "2026-03-08", tipo: "positivo", nota: "Excelente participación en clase" },
+  { id: "o1", estudianteId: "e2", estudianteNombre: "Martín López", claseId: "c1", fecha: "2026-03-07", tipo: "academico", nota: "Dificultades con ecuaciones de segundo grado" },
+  { id: "o2", estudianteId: "e4", estudianteNombre: "Santiago Martínez", claseId: "c2", fecha: "2026-03-06", tipo: "comportamiento", nota: "Distracción frecuente en clase" },
+  { id: "o3", estudianteId: "e1", estudianteNombre: "Lucía García", claseId: "c1", fecha: "2026-03-08", tipo: "positivo", nota: "Excelente participación en clase" },
 ];
 
 export const diarioClase: DiarioClase[] = [
-  { id: "d1", grupoId: "g1", grupoNombre: "3°A", fecha: "2026-03-07", descripcion: "Se trabajó con ecuaciones cuadráticas. Buena participación general.", temas: ["Ecuaciones cuadráticas", "Fórmula resolvente"] },
-  { id: "d2", grupoId: "g2", grupoNombre: "3°B", fecha: "2026-03-06", descripcion: "Introducción a funciones lineales con gráficos.", temas: ["Funciones lineales", "Representación gráfica"] },
+  { id: "d1", claseId: "c1", fecha: "2026-03-07", descripcion: "Se trabajó con ecuaciones cuadráticas. Buena participación general.", temas: ["Ecuaciones cuadráticas", "Fórmula resolvente"] },
+  { id: "d2", claseId: "c2", fecha: "2026-03-06", descripcion: "Introducción a funciones lineales con gráficos.", temas: ["Funciones lineales", "Representación gráfica"] },
 ];
 
 export const planificaciones: Planificacion[] = [
-  { id: "p1", grupoId: "g1", grupoNombre: "3°A", periodo: "Marzo 2026", objetivo: "Ecuaciones de segundo grado y sistemas", estado: "en_curso" },
-  { id: "p2", grupoId: "g2", grupoNombre: "3°B", periodo: "Marzo 2026", objetivo: "Funciones lineales y cuadráticas", estado: "en_curso" },
-  { id: "p3", grupoId: "g3", grupoNombre: "2°A", periodo: "Abril 2026", objetivo: "Cinemática y dinámica", estado: "pendiente" },
+  { id: "p1", claseId: "c1", periodo: "Marzo 2026", objetivo: "Ecuaciones de segundo grado y sistemas", estado: "en_curso" },
+  { id: "p2", claseId: "c2", periodo: "Marzo 2026", objetivo: "Funciones lineales y cuadráticas", estado: "en_curso" },
+  { id: "p3", claseId: "c3", periodo: "Abril 2026", objetivo: "Cinemática y dinámica", estado: "pendiente" },
 ];
 
 export const actividadReciente = [
-  { texto: "Asistencia registrada - 3°A", tiempo: "Hace 2 horas" },
+  { texto: "Asistencia registrada - Matemáticas 3°A", tiempo: "Hace 2 horas" },
   { texto: "Evaluación creada - Parcial Ecuaciones", tiempo: "Hace 5 horas" },
   { texto: "Observación añadida - Martín López", tiempo: "Ayer" },
-  { texto: "Planificación actualizada - 3°B", tiempo: "Hace 2 días" },
+  { texto: "Planificación actualizada - Matemáticas 3°B", tiempo: "Hace 2 días" },
 ];
 
+// --- Helpers ---
+
+export function getClaseLabel(claseId: string): string {
+  const clase = clases.find((c) => c.id === claseId);
+  if (!clase) return "Clase desconocida";
+  const materia = materias.find((m) => m.id === clase.materiaId);
+  const grupo = grupos.find((g) => g.id === clase.grupoId);
+  return `${materia?.nombre ?? "?"} - ${grupo?.nombre ?? "?"}`;
+}
+
+export function getClase(claseId: string) {
+  return clases.find((c) => c.id === claseId);
+}
+
 export const clasesDelDia = [
-  { grupo: "3°A", materia: "Matemáticas", horario: "8:00 - 9:20", aula: "Aula 12" },
-  { grupo: "2°A", materia: "Física", horario: "10:00 - 11:20", aula: "Lab. 3" },
+  { claseId: "c1", horario: "8:00 - 9:20" },
+  { claseId: "c3", horario: "10:00 - 11:20" },
 ];

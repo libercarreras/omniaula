@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus } from "lucide-react";
-import { diarioClase } from "@/data/mockData";
+import { diarioClase, getClaseLabel } from "@/data/mockData";
 
 export default function DiarioClase() {
   return (
@@ -18,7 +18,7 @@ export default function DiarioClase() {
           <Card key={entry.id}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-2">
-                <p className="font-semibold">{entry.grupoNombre}</p>
+                <p className="font-semibold">{getClaseLabel(entry.claseId)}</p>
                 <span className="text-sm text-muted-foreground">{entry.fecha}</span>
               </div>
               <p className="text-sm mb-2">{entry.descripcion}</p>

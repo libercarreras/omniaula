@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookOpen, AlertTriangle, ClipboardCheck, Clock, Users } from "lucide-react";
-import { clasesDelDia, evaluaciones, estudiantes, actividadReciente, grupos } from "@/data/mockData";
+import { clasesDelDia, evaluaciones, estudiantes, actividadReciente, clases, getClaseLabel, getClase } from "@/data/mockData";
 import { Link } from "react-router-dom";
 
 const estudiantesEnRiesgo = estudiantes.filter((e) => e.enRiesgo);
@@ -19,8 +19,8 @@ export default function Dashboard() {
         <Card className="bg-primary/5 border-primary/20">
           <CardContent className="p-4 flex flex-col items-center text-center">
             <Users className="h-6 w-6 text-primary mb-1" />
-            <span className="text-2xl font-bold text-primary">{grupos.length}</span>
-            <span className="text-xs text-muted-foreground">Grupos</span>
+            <span className="text-2xl font-bold text-primary">{clases.length}</span>
+            <span className="text-xs text-muted-foreground">Clases</span>
           </CardContent>
         </Card>
         <Card className="bg-accent/5 border-accent/20">
@@ -55,29 +55,31 @@ export default function Dashboard() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {clasesDelDia.map((clase, i) => (
-            <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-              <div>
-                <p className="font-semibold">{clase.grupo} — {clase.materia}</p>
-                <p className="text-sm text-muted-foreground">{clase.aula}</p>
+          {clasesDelDia.map((cd, i) => {
+            const clase = getClase(cd.claseId);
+            return (
+              <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                <div>
+                  <p className="font-semibold">{getClaseLabel(cd.claseId)}</p>
+                  <p className="text-sm text-muted-foreground">{clase?.aula}</p>
+                </div>
+                <span className="text-sm font-medium text-primary">{cd.horario}</span>
               </div>
-              <span className="text-sm font-medium text-primary">{clase.horario}</span>
-            </div>
-          ))}
+            );
+          })}
         </CardContent>
       </Card>
 
-      {/* Accesos rápidos a grupos */}
+      {/* Accesos rápidos a clases */}
       <div>
         <h2 className="font-display font-semibold text-lg mb-3">Acceso rápido</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {grupos.map((grupo) => (
-            <Link key={grupo.id} to="/grupos">
+          {clases.map((clase) => (
+            <Link key={clase.id} to="/materias">
               <Card className="hover:shadow-md transition-shadow cursor-pointer">
                 <CardContent className="p-4">
-                  <p className="font-bold text-lg">{grupo.nombre}</p>
-                  <p className="text-sm text-muted-foreground">{grupo.materia}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{grupo.cantidadEstudiantes} estudiantes</p>
+                  <p className="font-bold text-lg">{getClaseLabel(clase.id)}</p>
+                  <p className="text-sm text-muted-foreground">{clase.horario}</p>
                 </CardContent>
               </Card>
             </Link>
