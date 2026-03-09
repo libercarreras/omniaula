@@ -15,6 +15,7 @@ import Planificacion from "./pages/Planificacion";
 import Informes from "./pages/Informes";
 import Analisis from "./pages/Analisis";
 import Materias from "./pages/Materias";
+import ModoClase from "./pages/ModoClase";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/planificacion" element={<Planificacion />} />
             <Route path="/informes" element={<Informes />} />
             <Route path="/analisis" element={<Analisis />} />
+            <Route path="/clase/:claseId" element={<ModoClase />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
