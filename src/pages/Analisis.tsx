@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, PieChart, Pie, Cell, Area, AreaChart,
+  LineChart, Line, Area, AreaChart, Cell,
 } from "recharts";
 import {
   TrendingUp, TrendingDown, Users, AlertTriangle, Award,
@@ -17,14 +17,7 @@ import {
   mockEstudiantesEnRiesgo, mockGrupoReporte,
 } from "@/data/mockAnalytics";
 import { useState } from "react";
-
-const CHART_COLORS = [
-  "hsl(217, 72%, 45%)",   // primary
-  "hsl(152, 55%, 42%)",   // accent/success
-  "hsl(38, 92%, 50%)",    // warning
-  "hsl(0, 72%, 55%)",     // destructive
-  "hsl(215, 15%, 50%)",   // muted
-];
+import { AIGroupAnalysis } from "@/components/analisis/AIGroupAnalysis";
 
 const NOTA_COLORS = ["hsl(0, 72%, 55%)", "hsl(38, 92%, 50%)", "hsl(217, 72%, 45%)", "hsl(152, 55%, 42%)", "hsl(152, 55%, 32%)"];
 
@@ -47,6 +40,9 @@ export default function Analisis() {
         </Select>
       </div>
 
+      {/* AI Analysis Button */}
+      <AIGroupAnalysis claseLabel={getClaseLabel(claseSeleccionada)} />
+
       <Tabs defaultValue="rendimiento" className="w-full">
         <TabsList className="w-full grid grid-cols-3">
           <TabsTrigger value="rendimiento">Rendimiento</TabsTrigger>
@@ -56,39 +52,13 @@ export default function Analisis() {
 
         {/* ---- TAB: Rendimiento ---- */}
         <TabsContent value="rendimiento" className="space-y-6 mt-4">
-          {/* Summary cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Card>
-              <CardContent className="p-4 text-center">
-                <BarChart3 className="h-5 w-5 mx-auto mb-1 text-primary" />
-                <p className="text-2xl font-bold text-primary">{mockGrupoReporte.promedioGeneral}</p>
-                <p className="text-xs text-muted-foreground">Promedio general</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 text-center">
-                <UserCheck className="h-5 w-5 mx-auto mb-1 text-success" />
-                <p className="text-2xl font-bold text-success">{mockGrupoReporte.asistenciaPromedio}%</p>
-                <p className="text-xs text-muted-foreground">Asistencia</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 text-center">
-                <Award className="h-5 w-5 mx-auto mb-1 text-accent" />
-                <p className="text-2xl font-bold text-accent">{mockGrupoReporte.altoRendimiento}</p>
-                <p className="text-xs text-muted-foreground">Alto rendimiento</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 text-center">
-                <AlertTriangle className="h-5 w-5 mx-auto mb-1 text-destructive" />
-                <p className="text-2xl font-bold text-destructive">{mockGrupoReporte.bajoRendimiento}</p>
-                <p className="text-xs text-muted-foreground">Bajo rendimiento</p>
-              </CardContent>
-            </Card>
+            <SummaryCard icon={BarChart3} value={mockGrupoReporte.promedioGeneral} label="Promedio general" color="text-primary" />
+            <SummaryCard icon={UserCheck} value={`${mockGrupoReporte.asistenciaPromedio}%`} label="Asistencia" color="text-success" />
+            <SummaryCard icon={Award} value={mockGrupoReporte.altoRendimiento} label="Alto rendimiento" color="text-accent" />
+            <SummaryCard icon={AlertTriangle} value={mockGrupoReporte.bajoRendimiento} label="Bajo rendimiento" color="text-destructive" />
           </div>
 
-          {/* Distribution chart */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Distribución de notas</CardTitle>
@@ -100,13 +70,7 @@ export default function Analisis() {
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 25%, 89%)" />
                     <XAxis dataKey="rango" tick={{ fontSize: 12 }} />
                     <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip
-                      contentStyle={{
-                        borderRadius: "0.5rem",
-                        border: "1px solid hsl(214, 25%, 89%)",
-                        fontSize: "0.875rem",
-                      }}
-                    />
+                    <Tooltip contentStyle={{ borderRadius: "0.5rem", border: "1px solid hsl(214, 25%, 89%)", fontSize: "0.875rem" }} />
                     <Bar dataKey="cantidad" radius={[6, 6, 0, 0]}>
                       {mockDistribucionNotas.map((_, i) => (
                         <Cell key={i} fill={NOTA_COLORS[i]} />
@@ -118,7 +82,6 @@ export default function Analisis() {
             </CardContent>
           </Card>
 
-          {/* Averages per evaluation */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Promedio por evaluación</CardTitle>
@@ -160,17 +123,12 @@ export default function Analisis() {
                   <div>
                     <p className="font-semibold text-base">{est.nombre}</p>
                     <div className="flex gap-2 mt-1">
-                      <Badge variant="destructive" className="text-xs">
-                        Asist. {est.asistencia}%
-                      </Badge>
-                      <Badge variant="secondary" className="text-xs">
-                        Prom. {est.promedio}
-                      </Badge>
+                      <Badge variant="destructive" className="text-xs">Asist. {est.asistencia}%</Badge>
+                      <Badge variant="secondary" className="text-xs">Prom. {est.promedio}</Badge>
                     </div>
                   </div>
                   <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
                 </div>
-
                 <div className="space-y-2">
                   <div>
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Motivos</p>
@@ -194,7 +152,6 @@ export default function Analisis() {
 
         {/* ---- TAB: Tendencias ---- */}
         <TabsContent value="tendencias" className="space-y-6 mt-4">
-          {/* Trend: average over time */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
@@ -210,21 +167,13 @@ export default function Analisis() {
                     <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
                     <YAxis domain={[0, 10]} tick={{ fontSize: 12 }} />
                     <Tooltip contentStyle={{ borderRadius: "0.5rem", border: "1px solid hsl(214, 25%, 89%)" }} />
-                    <Area
-                      type="monotone"
-                      dataKey="promedio"
-                      stroke="hsl(217, 72%, 45%)"
-                      fill="hsl(217, 72%, 45%)"
-                      fillOpacity={0.15}
-                      strokeWidth={2}
-                    />
+                    <Area type="monotone" dataKey="promedio" stroke="hsl(217, 72%, 45%)" fill="hsl(217, 72%, 45%)" fillOpacity={0.15} strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
 
-          {/* Trend: attendance over weeks */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
@@ -240,20 +189,13 @@ export default function Analisis() {
                     <XAxis dataKey="semana" tick={{ fontSize: 12 }} />
                     <YAxis domain={[70, 100]} tick={{ fontSize: 12 }} />
                     <Tooltip contentStyle={{ borderRadius: "0.5rem", border: "1px solid hsl(214, 25%, 89%)" }} />
-                    <Line
-                      type="monotone"
-                      dataKey="porcentaje"
-                      stroke="hsl(152, 55%, 42%)"
-                      strokeWidth={2}
-                      dot={{ fill: "hsl(152, 55%, 42%)", r: 4 }}
-                    />
+                    <Line type="monotone" dataKey="porcentaje" stroke="hsl(152, 55%, 42%)" strokeWidth={2} dot={{ fill: "hsl(152, 55%, 42%)", r: 4 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
 
-          {/* Comparison cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card>
               <CardContent className="p-4">
@@ -279,5 +221,17 @@ export default function Analisis() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function SummaryCard({ icon: Icon, value, label, color }: { icon: any; value: string | number; label: string; color: string }) {
+  return (
+    <Card>
+      <CardContent className="p-4 text-center">
+        <Icon className={`h-5 w-5 mx-auto mb-1 ${color}`} />
+        <p className={`text-2xl font-bold ${color}`}>{value}</p>
+        <p className="text-xs text-muted-foreground">{label}</p>
+      </CardContent>
+    </Card>
   );
 }
