@@ -15,12 +15,14 @@ import { toast } from "@/hooks/use-toast";
 
 export default function Materias() {
   const { user } = useAuth();
+  const { instituciones, institucionActiva } = useInstitucion();
   const [loading, setLoading] = useState(true);
   const [materias, setMaterias] = useState<any[]>([]);
   const [clases, setClases] = useState<any[]>([]);
   const [grupos, setGrupos] = useState<Record<string, string>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [nombre, setNombre] = useState("");
+  const [institucionId, setInstitucionId] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [editingMateria, setEditingMateria] = useState<any | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
