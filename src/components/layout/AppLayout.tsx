@@ -5,7 +5,8 @@ import { MobileNav } from "./MobileNav";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/useAuth";
-import { BookOpen, LogOut, User } from "lucide-react";
+import { useTheme } from "next-themes";
+import { BookOpen, LogOut, User, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -17,6 +18,7 @@ export function AppLayout() {
   const isMobile = useIsMobile();
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
 
   const initials = profile?.nombre
     ? profile.nombre.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -42,6 +44,17 @@ export function AppLayout() {
                 <h1 className="font-display font-bold text-lg text-foreground">Libreta Docente</h1>
               </div>
             </div>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              aria-label="Modo oscuro"
+            >
+              <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+              <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            </Button>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
