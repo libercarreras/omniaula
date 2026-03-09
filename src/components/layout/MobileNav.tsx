@@ -16,6 +16,7 @@ const mainTabs = [
 ];
 
 const moreItems = [
+  { title: "Materias", url: "/materias", icon: BookOpen },
   { title: "Estudiantes", url: "/estudiantes", icon: GraduationCap },
   { title: "Seguimiento", url: "/seguimiento", icon: Eye },
   { title: "Diario de Clase", url: "/diario", icon: BookText },

@@ -11,6 +11,7 @@ import {
 
 const items = [
   { title: "Panel", url: "/", icon: LayoutDashboard },
+  { title: "Materias", url: "/materias", icon: BookOpen },
   { title: "Grupos", url: "/grupos", icon: Users },
   { title: "Estudiantes", url: "/estudiantes", icon: GraduationCap },
   { title: "Asistencia", url: "/asistencia", icon: UserCheck },
