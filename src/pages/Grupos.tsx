@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { InvitarDocente } from "@/components/colaboracion/InvitarDocente";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useInstitucion } from "@/hooks/useInstitucion";
 import { toast } from "@/hooks/use-toast";
 
 interface GrupoDB {
@@ -21,6 +22,7 @@ interface GrupoDB {
 
 export default function Grupos() {
   const { user } = useAuth();
+  const { institucionActiva } = useInstitucion();
   const [loading, setLoading] = useState(true);
   const [grupos, setGrupos] = useState<GrupoDB[]>([]);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -33,10 +35,10 @@ export default function Grupos() {
   const [saving, setSaving] = useState(false);
 
   const fetchData = async () => {
-    if (!user) return;
+    if (!user || !institucionActiva) return;
     setLoading(true);
     const [gruposRes, estudiantesRes, sharedRes] = await Promise.all([
-      supabase.from("grupos").select("*"),
+      supabase.from("grupos").select("*").eq("institucion_id", institucionActiva.id),
       supabase.from("estudiantes").select("id, grupo_id"),
       supabase.from("grupo_colaboradores").select("grupo_id").eq("colaborador_user_id", user.id).eq("estado", "aceptada"),
     ]);
@@ -46,21 +48,23 @@ export default function Grupos() {
       countMap[e.grupo_id] = (countMap[e.grupo_id] || 0) + 1;
     });
 
+    const grupoIds = new Set((gruposRes.data || []).map(g => g.id));
     setGrupos((gruposRes.data || []).map(g => ({ ...g, studentCount: countMap[g.id] || 0 })));
-    if (sharedRes.data) setSharedGrupoIds(new Set(sharedRes.data.map(d => d.grupo_id)));
+    if (sharedRes.data) setSharedGrupoIds(new Set(sharedRes.data.filter(d => grupoIds.has(d.grupo_id)).map(d => d.grupo_id)));
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, [user]);
+  useEffect(() => { fetchData(); }, [user, institucionActiva]);
 
   const handleCreate = async () => {
-    if (!user || !nombre.trim()) return;
+    if (!user || !nombre.trim() || !institucionActiva) return;
     setSaving(true);
     const { error } = await supabase.from("grupos").insert({
       nombre: nombre.trim(),
       anio: anio.trim() || null,
       turno: turno.trim() || null,
       user_id: user.id,
+      institucion_id: institucionActiva.id,
     });
     setSaving(false);
     if (error) {
@@ -78,7 +82,10 @@ export default function Grupos() {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-display font-bold">Grupos</h1>
+        <div>
+          <h1 className="text-2xl font-display font-bold">Grupos</h1>
+          {institucionActiva && <p className="text-sm text-muted-foreground">{institucionActiva.nombre}</p>}
+        </div>
         <Button size="lg" className="gap-2" onClick={() => setDialogOpen(true)}>
           <Plus className="h-4 w-4" /> Nuevo grupo
         </Button>
@@ -88,7 +95,7 @@ export default function Grupos() {
         <Card className="border-dashed">
           <CardContent className="p-8 text-center space-y-3">
             <FolderOpen className="h-12 w-12 text-muted-foreground mx-auto" />
-            <p className="text-muted-foreground">No tienes grupos creados aún.</p>
+            <p className="text-muted-foreground">No tienes grupos creados en esta institución.</p>
             <Button variant="outline" onClick={() => setDialogOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> Crear grupo</Button>
           </CardContent>
         </Card>

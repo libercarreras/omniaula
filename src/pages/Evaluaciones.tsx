@@ -5,27 +5,22 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Loader2, ClipboardCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useInstitucion } from "@/hooks/useInstitucion";
 
 const tipoLabel: Record<string, string> = {
-  prueba_escrita: "Prueba escrita",
-  oral: "Oral",
-  trabajo_practico: "Trabajo práctico",
-  laboratorio: "Laboratorio",
-  tarea: "Tarea",
-  evaluacion_formativa: "Formativa",
+  prueba_escrita: "Prueba escrita", oral: "Oral", trabajo_practico: "Trabajo práctico",
+  laboratorio: "Laboratorio", tarea: "Tarea", evaluacion_formativa: "Formativa",
 };
 
 const tipoColor: Record<string, string> = {
-  prueba_escrita: "bg-primary/10 text-primary",
-  oral: "bg-warning/10 text-warning",
-  trabajo_practico: "bg-accent/10 text-accent",
-  laboratorio: "bg-success/10 text-success",
-  tarea: "bg-muted text-muted-foreground",
-  evaluacion_formativa: "bg-secondary text-secondary-foreground",
+  prueba_escrita: "bg-primary/10 text-primary", oral: "bg-warning/10 text-warning",
+  trabajo_practico: "bg-accent/10 text-accent", laboratorio: "bg-success/10 text-success",
+  tarea: "bg-muted text-muted-foreground", evaluacion_formativa: "bg-secondary text-secondary-foreground",
 };
 
 export default function Evaluaciones() {
   const { user } = useAuth();
+  const { institucionActiva } = useInstitucion();
   const [loading, setLoading] = useState(true);
   const [evaluaciones, setEvaluaciones] = useState<any[]>([]);
   const [materias, setMaterias] = useState<Record<string, string>>({});
@@ -33,27 +28,33 @@ export default function Evaluaciones() {
   const [clases, setClases] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !institucionActiva) return;
     const fetch = async () => {
       setLoading(true);
-      const [evRes, clsRes, matRes, grpRes] = await Promise.all([
-        supabase.from("evaluaciones").select("*").order("fecha", { ascending: false }),
-        supabase.from("clases").select("id, materia_id, grupo_id"),
+      const { data: grpData } = await supabase.from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
+      const grupoIds = (grpData || []).map(g => g.id);
+      const gm: Record<string, string> = {};
+      (grpData || []).forEach(g => { gm[g.id] = g.nombre; });
+      setGrupos(gm);
+
+      if (grupoIds.length === 0) { setEvaluaciones([]); setClases([]); setLoading(false); return; }
+
+      const [clsRes, matRes, evRes] = await Promise.all([
+        supabase.from("clases").select("id, materia_id, grupo_id").in("grupo_id", grupoIds),
         supabase.from("materias").select("id, nombre"),
-        supabase.from("grupos").select("id, nombre"),
+        supabase.from("evaluaciones").select("*").order("fecha", { ascending: false }),
       ]);
-      setEvaluaciones(evRes.data || []);
-      setClases(clsRes.data || []);
+      const clsData = clsRes.data || [];
+      setClases(clsData);
       const mm: Record<string, string> = {};
       (matRes.data || []).forEach(m => { mm[m.id] = m.nombre; });
       setMaterias(mm);
-      const gm: Record<string, string> = {};
-      (grpRes.data || []).forEach(g => { gm[g.id] = g.nombre; });
-      setGrupos(gm);
+      const claseIds = new Set(clsData.map(c => c.id));
+      setEvaluaciones((evRes.data || []).filter(e => claseIds.has(e.clase_id)));
       setLoading(false);
     };
     fetch();
-  }, [user]);
+  }, [user, institucionActiva]);
 
   const getClaseLabel = (claseId: string) => {
     const c = clases.find(cl => cl.id === claseId);

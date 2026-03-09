@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Loader2, MessageSquare } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useInstitucion } from "@/hooks/useInstitucion";
 
 const tipoLabel: Record<string, { label: string; variant: "default" | "destructive" | "secondary" }> = {
   participacion: { label: "Participación", variant: "default" },
@@ -15,26 +16,32 @@ const tipoLabel: Record<string, { label: string; variant: "default" | "destructi
 
 export default function Seguimiento() {
   const { user } = useAuth();
+  const { institucionActiva } = useInstitucion();
   const [loading, setLoading] = useState(true);
   const [observaciones, setObservaciones] = useState<any[]>([]);
   const [estudiantes, setEstudiantes] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !institucionActiva) return;
     const fetch = async () => {
       setLoading(true);
-      const [obsRes, estRes] = await Promise.all([
-        supabase.from("observaciones").select("*").order("fecha", { ascending: false }),
-        supabase.from("estudiantes").select("id, nombre_completo"),
-      ]);
-      setObservaciones(obsRes.data || []);
+      const { data: grpData } = await supabase.from("grupos").select("id").eq("institucion_id", institucionActiva.id);
+      const grupoIds = (grpData || []).map(g => g.id);
+      if (grupoIds.length === 0) { setObservaciones([]); setEstudiantes({}); setLoading(false); return; }
+
+      const { data: estData } = await supabase.from("estudiantes").select("id, nombre_completo").in("grupo_id", grupoIds);
       const map: Record<string, string> = {};
-      (estRes.data || []).forEach(e => { map[e.id] = e.nombre_completo; });
+      (estData || []).forEach(e => { map[e.id] = e.nombre_completo; });
       setEstudiantes(map);
+
+      const estIds = Object.keys(map);
+      if (estIds.length === 0) { setObservaciones([]); setLoading(false); return; }
+      const { data: obsData } = await supabase.from("observaciones").select("*").in("estudiante_id", estIds).order("fecha", { ascending: false });
+      setObservaciones(obsData || []);
       setLoading(false);
     };
     fetch();
-  }, [user]);
+  }, [user, institucionActiva]);
 
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 

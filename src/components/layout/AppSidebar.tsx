@@ -1,17 +1,22 @@
 import {
   LayoutDashboard, Users, UserCheck, ClipboardCheck, GraduationCap,
-  Eye, BookText, Calendar, FileBarChart, BarChart3, BookOpen, Shield,
+  Eye, BookText, Calendar, FileBarChart, BarChart3, BookOpen, Shield, Building2, ChevronDown,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
+import { useInstitucion } from "@/hooks/useInstitucion";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 
 const items = [
   { title: "Panel", url: "/", icon: LayoutDashboard },
+  { title: "Instituciones", url: "/instituciones", icon: Building2 },
   { title: "Materias", url: "/materias", icon: BookOpen },
   { title: "Grupos", url: "/grupos", icon: Users },
   { title: "Estudiantes", url: "/estudiantes", icon: GraduationCap },
@@ -28,10 +33,35 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { role } = useAuth();
+  const { instituciones, institucionActiva, setInstitucionActiva } = useInstitucion();
 
   return (
     <Sidebar collapsible="icon">
       <SidebarContent className="pt-4">
+        {/* Institution selector */}
+        {!collapsed && instituciones.length > 1 && (
+          <div className="px-3 pb-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="w-full justify-between text-xs h-9 gap-1">
+                  <div className="flex items-center gap-2 truncate">
+                    <Building2 className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{institucionActiva?.nombre || "Seleccionar"}</span>
+                  </div>
+                  <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                {instituciones.map(inst => (
+                  <DropdownMenuItem key={inst.id} onClick={() => setInstitucionActiva(inst)} className={inst.id === institucionActiva?.id ? "bg-primary/10" : ""}>
+                    {inst.nombre}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
+
         <SidebarGroup>
           <SidebarGroupLabel>Módulos</SidebarGroupLabel>
           <SidebarGroupContent>

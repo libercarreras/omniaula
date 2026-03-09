@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BookOpen, AlertTriangle, ClipboardCheck, Clock, Users, Plus, Loader2 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { BookOpen, AlertTriangle, ClipboardCheck, Users, Plus, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useInstitucion } from "@/hooks/useInstitucion";
 import { RadarRiesgo } from "@/components/radar/RadarRiesgo";
 import { InvitacionesPendientes } from "@/components/colaboracion/InvitacionesPendientes";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,48 +15,61 @@ interface ClaseWithRelations {
   grupo_id: string;
   horario: string | null;
   aula: string | null;
-  materia_nombre?: string;
-  grupo_nombre?: string;
 }
 
 export default function Dashboard() {
   const { profile, user } = useAuth();
+  const { institucionActiva } = useInstitucion();
   const nombre = profile?.nombre?.split(" ")[0] || "Profesor";
   const [loading, setLoading] = useState(true);
   const [clases, setClases] = useState<ClaseWithRelations[]>([]);
   const [totalEstudiantes, setTotalEstudiantes] = useState(0);
   const [totalEvaluaciones, setTotalEvaluaciones] = useState(0);
-  const [estudiantesEnRiesgo, setEstudiantesEnRiesgo] = useState(0);
+  const [estudiantesEnRiesgo] = useState(0);
   const [materias, setMaterias] = useState<Record<string, string>>({});
   const [grupos, setGrupos] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !institucionActiva) { setLoading(false); return; }
     const fetchData = async () => {
       setLoading(true);
-      const [clasesRes, materiasRes, gruposRes, estudiantesRes, evaluacionesRes] = await Promise.all([
-        supabase.from("clases").select("*"),
+      // Get grupos for active institution
+      const { data: gruposData } = await supabase
+        .from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
+      const grupoIds = (gruposData || []).map(g => g.id);
+      const grpMap: Record<string, string> = {};
+      (gruposData || []).forEach(g => { grpMap[g.id] = g.nombre; });
+      setGrupos(grpMap);
+
+      if (grupoIds.length === 0) {
+        setClases([]); setTotalEstudiantes(0); setTotalEvaluaciones(0);
+        setMaterias({});
+        setLoading(false);
+        return;
+      }
+
+      const [clasesRes, materiasRes, estudiantesRes, evaluacionesRes] = await Promise.all([
+        supabase.from("clases").select("*").in("grupo_id", grupoIds),
         supabase.from("materias").select("id, nombre"),
-        supabase.from("grupos").select("id, nombre"),
-        supabase.from("estudiantes").select("id"),
-        supabase.from("evaluaciones").select("id"),
+        supabase.from("estudiantes").select("id").in("grupo_id", grupoIds),
+        supabase.from("evaluaciones").select("id, clase_id"),
       ]);
 
       const matMap: Record<string, string> = {};
       (materiasRes.data || []).forEach(m => { matMap[m.id] = m.nombre; });
       setMaterias(matMap);
 
-      const grpMap: Record<string, string> = {};
-      (gruposRes.data || []).forEach(g => { grpMap[g.id] = g.nombre; });
-      setGrupos(grpMap);
-
-      setClases(clasesRes.data || []);
+      const clasesInst = clasesRes.data || [];
+      setClases(clasesInst);
       setTotalEstudiantes((estudiantesRes.data || []).length);
-      setTotalEvaluaciones((evaluacionesRes.data || []).length);
+
+      const claseIds = new Set(clasesInst.map(c => c.id));
+      const evsFiltered = (evaluacionesRes.data || []).filter(e => claseIds.has(e.clase_id));
+      setTotalEvaluaciones(evsFiltered.length);
       setLoading(false);
     };
     fetchData();
-  }, [user]);
+  }, [user, institucionActiva]);
 
   const getClaseLabel = (clase: ClaseWithRelations) =>
     `${materias[clase.materia_id] || "?"} - ${grupos[clase.grupo_id] || "?"}`;
@@ -65,11 +79,7 @@ export default function Dashboard() {
   });
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
   const hasData = clases.length > 0;
@@ -79,6 +89,9 @@ export default function Dashboard() {
       <div>
         <h1 className="text-2xl font-display font-bold">Buenos días, {nombre}</h1>
         <p className="text-muted-foreground capitalize">{hoy}</p>
+        {institucionActiva && (
+          <p className="text-sm text-primary font-medium mt-1">{institucionActiva.nombre}</p>
+        )}
       </div>
 
       <InvitacionesPendientes />
