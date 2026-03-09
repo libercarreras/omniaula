@@ -86,7 +86,9 @@ export default function Dashboard() {
     return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
-  const hasData = clases.length > 0;
+  const isNewUser = totalMaterias === 0 && totalGrupos === 0;
+  const hasMateriasOrGrupos = totalMaterias > 0 || totalGrupos > 0;
+  const hasClases = clases.length > 0;
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
