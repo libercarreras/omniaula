@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus } from "lucide-react";
-import { observaciones } from "@/data/mockData";
+import { observaciones, getClaseLabel } from "@/data/mockData";
 
 const tipoLabel: Record<string, { label: string; variant: "default" | "destructive" | "secondary" }> = {
   comportamiento: { label: "Comportamiento", variant: "destructive" },
@@ -24,7 +24,10 @@ export default function Seguimiento() {
           <Card key={obs.id}>
             <CardContent className="p-4">
               <div className="flex items-start justify-between mb-2">
-                <p className="font-semibold">{obs.estudianteNombre}</p>
+                <div>
+                  <p className="font-semibold">{obs.estudianteNombre}</p>
+                  <p className="text-xs text-muted-foreground">{getClaseLabel(obs.claseId)}</p>
+                </div>
                 <Badge variant={tipoLabel[obs.tipo].variant}>
                   {tipoLabel[obs.tipo].label}
                 </Badge>

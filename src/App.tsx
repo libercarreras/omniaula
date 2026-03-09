@@ -14,6 +14,7 @@ import DiarioClase from "./pages/DiarioClase";
 import Planificacion from "./pages/Planificacion";
 import Informes from "./pages/Informes";
 import Analisis from "./pages/Analisis";
+import Materias from "./pages/Materias";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -27,6 +28,7 @@ const App = () => (
         <Routes>
           <Route element={<AppLayout />}>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/materias" element={<Materias />} />
             <Route path="/grupos" element={<Grupos />} />
             <Route path="/estudiantes" element={<Estudiantes />} />
             <Route path="/asistencia" element={<Asistencia />} />

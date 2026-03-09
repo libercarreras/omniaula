@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus } from "lucide-react";
-import { evaluaciones } from "@/data/mockData";
+import { evaluaciones, getClaseLabel } from "@/data/mockData";
 
 const tipoColor: Record<string, string> = {
   parcial: "bg-primary/10 text-primary",
@@ -26,7 +26,7 @@ export default function Evaluaciones() {
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <p className="font-semibold">{ev.titulo}</p>
-                <p className="text-sm text-muted-foreground">{ev.grupoNombre} · {ev.fecha}</p>
+                <p className="text-sm text-muted-foreground">{getClaseLabel(ev.claseId)} · {ev.fecha}</p>
               </div>
               <Badge className={tipoColor[ev.tipo]} variant="secondary">
                 {ev.tipo.charAt(0).toUpperCase() + ev.tipo.slice(1)}

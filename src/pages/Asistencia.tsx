@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { grupos, estudiantes } from "@/data/mockData";
+import { clases, estudiantes, getClaseLabel, getClase } from "@/data/mockData";
 import { useState } from "react";
 import { Check, X, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -9,10 +9,11 @@ import { cn } from "@/lib/utils";
 type EstadoAsistencia = "presente" | "ausente" | "tardanza" | null;
 
 export default function Asistencia() {
-  const [grupoSeleccionado, setGrupoSeleccionado] = useState(grupos[0].id);
+  const [claseSeleccionada, setClaseSeleccionada] = useState(clases[0].id);
   const [asistencia, setAsistencia] = useState<Record<string, EstadoAsistencia>>({});
 
-  const estudiantesGrupo = estudiantes.filter((e) => e.grupoId === grupoSeleccionado);
+  const clase = getClase(claseSeleccionada);
+  const estudiantesClase = estudiantes.filter((e) => e.grupoId === clase?.grupoId);
 
   const marcar = (estudianteId: string, estado: EstadoAsistencia) => {
     setAsistencia((prev) => ({ ...prev, [estudianteId]: prev[estudianteId] === estado ? null : estado }));
@@ -23,13 +24,13 @@ export default function Asistencia() {
       <h1 className="text-2xl font-display font-bold">Asistencia</h1>
 
       <div className="flex gap-3 flex-wrap">
-        <Select value={grupoSeleccionado} onValueChange={setGrupoSeleccionado}>
-          <SelectTrigger className="w-40">
+        <Select value={claseSeleccionada} onValueChange={setClaseSeleccionada}>
+          <SelectTrigger className="w-56">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {grupos.map((g) => (
-              <SelectItem key={g.id} value={g.id}>{g.nombre}</SelectItem>
+            {clases.map((c) => (
+              <SelectItem key={c.id} value={c.id}>{getClaseLabel(c.id)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -39,11 +40,11 @@ export default function Asistencia() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">
-            {grupos.find((g) => g.id === grupoSeleccionado)?.nombre} — {estudiantesGrupo.length} estudiantes
+            {getClaseLabel(claseSeleccionada)} — {estudiantesClase.length} estudiantes
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          {estudiantesGrupo.map((est) => {
+          {estudiantesClase.map((est) => {
             const estado = asistencia[est.id];
             return (
               <div key={est.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">

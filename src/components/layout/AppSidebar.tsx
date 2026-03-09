@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, UserCheck, ClipboardCheck, GraduationCap,
-  Eye, BookText, Calendar, FileBarChart, BarChart3,
+  Eye, BookText, Calendar, FileBarChart, BarChart3, BookOpen,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -11,6 +11,7 @@ import {
 
 const items = [
   { title: "Panel", url: "/", icon: LayoutDashboard },
+  { title: "Materias", url: "/materias", icon: BookOpen },
   { title: "Grupos", url: "/grupos", icon: Users },
   { title: "Estudiantes", url: "/estudiantes", icon: GraduationCap },
   { title: "Asistencia", url: "/asistencia", icon: UserCheck },
