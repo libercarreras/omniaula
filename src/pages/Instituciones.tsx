@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -109,7 +109,12 @@ export default function Instituciones() {
     navigate("/");
   };
 
-  if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  const initialLoadDone = useRef(false);
+  useEffect(() => {
+    if (!loading) initialLoadDone.current = true;
+  }, [loading]);
+
+  if (loading && !initialLoadDone.current) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -171,6 +176,7 @@ export default function Instituciones() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Nueva institución</DialogTitle>
+            <DialogDescription>Completá los datos para crear una nueva institución.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -201,6 +207,7 @@ export default function Instituciones() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Editar institución</DialogTitle>
+            <DialogDescription>Modificá los datos de la institución.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
