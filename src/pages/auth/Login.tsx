@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,8 @@ export default function Login() {
     if (error) {
       toast.error(error.message === "Invalid login credentials"
         ? "Credenciales incorrectas"
+        : error.message === "Signups not allowed for this instance"
+        ? "El registro no está disponible. Contacta al administrador."
         : error.message);
     } else {
       navigate("/");
@@ -60,12 +62,7 @@ export default function Login() {
               />
             </div>
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Contraseña</Label>
-                <Link to="/recuperar" className="text-xs text-primary hover:underline">
-                  ¿Olvidaste tu contraseña?
-                </Link>
-              </div>
+              <Label htmlFor="password">Contraseña</Label>
               <Input
                 id="password"
                 type="password"
@@ -80,11 +77,8 @@ export default function Login() {
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Iniciar sesión"}
             </Button>
           </form>
-          <p className="text-sm text-center text-muted-foreground mt-4">
-            ¿No tienes cuenta?{" "}
-            <Link to="/registro" className="text-primary font-medium hover:underline">
-              Regístrate gratis
-            </Link>
+          <p className="text-xs text-center text-muted-foreground mt-4">
+            Las cuentas son creadas por el administrador del sistema.
           </p>
         </CardContent>
       </Card>
