@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
@@ -7,13 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  estudiantes, observaciones, getClaseLabel,
-} from "@/data/mockData";
-import {
   UserCheck, ClipboardCheck, MessageSquare, Calendar,
-  Check, X, Clock, Copy,
+  Check, X, Clock, Copy, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface StudentDetailSheetProps {
   studentId: string | null;
@@ -22,196 +21,120 @@ interface StudentDetailSheetProps {
   onClose: () => void;
 }
 
-const mockAsistenciaHistorial = [
-  { fecha: "2026-03-07", estado: "presente" },
-  { fecha: "2026-03-06", estado: "presente" },
-  { fecha: "2026-03-05", estado: "tarde" },
-  { fecha: "2026-03-04", estado: "presente" },
-  { fecha: "2026-03-03", estado: "falta" },
-];
-
-const mockNotasHistorial = [
-  { evaluacion: "Parcial Ecuaciones", nota: 7, fecha: "2026-03-01" },
-  { evaluacion: "TP Funciones", nota: 8.5, fecha: "2026-02-20" },
-  { evaluacion: "Oral Cinemática", nota: 6, fecha: "2026-02-10" },
-];
-
 export function StudentDetailSheet({ studentId, claseId, open, onClose }: StudentDetailSheetProps) {
-  const student = estudiantes.find((e) => e.id === studentId);
-  const studentObs = observaciones.filter((o) => o.estudianteId === studentId);
+  const [student, setStudent] = useState<any>(null);
+  const [observaciones, setObservaciones] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  if (!student) return null;
+  useEffect(() => {
+    if (!studentId || !open) return;
+    setLoading(true);
+    const fetch = async () => {
+      const [estRes, obsRes] = await Promise.all([
+        supabase.from("estudiantes").select("*").eq("id", studentId).maybeSingle(),
+        supabase.from("observaciones").select("*").eq("estudiante_id", studentId).order("fecha", { ascending: false }),
+      ]);
+      setStudent(estRes.data);
+      setObservaciones(obsRes.data || []);
+      setLoading(false);
+    };
+    fetch();
+  }, [studentId, open]);
 
-  const estadoIcon: Record<string, React.ReactNode> = {
-    presente: <Check className="h-3.5 w-3.5 text-success" />,
-    falta: <X className="h-3.5 w-3.5 text-destructive" />,
-    tarde: <Clock className="h-3.5 w-3.5 text-warning" />,
+  if (!student && !loading) return null;
+
+  const getInitials = (name: string) => {
+    const parts = name?.split(" ") || [];
+    return parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}` : (name || "?").substring(0, 2);
   };
 
-  const promedioNotas = mockNotasHistorial.reduce((s, n) => s + n.nota, 0) / mockNotasHistorial.length;
-  const asistenciaPct = 85;
-
   const copiarResumen = () => {
+    if (!student) return;
     const resumen = [
       `📋 Resumen del estudiante`,
-      `Nombre: ${student.apellido}, ${student.nombre}`,
-      `Grupo: ${student.grupoNombre}`,
-      `Asistencia: ${asistenciaPct}%`,
-      `Promedio: ${promedioNotas.toFixed(1)}`,
-      `Observaciones: ${studentObs.length > 0 ? studentObs.map((o) => o.nota).join("; ") : "Sin observaciones"}`,
+      `Nombre: ${student.nombre_completo}`,
+      `Observaciones: ${observaciones.length > 0 ? observaciones.map(o => o.descripcion).join("; ") : "Sin observaciones"}`,
     ].join("\n");
-
     navigator.clipboard.writeText(resumen);
     toast.success("Resumen copiado al portapapeles");
   };
 
+  const tipoLabel: Record<string, string> = {
+    participacion: "Participación",
+    actitud: "Actitud",
+    cumplimiento_tareas: "Tareas",
+    dificultad_contenidos: "Dificultad",
+  };
+
   return (
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+    <Sheet open={open} onOpenChange={v => !v && onClose()}>
       <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-y-auto">
-        <SheetHeader className="pb-4">
-          <div className="flex items-center gap-3">
-            <Avatar className="h-12 w-12">
-              <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                {student.nombre[0]}{student.apellido[0]}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1">
-              <SheetTitle className="text-left">
-                {student.apellido}, {student.nombre}
-              </SheetTitle>
-              <p className="text-sm text-muted-foreground">{student.grupoNombre}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {student.enRiesgo && (
-                <Badge variant="destructive">En riesgo</Badge>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                onClick={copiarResumen}
-              >
-                <Copy className="h-3.5 w-3.5" /> Copiar
-              </Button>
-            </div>
-          </div>
-        </SheetHeader>
-
-        <Tabs defaultValue="asistencia" className="w-full">
-          <TabsList className="w-full grid grid-cols-4">
-            <TabsTrigger value="asistencia" className="text-xs gap-1">
-              <UserCheck className="h-3.5 w-3.5" /> Asist.
-            </TabsTrigger>
-            <TabsTrigger value="notas" className="text-xs gap-1">
-              <ClipboardCheck className="h-3.5 w-3.5" /> Notas
-            </TabsTrigger>
-            <TabsTrigger value="observaciones" className="text-xs gap-1">
-              <MessageSquare className="h-3.5 w-3.5" /> Obs.
-            </TabsTrigger>
-            <TabsTrigger value="historial" className="text-xs gap-1">
-              <Calendar className="h-3.5 w-3.5" /> Historial
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="asistencia" className="mt-4 space-y-2">
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              <Card>
-                <CardContent className="p-3 text-center">
-                  <p className="text-2xl font-bold text-success">{asistenciaPct}%</p>
-                  <p className="text-xs text-muted-foreground">Asistencia</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-3 text-center">
-                  <p className="text-2xl font-bold text-destructive">2</p>
-                  <p className="text-xs text-muted-foreground">Faltas</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-3 text-center">
-                  <p className="text-2xl font-bold text-warning">1</p>
-                  <p className="text-xs text-muted-foreground">Tardanzas</p>
-                </CardContent>
-              </Card>
-            </div>
-            {mockAsistenciaHistorial.map((item, i) => (
-              <div key={i} className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30">
-                <span className="text-sm">{item.fecha}</span>
-                <div className="flex items-center gap-1.5">
-                  {estadoIcon[item.estado]}
-                  <span className="text-xs capitalize">{item.estado}</span>
+        {loading ? (
+          <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+        ) : student ? (
+          <>
+            <SheetHeader className="pb-4">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-12 w-12">
+                  <AvatarFallback className="bg-primary/10 text-primary font-semibold">{getInitials(student.nombre_completo)}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <SheetTitle className="text-left">{student.nombre_completo}</SheetTitle>
                 </div>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={copiarResumen}>
+                  <Copy className="h-3.5 w-3.5" /> Copiar
+                </Button>
               </div>
-            ))}
-          </TabsContent>
+            </SheetHeader>
 
-          <TabsContent value="notas" className="mt-4 space-y-2">
-            <Card className="mb-4">
-              <CardContent className="p-3 text-center">
-                <p className="text-2xl font-bold text-primary">{promedioNotas.toFixed(1)}</p>
-                <p className="text-xs text-muted-foreground">Promedio general</p>
-              </CardContent>
-            </Card>
-            {mockNotasHistorial.map((item, i) => (
-              <div key={i} className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30">
-                <div>
-                  <p className="text-sm font-medium">{item.evaluacion}</p>
-                  <p className="text-xs text-muted-foreground">{item.fecha}</p>
-                </div>
-                <span className="text-lg font-bold text-primary">{item.nota}</span>
-              </div>
-            ))}
-          </TabsContent>
+            <Tabs defaultValue="observaciones" className="w-full">
+              <TabsList className="w-full grid grid-cols-2">
+                <TabsTrigger value="observaciones" className="text-xs gap-1"><MessageSquare className="h-3.5 w-3.5" /> Observaciones</TabsTrigger>
+                <TabsTrigger value="historial" className="text-xs gap-1"><Calendar className="h-3.5 w-3.5" /> Info</TabsTrigger>
+              </TabsList>
 
-          <TabsContent value="observaciones" className="mt-4 space-y-2">
-            {studentObs.length > 0 ? (
-              studentObs.map((obs) => (
-                <Card key={obs.id}>
-                  <CardContent className="p-3">
-                    <div className="flex items-start justify-between mb-1">
-                      <Badge variant="secondary" className="text-xs">{obs.tipo}</Badge>
-                      <span className="text-xs text-muted-foreground">{obs.fecha}</span>
+              <TabsContent value="observaciones" className="mt-4 space-y-2">
+                {observaciones.length > 0 ? (
+                  observaciones.map(obs => (
+                    <Card key={obs.id}>
+                      <CardContent className="p-3">
+                        <div className="flex items-start justify-between mb-1">
+                          <Badge variant="secondary" className="text-xs">{tipoLabel[obs.tipo] || obs.tipo}</Badge>
+                          <span className="text-xs text-muted-foreground">{obs.fecha}</span>
+                        </div>
+                        <p className="text-sm mt-1">{obs.descripcion}</p>
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-6">Sin observaciones registradas</p>
+                )}
+              </TabsContent>
+
+              <TabsContent value="historial" className="mt-4">
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Información del estudiante</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Nombre</span>
+                      <span className="font-medium">{student.nombre_completo}</span>
                     </div>
-                    <p className="text-sm mt-1">{obs.nota}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{getClaseLabel(obs.claseId)}</p>
+                    {student.numero_lista && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">N° de lista</span>
+                        <span className="font-medium">#{student.numero_lista}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Observaciones</span>
+                      <span className="font-medium">{observaciones.length}</span>
+                    </div>
                   </CardContent>
                 </Card>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-6">
-                Sin observaciones registradas
-              </p>
-            )}
-          </TabsContent>
-
-          <TabsContent value="historial" className="mt-4">
-            <div className="space-y-3">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Resumen general</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Asistencia total</span>
-                    <span className="font-medium">{asistenciaPct}%</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Promedio notas</span>
-                    <span className="font-medium">{promedioNotas.toFixed(1)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Participación</span>
-                    <span className="font-medium">Media</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Observaciones</span>
-                    <span className="font-medium">{studentObs.length}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-        </Tabs>
+              </TabsContent>
+            </Tabs>
+          </>
+        ) : null}
       </SheetContent>
     </Sheet>
   );

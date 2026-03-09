@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -9,93 +8,132 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Sparkles, Loader2 } from "lucide-react";
-import { diarioClase, getClaseLabel, clases } from "@/data/mockData";
+import { Plus, Sparkles, Loader2, BookOpen } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
 export default function DiarioClase() {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [entries, setEntries] = useState<any[]>([]);
+  const [clases, setClases] = useState<any[]>([]);
+  const [materias, setMaterias] = useState<Record<string, string>>({});
+  const [grupos, setGrupos] = useState<Record<string, string>>({});
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [tema, setTema] = useState("");
   const [actividad, setActividad] = useState("");
   const [participacion, setParticipacion] = useState("moderada");
-  const [claseId, setClaseId] = useState(clases[0]?.id || "");
+  const [claseId, setClaseId] = useState("");
   const [resumen, setResumen] = useState("");
   const [generating, setGenerating] = useState(false);
 
+  useEffect(() => {
+    if (!user) return;
+    const fetch = async () => {
+      setLoading(true);
+      const [diarioRes, clsRes, matRes, grpRes] = await Promise.all([
+        supabase.from("diario_clase").select("*").order("fecha", { ascending: false }),
+        supabase.from("clases").select("*"),
+        supabase.from("materias").select("id, nombre"),
+        supabase.from("grupos").select("id, nombre"),
+      ]);
+      setEntries(diarioRes.data || []);
+      setClases(clsRes.data || []);
+      const mm: Record<string, string> = {};
+      (matRes.data || []).forEach(m => { mm[m.id] = m.nombre; });
+      setMaterias(mm);
+      const gm: Record<string, string> = {};
+      (grpRes.data || []).forEach(g => { gm[g.id] = g.nombre; });
+      setGrupos(gm);
+      if (clsRes.data && clsRes.data.length > 0) setClaseId(clsRes.data[0].id);
+      setLoading(false);
+    };
+    fetch();
+  }, [user]);
+
+  const getClaseLabel = (id: string) => {
+    const c = clases.find(cl => cl.id === id);
+    if (!c) return "?";
+    return `${materias[c.materia_id] || "?"} - ${grupos[c.grupo_id] || "?"}`;
+  };
+
   const generarResumen = async () => {
-    if (!tema.trim() || !actividad.trim()) {
-      toast.error("Completa el tema y la actividad");
-      return;
-    }
+    if (!tema.trim() || !actividad.trim()) { toast.error("Completa el tema y la actividad"); return; }
     setGenerating(true);
     try {
       const { data, error } = await supabase.functions.invoke("generate-diary-summary", {
-        body: {
-          tema,
-          actividad,
-          participacion,
-          claseLabel: getClaseLabel(claseId),
-        },
+        body: { tema, actividad, participacion, claseLabel: getClaseLabel(claseId) },
       });
       if (error) throw error;
       setResumen(data?.summary || "");
       toast.success("Resumen generado con IA");
     } catch {
-      // Fallback local
-      setResumen(
-        `Durante la clase se trabajó el tema "${tema}" mediante ${actividad.toLowerCase()}. ` +
-        `La participación del grupo fue ${participacion}. `
-      );
+      setResumen(`Durante la clase se trabajó el tema "${tema}" mediante ${actividad.toLowerCase()}. La participación del grupo fue ${participacion}.`);
       toast.info("Resumen generado localmente (IA no disponible)");
-    } finally {
-      setGenerating(false);
-    }
+    } finally { setGenerating(false); }
   };
 
-  const guardarEntrada = () => {
+  const guardarEntrada = async () => {
+    if (!user || !claseId) return;
+    const { error } = await supabase.from("diario_clase").insert({
+      clase_id: claseId,
+      tema_trabajado: tema,
+      actividad_realizada: actividad,
+      observaciones: resumen || null,
+      user_id: user.id,
+    });
+    if (error) { toast.error("Error al guardar"); return; }
     toast.success("Entrada guardada en el diario");
     setDialogOpen(false);
-    setTema("");
-    setActividad("");
-    setResumen("");
+    setTema(""); setActividad(""); setResumen("");
+    // Refresh
+    const { data } = await supabase.from("diario_clase").select("*").order("fecha", { ascending: false });
+    setEntries(data || []);
   };
+
+  if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-display font-bold">Diario de Clase</h1>
-        <Button size="lg" className="gap-2" onClick={() => setDialogOpen(true)}>
+        <Button size="lg" className="gap-2" onClick={() => setDialogOpen(true)} disabled={clases.length === 0}>
           <Plus className="h-4 w-4" /> Nueva entrada
         </Button>
       </div>
-      <div className="space-y-3">
-        {diarioClase.map((entry) => (
-          <Card key={entry.id}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="font-semibold">{getClaseLabel(entry.claseId)}</p>
-                <span className="text-sm text-muted-foreground">{entry.fecha}</span>
-              </div>
-              <p className="text-sm mb-2">{entry.descripcion}</p>
-              <div className="flex gap-2 flex-wrap">
-                {entry.temas.map((t) => (
-                  <Badge key={t} variant="secondary">{t}</Badge>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
 
-      {/* Dialog nueva entrada */}
+      {entries.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="p-8 text-center space-y-3">
+            <BookOpen className="h-12 w-12 text-muted-foreground mx-auto" />
+            <p className="text-muted-foreground">No hay entradas en el diario.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {entries.map(entry => (
+            <Card key={entry.id}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-semibold">{getClaseLabel(entry.clase_id)}</p>
+                  <span className="text-sm text-muted-foreground">{entry.fecha}</span>
+                </div>
+                {entry.tema_trabajado && <p className="text-sm font-medium text-primary">{entry.tema_trabajado}</p>}
+                {entry.actividad_realizada && <p className="text-sm text-muted-foreground">{entry.actividad_realizada}</p>}
+                {entry.observaciones && <p className="text-sm mt-1">{entry.observaciones}</p>}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Nueva entrada del diario</DialogTitle>
-            <DialogDescription>
-              Registra lo trabajado en la clase. Puedes generar un resumen con IA.
-            </DialogDescription>
+            <DialogDescription>Registra lo trabajado en la clase.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -103,28 +141,12 @@ export default function DiarioClase() {
               <Select value={claseId} onValueChange={setClaseId}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {clases.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{getClaseLabel(c.id)}</SelectItem>
-                  ))}
+                  {clases.map(c => <SelectItem key={c.id} value={c.id}>{getClaseLabel(c.id)}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Tema trabajado</Label>
-              <Input
-                placeholder="Ej: Ecuaciones cuadráticas"
-                value={tema}
-                onChange={(e) => setTema(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Actividad realizada</Label>
-              <Input
-                placeholder="Ej: Ejercicios prácticos en grupo"
-                value={actividad}
-                onChange={(e) => setActividad(e.target.value)}
-              />
-            </div>
+            <div><Label>Tema trabajado</Label><Input placeholder="Ej: Ecuaciones cuadráticas" value={tema} onChange={e => setTema(e.target.value)} /></div>
+            <div><Label>Actividad realizada</Label><Input placeholder="Ej: Ejercicios prácticos en grupo" value={actividad} onChange={e => setActividad(e.target.value)} /></div>
             <div>
               <Label>Nivel de participación</Label>
               <Select value={participacion} onValueChange={setParticipacion}>
@@ -136,36 +158,14 @@ export default function DiarioClase() {
                 </SelectContent>
               </Select>
             </div>
-
-            <Button
-              variant="outline"
-              className="w-full gap-2"
-              onClick={generarResumen}
-              disabled={generating}
-            >
-              {generating ? (
-                <><Loader2 className="h-4 w-4 animate-spin" /> Generando...</>
-              ) : (
-                <><Sparkles className="h-4 w-4" /> Generar resumen con IA</>
-              )}
+            <Button variant="outline" className="w-full gap-2" onClick={generarResumen} disabled={generating}>
+              {generating ? <><Loader2 className="h-4 w-4 animate-spin" /> Generando...</> : <><Sparkles className="h-4 w-4" /> Generar resumen con IA</>}
             </Button>
-
-            {resumen && (
-              <div>
-                <Label>Resumen (editable)</Label>
-                <Textarea
-                  value={resumen}
-                  onChange={(e) => setResumen(e.target.value)}
-                  className="min-h-[100px]"
-                />
-              </div>
-            )}
+            {resumen && <div><Label>Resumen (editable)</Label><Textarea value={resumen} onChange={e => setResumen(e.target.value)} className="min-h-[100px]" /></div>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={guardarEntrada} disabled={!tema.trim()}>
-              Guardar entrada
-            </Button>
+            <Button onClick={guardarEntrada} disabled={!tema.trim()}>Guardar entrada</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
