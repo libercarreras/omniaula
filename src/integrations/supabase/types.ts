@@ -398,6 +398,7 @@ export type Database = {
           color: string | null
           created_at: string
           id: string
+          institucion_id: string | null
           nombre: string
           updated_at: string
           user_id: string
@@ -406,6 +407,7 @@ export type Database = {
           color?: string | null
           created_at?: string
           id?: string
+          institucion_id?: string | null
           nombre: string
           updated_at?: string
           user_id: string
@@ -414,11 +416,20 @@ export type Database = {
           color?: string | null
           created_at?: string
           id?: string
+          institucion_id?: string | null
           nombre?: string
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "materias_institucion_id_fkey"
+            columns: ["institucion_id"]
+            isOneToOne: false
+            referencedRelation: "instituciones"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notas: {
         Row: {
