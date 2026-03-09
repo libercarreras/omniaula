@@ -2,15 +2,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookOpen, AlertTriangle, ClipboardCheck, Clock, Users } from "lucide-react";
 import { clasesDelDia, evaluaciones, estudiantes, actividadReciente, clases, getClaseLabel, getClase } from "@/data/mockData";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 const estudiantesEnRiesgo = estudiantes.filter((e) => e.enRiesgo);
 const proximasEvaluaciones = evaluaciones.slice(0, 3);
 
 export default function Dashboard() {
+  const { profile } = useAuth();
+  const nombre = profile?.nombre?.split(" ")[0] || "Profesor";
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div>
-        <h1 className="text-2xl font-display font-bold">Buenos días, Profesor</h1>
+        <h1 className="text-2xl font-display font-bold">Buenos días, {nombre}</h1>
         <p className="text-muted-foreground">Lunes 9 de marzo, 2026</p>
       </div>
 
