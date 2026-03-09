@@ -79,7 +79,7 @@ export default function Dashboard() {
         <h2 className="font-display font-semibold text-lg mb-3">Acceso rápido</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {clases.map((clase) => (
-            <Link key={clase.id} to="/materias">
+            <Link key={clase.id} to={`/clase/${clase.id}`}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer">
                 <CardContent className="p-4">
                   <p className="font-bold text-lg">{getClaseLabel(clase.id)}</p>
