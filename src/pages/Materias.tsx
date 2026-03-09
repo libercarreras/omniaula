@@ -169,6 +169,19 @@ export default function Materias() {
               <Label htmlFor="materia-nombre">Nombre de la materia</Label>
               <Input id="materia-nombre" placeholder="Ej: Matemáticas" value={nombre} onChange={e => setNombre(e.target.value)} onKeyDown={e => e.key === "Enter" && handleSave()} />
             </div>
+            <div className="space-y-2">
+              <Label>Institución</Label>
+              <Select value={institucionId} onValueChange={setInstitucionId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar institución" />
+                </SelectTrigger>
+                <SelectContent>
+                  {instituciones.map(inst => (
+                    <SelectItem key={inst.id} value={inst.id}>{inst.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
