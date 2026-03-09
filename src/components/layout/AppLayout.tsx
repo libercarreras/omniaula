@@ -18,6 +18,7 @@ export function AppLayout() {
   const isMobile = useIsMobile();
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
 
   const initials = profile?.nombre
     ? profile.nombre.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
