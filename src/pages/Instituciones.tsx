@@ -176,6 +176,7 @@ export default function Instituciones() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Nueva institución</DialogTitle>
+            <DialogDescription>Completá los datos para crear una nueva institución.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
