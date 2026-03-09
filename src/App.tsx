@@ -15,6 +15,7 @@ import Planificacion from "./pages/Planificacion";
 import Informes from "./pages/Informes";
 import Analisis from "./pages/Analisis";
 import Materias from "./pages/Materias";
+import ModoClase from "./pages/ModoClase";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
