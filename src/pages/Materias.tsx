@@ -72,7 +72,7 @@ export default function Materias() {
       }
       toast({ title: "Materia actualizada", description: `"${nombre.trim()}" fue actualizada correctamente.` });
     } else {
-      const { error } = await supabase.from("materias").insert({ nombre: nombre.trim(), user_id: user.id });
+      const { error } = await supabase.from("materias").insert({ nombre: nombre.trim(), user_id: user.id, institucion_id: institucionId || null });
       setSaving(false);
       if (error) {
         toast({ title: "Error", description: "No se pudo crear la materia.", variant: "destructive" });
