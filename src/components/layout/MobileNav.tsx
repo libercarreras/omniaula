@@ -1,11 +1,12 @@
 import { NavLink as RouterNavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Users, UserCheck, ClipboardCheck, MoreHorizontal,
-  Eye, BookText, Calendar, FileBarChart, BarChart3, GraduationCap, BookOpen,
+  Eye, BookText, Calendar, FileBarChart, BarChart3, GraduationCap, BookOpen, Shield,
 } from "lucide-react";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 
 const mainTabs = [
   { title: "Panel", url: "/", icon: LayoutDashboard },
@@ -28,13 +29,16 @@ const moreItems = [
 export function MobileNav() {
   const [moreOpen, setMoreOpen] = useState(false);
   const location = useLocation();
+  const { role } = useAuth();
 
   const isActive = (url: string) => {
     if (url === "/") return location.pathname === "/";
     return location.pathname.startsWith(url);
   };
 
-  const isMoreActive = moreItems.some((item) => isActive(item.url));
+  const adminItem = { title: "Admin", url: "/administracion", icon: Shield };
+  const allMoreItems = role === "admin" ? [...moreItems, adminItem] : moreItems;
+  const isMoreActive = allMoreItems.some((item) => isActive(item.url));
 
   return (
     <>
@@ -82,7 +86,7 @@ export function MobileNav() {
             <SheetTitle>Más opciones</SheetTitle>
           </SheetHeader>
           <div className="grid grid-cols-3 gap-4 py-6">
-            {moreItems.map((item) => (
+            {allMoreItems.map((item) => (
               <RouterNavLink
                 key={item.url}
                 to={item.url}

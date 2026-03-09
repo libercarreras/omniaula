@@ -19,8 +19,8 @@ import Analisis from "./pages/Analisis";
 import Materias from "./pages/Materias";
 import ModoClase from "./pages/ModoClase";
 import Perfil from "./pages/Perfil";
+import Administracion from "./pages/Administracion";
 import Login from "./pages/auth/Login";
-import Register from "./pages/auth/Register";
 import RecoverPassword from "./pages/auth/RecoverPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
 import NotFound from "./pages/NotFound";
@@ -37,7 +37,6 @@ const App = () => (
           <Routes>
             {/* Public auth routes */}
             <Route path="/login" element={<Login />} />
-            <Route path="/registro" element={<Register />} />
             <Route path="/recuperar" element={<RecoverPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
 
@@ -56,6 +55,7 @@ const App = () => (
               <Route path="/analisis" element={<Analisis />} />
               <Route path="/clase/:claseId" element={<ModoClase />} />
               <Route path="/perfil" element={<Perfil />} />
+              <Route path="/administracion" element={<Administracion />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />
