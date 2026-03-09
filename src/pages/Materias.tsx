@@ -127,6 +127,11 @@ export default function Materias() {
                     <BookOpen className="h-5 w-5 text-primary" />
                     <h3 className="font-display font-bold text-lg">{materia.nombre}</h3>
                     <Badge variant="secondary">{clasesMateria.length} clases</Badge>
+                    {materia.institucion_id && (
+                      <Badge variant="outline" className="text-xs">
+                        {instituciones.find(i => i.id === materia.institucion_id)?.nombre || "Institución"}
+                      </Badge>
+                    )}
                     <div className="ml-auto flex gap-1">
                       <Button variant="ghost" size="icon" onClick={() => openEdit(materia)}>
                         <Pencil className="h-4 w-4" />
