@@ -2,12 +2,13 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Building2, Plus, Loader2, MapPin } from "lucide-react";
+import { Building2, Plus, Loader2, MapPin, Pencil, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useInstitucion } from "@/hooks/useInstitucion";
+import { useInstitucion, type Institucion } from "@/hooks/useInstitucion";
 import { toast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 
@@ -15,11 +16,23 @@ export default function Instituciones() {
   const { user } = useAuth();
   const { instituciones, loading, setInstitucionActiva, refresh } = useInstitucion();
   const navigate = useNavigate();
+
+  // Create dialog
   const [dialogOpen, setDialogOpen] = useState(false);
   const [nombre, setNombre] = useState("");
   const [direccion, setDireccion] = useState("");
   const [ciudad, setCiudad] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Edit dialog
+  const [editingInst, setEditingInst] = useState<Institucion | null>(null);
+  const [editNombre, setEditNombre] = useState("");
+  const [editDireccion, setEditDireccion] = useState("");
+  const [editCiudad, setEditCiudad] = useState("");
+
+  // Delete dialog
+  const [deleteInst, setDeleteInst] = useState<Institucion | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const handleCreate = async () => {
     if (!user || !nombre.trim()) return;
@@ -50,7 +63,48 @@ export default function Instituciones() {
     await refresh();
   };
 
-  const handleSelect = (inst: typeof instituciones[0]) => {
+  const handleEdit = (inst: Institucion, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingInst(inst);
+    setEditNombre(inst.nombre);
+    setEditDireccion(inst.direccion || "");
+    setEditCiudad(inst.ciudad || "");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingInst || !editNombre.trim()) return;
+    setSaving(true);
+    const { error } = await supabase.from("instituciones").update({
+      nombre: editNombre.trim(),
+      direccion: editDireccion.trim() || null,
+      ciudad: editCiudad.trim() || null,
+    }).eq("id", editingInst.id);
+
+    if (error) {
+      toast({ title: "Error", description: "No se pudo actualizar la institución.", variant: "destructive" });
+    } else {
+      toast({ title: "Institución actualizada" });
+    }
+    setEditingInst(null);
+    setSaving(false);
+    await refresh();
+  };
+
+  const handleDelete = async () => {
+    if (!deleteInst) return;
+    setDeleting(true);
+    const { error } = await supabase.from("instituciones").delete().eq("id", deleteInst.id);
+    if (error) {
+      toast({ title: "Error", description: "No se pudo eliminar la institución.", variant: "destructive" });
+    } else {
+      toast({ title: "Institución eliminada" });
+    }
+    setDeleteInst(null);
+    setDeleting(false);
+    await refresh();
+  };
+
+  const handleSelect = (inst: Institucion) => {
     setInstitucionActiva(inst);
     navigate("/");
   };
@@ -95,6 +149,16 @@ export default function Instituciones() {
                     )}
                     <span className="text-xs text-muted-foreground capitalize mt-1 inline-block">{inst.rol}</span>
                   </div>
+                  {inst.rol === "administrador" && (
+                    <div className="flex gap-1 shrink-0">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => handleEdit(inst, e)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteInst(inst); }}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -102,6 +166,7 @@ export default function Instituciones() {
         </div>
       )}
 
+      {/* Create Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -130,6 +195,55 @@ export default function Instituciones() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editingInst} onOpenChange={(open) => { if (!open) setEditingInst(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar institución</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="edit-nombre">Nombre *</Label>
+              <Input id="edit-nombre" value={editNombre} onChange={e => setEditNombre(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-direccion">Dirección</Label>
+              <Input id="edit-direccion" value={editDireccion} onChange={e => setEditDireccion(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-ciudad">Ciudad</Label>
+              <Input id="edit-ciudad" value={editCiudad} onChange={e => setEditCiudad(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingInst(null)}>Cancelar</Button>
+            <Button onClick={handleSaveEdit} disabled={!editNombre.trim() || saving}>
+              {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Guardar cambios
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteInst} onOpenChange={(open) => { if (!open) setDeleteInst(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar institución?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará <strong>"{deleteInst?.nombre}"</strong> junto con todos sus grupos y datos asociados. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={deleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
