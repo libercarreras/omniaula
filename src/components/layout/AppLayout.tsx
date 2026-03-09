@@ -5,7 +5,8 @@ import { MobileNav } from "./MobileNav";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/hooks/useAuth";
-import { BookOpen, LogOut, User } from "lucide-react";
+import { useTheme } from "next-themes";
+import { BookOpen, LogOut, User, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
