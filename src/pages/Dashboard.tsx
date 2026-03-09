@@ -42,6 +42,7 @@ export default function Dashboard() {
       const grpMap: Record<string, string> = {};
       (gruposData || []).forEach(g => { grpMap[g.id] = g.nombre; });
       setGrupos(grpMap);
+      setTotalGrupos(grupoIds.length);
 
       if (grupoIds.length === 0) {
         setClases([]); setTotalEstudiantes(0); setTotalEvaluaciones(0);
