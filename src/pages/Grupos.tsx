@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Users, UserPlus, Share2, Loader2, FolderOpen } from "lucide-react";
+import { Plus, Users, UserPlus, Share2, Loader2, FolderOpen, Pencil, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InvitarDocente } from "@/components/colaboracion/InvitarDocente";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,12 +19,13 @@ interface GrupoDB {
   nombre: string;
   anio: string | null;
   turno: string | null;
+  institucion_id: string;
   studentCount?: number;
 }
 
 export default function Grupos() {
   const { user } = useAuth();
-  const { institucionActiva } = useInstitucion();
+  const { institucionActiva, instituciones } = useInstitucion();
   const [loading, setLoading] = useState(true);
   const [grupos, setGrupos] = useState<GrupoDB[]>([]);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -32,7 +35,10 @@ export default function Grupos() {
   const [nombre, setNombre] = useState("");
   const [anio, setAnio] = useState("");
   const [turno, setTurno] = useState("");
+  const [institucionId, setInstitucionId] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editingGrupo, setEditingGrupo] = useState<GrupoDB | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<GrupoDB | null>(null);
 
   const fetchData = async () => {
     if (!user || !institucionActiva) return;
@@ -56,25 +62,73 @@ export default function Grupos() {
 
   useEffect(() => { fetchData(); }, [user, institucionActiva]);
 
-  const handleCreate = async () => {
-    if (!user || !nombre.trim() || !institucionActiva) return;
+  const openCreate = () => {
+    setEditingGrupo(null);
+    setNombre("");
+    setAnio("");
+    setTurno("");
+    setInstitucionId(institucionActiva?.id || "");
+    setDialogOpen(true);
+  };
+
+  const openEdit = (grupo: GrupoDB) => {
+    setEditingGrupo(grupo);
+    setNombre(grupo.nombre);
+    setAnio(grupo.anio || "");
+    setTurno(grupo.turno || "");
+    setInstitucionId(grupo.institucion_id);
+    setDialogOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!user || !nombre.trim() || !institucionId) return;
     setSaving(true);
-    const { error } = await supabase.from("grupos").insert({
-      nombre: nombre.trim(),
-      anio: anio.trim() || null,
-      turno: turno.trim() || null,
-      user_id: user.id,
-      institucion_id: institucionActiva.id,
-    });
-    setSaving(false);
-    if (error) {
-      toast({ title: "Error", description: "No se pudo crear el grupo.", variant: "destructive" });
-      return;
+
+    if (editingGrupo) {
+      const { error } = await supabase.from("grupos").update({
+        nombre: nombre.trim(),
+        anio: anio.trim() || null,
+        turno: turno.trim() || null,
+        institucion_id: institucionId,
+      }).eq("id", editingGrupo.id);
+      setSaving(false);
+      if (error) {
+        toast({ title: "Error", description: "No se pudo actualizar el grupo.", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Grupo actualizado", description: `"${nombre.trim()}" fue actualizado correctamente.` });
+    } else {
+      const { error } = await supabase.from("grupos").insert({
+        nombre: nombre.trim(),
+        anio: anio.trim() || null,
+        turno: turno.trim() || null,
+        user_id: user.id,
+        institucion_id: institucionId,
+      });
+      setSaving(false);
+      if (error) {
+        toast({ title: "Error", description: "No se pudo crear el grupo.", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Grupo creado", description: `"${nombre.trim()}" fue agregado correctamente.` });
     }
-    toast({ title: "Grupo creado", description: `"${nombre.trim()}" fue agregado correctamente.` });
-    setNombre(""); setAnio(""); setTurno("");
+
+    setNombre(""); setAnio(""); setTurno(""); setInstitucionId("");
+    setEditingGrupo(null);
     setDialogOpen(false);
     fetchData();
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    const { error } = await supabase.from("grupos").delete().eq("id", deleteTarget.id);
+    if (error) {
+      toast({ title: "Error", description: "No se pudo eliminar el grupo. Puede tener estudiantes o clases asociadas.", variant: "destructive" });
+    } else {
+      toast({ title: "Grupo eliminado", description: `"${deleteTarget.nombre}" fue eliminado.` });
+      fetchData();
+    }
+    setDeleteTarget(null);
   };
 
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -86,7 +140,7 @@ export default function Grupos() {
           <h1 className="text-2xl font-display font-bold">Grupos</h1>
           {institucionActiva && <p className="text-sm text-muted-foreground">{institucionActiva.nombre}</p>}
         </div>
-        <Button size="lg" className="gap-2" onClick={() => setDialogOpen(true)}>
+        <Button size="lg" className="gap-2" onClick={openCreate}>
           <Plus className="h-4 w-4" /> Nuevo grupo
         </Button>
       </div>
@@ -96,7 +150,7 @@ export default function Grupos() {
           <CardContent className="p-8 text-center space-y-3">
             <FolderOpen className="h-12 w-12 text-muted-foreground mx-auto" />
             <p className="text-muted-foreground">No tienes grupos creados en esta institución.</p>
-            <Button variant="outline" onClick={() => setDialogOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> Crear grupo</Button>
+            <Button variant="outline" onClick={openCreate} className="gap-2"><Plus className="h-4 w-4" /> Crear grupo</Button>
           </CardContent>
         </Card>
       ) : (
@@ -118,9 +172,17 @@ export default function Grupos() {
                       </div>
                       {grupo.anio && <p className="text-sm text-muted-foreground mt-1">{grupo.anio} {grupo.turno ? `· ${grupo.turno}` : ""}</p>}
                     </div>
-                    <div className="flex items-center gap-1 text-sm bg-muted rounded-full px-3 py-1">
-                      <Users className="h-3.5 w-3.5" />
-                      {grupo.studentCount}
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 text-sm bg-muted rounded-full px-3 py-1">
+                        <Users className="h-3.5 w-3.5" />
+                        {grupo.studentCount}
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(grupo)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(grupo)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   </div>
                   <div className="mt-3 pt-3 border-t flex gap-2">
@@ -138,12 +200,23 @@ export default function Grupos() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Nuevo grupo</DialogTitle>
+            <DialogTitle>{editingGrupo ? "Editar grupo" : "Nuevo grupo"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label htmlFor="grupo-nombre">Nombre del grupo *</Label>
               <Input id="grupo-nombre" placeholder="Ej: 3°A" value={nombre} onChange={e => setNombre(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Institución *</Label>
+              <Select value={institucionId} onValueChange={setInstitucionId}>
+                <SelectTrigger><SelectValue placeholder="Seleccionar institución" /></SelectTrigger>
+                <SelectContent>
+                  {instituciones.map(inst => (
+                    <SelectItem key={inst.id} value={inst.id}>{inst.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="grupo-anio">Año</Label>
@@ -156,13 +229,28 @@ export default function Grupos() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCreate} disabled={!nombre.trim() || saving}>
+            <Button onClick={handleSave} disabled={!nombre.trim() || !institucionId || saving}>
               {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              Crear grupo
+              {editingGrupo ? "Guardar cambios" : "Crear grupo"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar grupo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará el grupo "{deleteTarget?.nombre}". Esta acción no se puede deshacer. Si tiene estudiantes o clases asociadas, no se podrá eliminar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Eliminar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {selectedGrupo && (
         <InvitarDocente open={inviteOpen} onClose={() => setInviteOpen(false)} grupoId={selectedGrupo.id} grupoNombre={selectedGrupo.nombre} />

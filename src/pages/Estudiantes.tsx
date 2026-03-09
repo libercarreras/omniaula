@@ -3,9 +3,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, UserX, Plus } from "lucide-react";
+import { Loader2, UserX, Plus, Pencil, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
@@ -35,6 +36,8 @@ export default function Estudiantes() {
   const [grupoId, setGrupoId] = useState("");
   const [numeroLista, setNumeroLista] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editingEstudiante, setEditingEstudiante] = useState<EstudianteDB | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<EstudianteDB | null>(null);
 
   const fetchData = async () => {
     if (!user || !institucionActiva) return;
@@ -51,24 +54,69 @@ export default function Estudiantes() {
 
   useEffect(() => { fetchData(); }, [user, institucionActiva]);
 
-  const handleCreate = async () => {
+  const openCreate = () => {
+    setEditingEstudiante(null);
+    setNombre("");
+    setGrupoId("");
+    setNumeroLista("");
+    setDialogOpen(true);
+  };
+
+  const openEdit = (est: EstudianteDB) => {
+    setEditingEstudiante(est);
+    setNombre(est.nombre_completo);
+    setGrupoId(est.grupo_id);
+    setNumeroLista(est.numero_lista?.toString() || "");
+    setDialogOpen(true);
+  };
+
+  const handleSave = async () => {
     if (!user || !nombre.trim() || !grupoId) return;
     setSaving(true);
-    const { error } = await supabase.from("estudiantes").insert({
-      nombre_completo: nombre.trim(),
-      grupo_id: grupoId,
-      numero_lista: numeroLista ? parseInt(numeroLista) : null,
-      user_id: user.id,
-    });
-    setSaving(false);
-    if (error) {
-      toast({ title: "Error", description: "No se pudo crear el estudiante.", variant: "destructive" });
-      return;
+
+    if (editingEstudiante) {
+      const { error } = await supabase.from("estudiantes").update({
+        nombre_completo: nombre.trim(),
+        grupo_id: grupoId,
+        numero_lista: numeroLista ? parseInt(numeroLista) : null,
+      }).eq("id", editingEstudiante.id);
+      setSaving(false);
+      if (error) {
+        toast({ title: "Error", description: "No se pudo actualizar el estudiante.", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Estudiante actualizado", description: `"${nombre.trim()}" fue actualizado correctamente.` });
+    } else {
+      const { error } = await supabase.from("estudiantes").insert({
+        nombre_completo: nombre.trim(),
+        grupo_id: grupoId,
+        numero_lista: numeroLista ? parseInt(numeroLista) : null,
+        user_id: user.id,
+      });
+      setSaving(false);
+      if (error) {
+        toast({ title: "Error", description: "No se pudo crear el estudiante.", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Estudiante agregado", description: `"${nombre.trim()}" fue registrado correctamente.` });
     }
-    toast({ title: "Estudiante agregado", description: `"${nombre.trim()}" fue registrado correctamente.` });
+
     setNombre(""); setGrupoId(""); setNumeroLista("");
+    setEditingEstudiante(null);
     setDialogOpen(false);
     fetchData();
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    const { error } = await supabase.from("estudiantes").delete().eq("id", deleteTarget.id);
+    if (error) {
+      toast({ title: "Error", description: "No se pudo eliminar el estudiante. Puede tener registros asociados.", variant: "destructive" });
+    } else {
+      toast({ title: "Estudiante eliminado", description: `"${deleteTarget.nombre_completo}" fue eliminado.` });
+      fetchData();
+    }
+    setDeleteTarget(null);
   };
 
   const filtered = filtroGrupo === "todos" ? estudiantes : estudiantes.filter(e => e.grupo_id === filtroGrupo);
@@ -93,7 +141,7 @@ export default function Estudiantes() {
               {grupos.map(g => <SelectItem key={g.id} value={g.id}>{g.nombre}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Button size="lg" className="gap-2" onClick={() => setDialogOpen(true)}>
+          <Button size="lg" className="gap-2" onClick={openCreate}>
             <Plus className="h-4 w-4" /> Nuevo estudiante
           </Button>
         </div>
@@ -104,7 +152,7 @@ export default function Estudiantes() {
           <CardContent className="p-8 text-center space-y-3">
             <UserX className="h-12 w-12 text-muted-foreground mx-auto" />
             <p className="text-muted-foreground">No hay estudiantes registrados.</p>
-            <Button variant="outline" onClick={() => setDialogOpen(true)} className="gap-2">
+            <Button variant="outline" onClick={openCreate} className="gap-2">
               <Plus className="h-4 w-4" /> Agregar estudiante
             </Button>
           </CardContent>
@@ -118,7 +166,15 @@ export default function Estudiantes() {
                   <p className="font-semibold">{est.nombre_completo}</p>
                   <p className="text-sm text-muted-foreground">{grupoMap[est.grupo_id] || "Sin grupo"}</p>
                 </div>
-                {est.numero_lista && <span className="text-xs text-muted-foreground">#{est.numero_lista}</span>}
+                <div className="flex items-center gap-2">
+                  {est.numero_lista && <span className="text-xs text-muted-foreground">#{est.numero_lista}</span>}
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(est)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(est)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -128,7 +184,7 @@ export default function Estudiantes() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Nuevo estudiante</DialogTitle>
+            <DialogTitle>{editingEstudiante ? "Editar estudiante" : "Nuevo estudiante"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -151,13 +207,28 @@ export default function Estudiantes() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCreate} disabled={!nombre.trim() || !grupoId || saving}>
+            <Button onClick={handleSave} disabled={!nombre.trim() || !grupoId || saving}>
               {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              Agregar estudiante
+              {editingEstudiante ? "Guardar cambios" : "Agregar estudiante"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar estudiante?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará a "{deleteTarget?.nombre_completo}". Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Eliminar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
