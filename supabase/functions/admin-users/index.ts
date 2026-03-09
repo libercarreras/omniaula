@@ -130,7 +130,7 @@ serve(async (req) => {
       }
 
       // Don't allow deleting yourself
-      if (userId === caller.id) {
+      if (userId === callerId) {
         return new Response(JSON.stringify({ error: "No puedes eliminar tu propia cuenta" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
