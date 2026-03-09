@@ -61,6 +61,7 @@ export default function Dashboard() {
       const matMap: Record<string, string> = {};
       (materiasRes.data || []).forEach(m => { matMap[m.id] = m.nombre; });
       setMaterias(matMap);
+      setTotalMaterias((materiasRes.data || []).length);
 
       const clasesInst = clasesRes.data || [];
       setClases(clasesInst);
