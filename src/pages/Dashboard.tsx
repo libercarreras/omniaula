@@ -3,6 +3,8 @@ import { BookOpen, AlertTriangle, ClipboardCheck, Clock, Users } from "lucide-re
 import { clasesDelDia, evaluaciones, estudiantes, actividadReciente, clases, getClaseLabel, getClase } from "@/data/mockData";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { RadarRiesgo } from "@/components/radar/RadarRiesgo";
+import { InvitacionesPendientes } from "@/components/colaboracion/InvitacionesPendientes";
 
 const estudiantesEnRiesgo = estudiantes.filter((e) => e.enRiesgo);
 const proximasEvaluaciones = evaluaciones.slice(0, 3);
@@ -17,6 +19,9 @@ export default function Dashboard() {
         <h1 className="text-2xl font-display font-bold">Buenos días, {nombre}</h1>
         <p className="text-muted-foreground">Lunes 9 de marzo, 2026</p>
       </div>
+
+      {/* Invitaciones pendientes */}
+      <InvitacionesPendientes />
 
       {/* Resumen rápido */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -50,6 +55,9 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      {/* Radar de riesgo */}
+      <RadarRiesgo />
+
       {/* Clases del día */}
       <Card>
         <CardHeader className="pb-3">
@@ -78,7 +86,7 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Accesos rápidos a clases */}
+      {/* Accesos rápidos */}
       <div>
         <h2 className="font-display font-semibold text-lg mb-3">Acceso rápido</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

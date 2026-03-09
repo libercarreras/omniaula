@@ -1,1 +1,19 @@
 project_id = "uwimuaezmmmqydycsgdi"
+
+[functions.admin-users]
+verify_jwt = false
+
+[functions.setup-admin]
+verify_jwt = false
+
+[functions.analyze-group]
+verify_jwt = false
+
+[functions.generate-bulletin-comment]
+verify_jwt = false
+
+[functions.generate-student-report]
+verify_jwt = false
+
+[functions.generate-diary-summary]
+verify_jwt = false

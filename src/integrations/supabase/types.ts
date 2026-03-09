@@ -284,6 +284,41 @@ export type Database = {
           },
         ]
       }
+      grupo_colaboradores: {
+        Row: {
+          colaborador_user_id: string
+          created_at: string
+          estado: Database["public"]["Enums"]["estado_invitacion"]
+          grupo_id: string
+          id: string
+          owner_user_id: string
+        }
+        Insert: {
+          colaborador_user_id: string
+          created_at?: string
+          estado?: Database["public"]["Enums"]["estado_invitacion"]
+          grupo_id: string
+          id?: string
+          owner_user_id: string
+        }
+        Update: {
+          colaborador_user_id?: string
+          created_at?: string
+          estado?: Database["public"]["Enums"]["estado_invitacion"]
+          grupo_id?: string
+          id?: string
+          owner_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grupo_colaboradores_grupo_id_fkey"
+            columns: ["grupo_id"]
+            isOneToOne: false
+            referencedRelation: "grupos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       grupos: {
         Row: {
           anio: string | null
@@ -571,11 +606,16 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_grupo_colaborador: {
+        Args: { _grupo_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "docente"
       estado_asistencia: "presente" | "falta" | "tarde" | "retiro"
       estado_entrega: "entregado" | "no_entregado"
+      estado_invitacion: "pendiente" | "aceptada" | "rechazada"
       tipo_evaluacion:
         | "prueba_escrita"
         | "oral"
@@ -718,6 +758,7 @@ export const Constants = {
       app_role: ["admin", "docente"],
       estado_asistencia: ["presente", "falta", "tarde", "retiro"],
       estado_entrega: ["entregado", "no_entregado"],
+      estado_invitacion: ["pendiente", "aceptada", "rechazada"],
       tipo_evaluacion: [
         "prueba_escrita",
         "oral",
