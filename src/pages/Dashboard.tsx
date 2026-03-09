@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookOpen, AlertTriangle, ClipboardCheck, Clock, Users } from "lucide-react";
 import { clasesDelDia, evaluaciones, estudiantes, actividadReciente, clases, getClaseLabel, getClase } from "@/data/mockData";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 const estudiantesEnRiesgo = estudiantes.filter((e) => e.enRiesgo);
 const proximasEvaluaciones = evaluaciones.slice(0, 3);
