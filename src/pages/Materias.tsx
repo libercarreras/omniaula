@@ -64,7 +64,7 @@ export default function Materias() {
     setSaving(true);
 
     if (editingMateria) {
-      const { error } = await supabase.from("materias").update({ nombre: nombre.trim() }).eq("id", editingMateria.id);
+      const { error } = await supabase.from("materias").update({ nombre: nombre.trim(), institucion_id: institucionId || null }).eq("id", editingMateria.id);
       setSaving(false);
       if (error) {
         toast({ title: "Error", description: "No se pudo actualizar la materia.", variant: "destructive" });
