@@ -28,6 +28,8 @@ export default function Dashboard() {
   const [estudiantesEnRiesgo] = useState(0);
   const [materias, setMaterias] = useState<Record<string, string>>({});
   const [grupos, setGrupos] = useState<Record<string, string>>({});
+  const [totalMaterias, setTotalMaterias] = useState(0);
+  const [totalGrupos, setTotalGrupos] = useState(0);
 
   useEffect(() => {
     if (!user || !institucionActiva) { setLoading(false); return; }
