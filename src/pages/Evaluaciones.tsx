@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Loader2, ClipboardCheck, Sparkles, FileText, ListChecks, Shuffle, ChevronRight, ChevronLeft, Trash2, GripVertical, CheckCircle2, Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -66,6 +67,8 @@ export default function Evaluaciones() {
   const [detailContenido, setDetailContenido] = useState<any[]>([]);
   const [detailNotas, setDetailNotas] = useState<any[]>([]);
   const [detailEstudiantes, setDetailEstudiantes] = useState<any[]>([]);
+  const [deletingEvalId, setDeletingEvalId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Load evaluaciones
   useEffect(() => {
@@ -212,6 +215,25 @@ export default function Evaluaciones() {
       ]);
       setDetailNotas(notasRes.data || []);
       setDetailEstudiantes(estRes.data || []);
+    }
+  };
+
+  const handleDeleteEval = async (evalId: string) => {
+    setDeleting(true);
+    try {
+      await supabase.from("evaluacion_contenido").delete().eq("evaluacion_id", evalId);
+      await supabase.from("notas").delete().eq("evaluacion_id", evalId);
+      const { error } = await supabase.from("evaluaciones").delete().eq("id", evalId);
+      if (error) throw error;
+      setEvaluaciones(prev => prev.filter(e => e.id !== evalId));
+      setContenidos(prev => { const n = { ...prev }; delete n[evalId]; return n; });
+      setDetailEval(null);
+      setDeletingEvalId(null);
+      toast.success("Evaluación eliminada");
+    } catch (e: any) {
+      toast.error(e.message || "Error al eliminar");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -591,16 +613,21 @@ export default function Evaluaciones() {
             <>
               <SheetHeader>
                 <div className="flex items-center justify-between">
-                  <SheetTitle>{detailEval.nombre}</SheetTitle>
-                  {detailContenido.length > 0 && (
-                    <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printEvaluacion(
-                      detailEval.nombre, detailEval.fecha, detailEval.clase_id,
-                      detailContenido.map((c: any) => ({ tipo_pregunta: c.tipo_pregunta, enunciado: c.enunciado, opciones: c.opciones as any[], puntos: c.puntos }))
-                    )}>
-                      <Printer className="h-3.5 w-3.5" /> Imprimir
-                    </Button>
-                  )}
-                </div>
+                   <SheetTitle>{detailEval.nombre}</SheetTitle>
+                   <div className="flex gap-1.5">
+                     {detailContenido.length > 0 && (
+                       <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printEvaluacion(
+                         detailEval.nombre, detailEval.fecha, detailEval.clase_id,
+                         detailContenido.map((c: any) => ({ tipo_pregunta: c.tipo_pregunta, enunciado: c.enunciado, opciones: c.opciones as any[], puntos: c.puntos }))
+                       )}>
+                         <Printer className="h-3.5 w-3.5" /> Imprimir
+                       </Button>
+                     )}
+                     <Button variant="destructive" size="sm" className="gap-1.5" onClick={() => setDeletingEvalId(detailEval.id)}>
+                       <Trash2 className="h-3.5 w-3.5" /> Eliminar
+                     </Button>
+                   </div>
+                 </div>
                 <SheetDescription>
                   {getClaseLabel(detailEval.clase_id)} · {detailEval.fecha || "Sin fecha"}
                 </SheetDescription>
@@ -672,6 +699,28 @@ export default function Evaluaciones() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* === DELETE CONFIRMATION === */}
+      <AlertDialog open={!!deletingEvalId} onOpenChange={(o) => { if (!o) setDeletingEvalId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar evaluación?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará la evaluación, sus preguntas y todas las notas asociadas. No se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleting}
+              onClick={() => deletingEvalId && handleDeleteEval(deletingEvalId)}
+            >
+              {deleting ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Eliminando...</> : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
