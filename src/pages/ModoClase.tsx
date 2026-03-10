@@ -63,6 +63,8 @@ export default function ModoClase() {
   const [programaArchivoUrl, setProgramaArchivoUrl] = useState<string | null>(null);
   const [programaArchivoNombre, setProgramaArchivoNombre] = useState<string | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [programaEstructura, setProgramaEstructura] = useState<any>(null);
+  const [savingEstructura, setSavingEstructura] = useState(false);
 
   const hoyISO = new Date().toISOString().split("T")[0];
   const isInitialLoad = useRef(true);
