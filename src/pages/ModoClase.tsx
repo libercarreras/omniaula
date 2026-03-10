@@ -68,9 +68,37 @@ export default function ModoClase() {
   const [programaEstructura, setProgramaEstructura] = useState<any>(null);
   const [savingEstructura, setSavingEstructura] = useState(false);
   const [editClaseOpen, setEditClaseOpen] = useState(false);
-  const [editHorario, setEditHorario] = useState("");
+  const [editDias, setEditDias] = useState<string[]>([]);
+  const [editHora, setEditHora] = useState("");
   const [editAula, setEditAula] = useState("");
   const [savingClase, setSavingClase] = useState(false);
+
+  const DIAS_SEMANA = [
+    { key: "Lun", label: "Lun" },
+    { key: "Mar", label: "Mar" },
+    { key: "Mié", label: "Mié" },
+    { key: "Jue", label: "Jue" },
+    { key: "Vie", label: "Vie" },
+    { key: "Sáb", label: "Sáb" },
+  ];
+
+  const parseHorarioToState = (horario: string | null) => {
+    if (!horario) return { dias: [] as string[], hora: "" };
+    const diasFound: string[] = [];
+    const lower = horario.toLowerCase();
+    const map: Record<string, string> = { lun: "Lun", mar: "Mar", "mié": "Mié", mie: "Mié", jue: "Jue", vie: "Vie", "sáb": "Sáb", sab: "Sáb" };
+    for (const [k, v] of Object.entries(map)) {
+      if (lower.includes(k) && !diasFound.includes(v)) diasFound.push(v);
+    }
+    const horaMatch = horario.match(/(\d{1,2}[:.]\d{2}(?:\s*[-–]\s*\d{1,2}[:.]\d{2})?)/);
+    return { dias: diasFound, hora: horaMatch ? horaMatch[1] : "" };
+  };
+
+  const buildHorarioString = (dias: string[], hora: string) => {
+    if (dias.length === 0) return null;
+    const ordered = DIAS_SEMANA.filter(d => dias.includes(d.key)).map(d => d.key);
+    return `${ordered.join("/")}${hora ? " " + hora : ""}`;
+  };
 
   const hoyISO = new Date().toISOString().split("T")[0];
   const isInitialLoad = useRef(true);
