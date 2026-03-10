@@ -557,6 +557,69 @@ export type Database = {
         }
         Relationships: []
       }
+      planificacion_clases: {
+        Row: {
+          clase_id: string
+          created_at: string
+          diario_id: string | null
+          estado: Database["public"]["Enums"]["estado_planificacion"]
+          fecha: string
+          id: string
+          notas: string | null
+          tema_index: number
+          tema_titulo: string
+          unidad_index: number
+          unidad_titulo: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          clase_id: string
+          created_at?: string
+          diario_id?: string | null
+          estado?: Database["public"]["Enums"]["estado_planificacion"]
+          fecha: string
+          id?: string
+          notas?: string | null
+          tema_index: number
+          tema_titulo: string
+          unidad_index: number
+          unidad_titulo: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          clase_id?: string
+          created_at?: string
+          diario_id?: string | null
+          estado?: Database["public"]["Enums"]["estado_planificacion"]
+          fecha?: string
+          id?: string
+          notas?: string | null
+          tema_index?: number
+          tema_titulo?: string
+          unidad_index?: number
+          unidad_titulo?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planificacion_clases_clase_id_fkey"
+            columns: ["clase_id"]
+            isOneToOne: false
+            referencedRelation: "clases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planificacion_clases_diario_id_fkey"
+            columns: ["diario_id"]
+            isOneToOne: false
+            referencedRelation: "diario_clase"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profesor_institucion: {
         Row: {
           created_at: string
@@ -751,6 +814,12 @@ export type Database = {
       estado_asistencia: "presente" | "falta" | "tarde" | "retiro"
       estado_entrega: "entregado" | "no_entregado"
       estado_invitacion: "pendiente" | "aceptada" | "rechazada"
+      estado_planificacion:
+        | "pendiente"
+        | "completado"
+        | "parcial"
+        | "suspendido"
+        | "reprogramado"
       tipo_evaluacion:
         | "prueba_escrita"
         | "oral"
@@ -894,6 +963,13 @@ export const Constants = {
       estado_asistencia: ["presente", "falta", "tarde", "retiro"],
       estado_entrega: ["entregado", "no_entregado"],
       estado_invitacion: ["pendiente", "aceptada", "rechazada"],
+      estado_planificacion: [
+        "pendiente",
+        "completado",
+        "parcial",
+        "suspendido",
+        "reprogramado",
+      ],
       tipo_evaluacion: [
         "prueba_escrita",
         "oral",
