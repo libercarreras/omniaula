@@ -411,6 +411,26 @@ export default function ModoClase() {
     );
   };
 
+  const openEditClase = () => {
+    setEditHorario(clase?.horario || "");
+    setEditAula(clase?.aula || "");
+    setEditClaseOpen(true);
+  };
+
+  const saveClaseDetails = async () => {
+    if (!claseId) return;
+    setSavingClase(true);
+    const { error } = await supabase.from("clases").update({
+      horario: editHorario.trim() || null,
+      aula: editAula.trim() || null,
+    }).eq("id", claseId);
+    setSavingClase(false);
+    if (error) { toast.error("Error al guardar"); return; }
+    setClase((prev: any) => ({ ...prev, horario: editHorario.trim() || null, aula: editAula.trim() || null }));
+    setEditClaseOpen(false);
+    toast.success("Clase actualizada");
+  };
+
   return (
     <div className="max-w-4xl mx-auto pb-6">
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-sm border-b -mx-4 px-4 pt-1 pb-2 md:-mx-0 md:px-0">
@@ -418,6 +438,10 @@ export default function ModoClase() {
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="shrink-0 h-8 w-8"><ArrowLeft className="h-4 w-4" /></Button>
           <div className="min-w-0 flex-1">
             <h1 className="text-base font-display font-bold truncate">{materia.nombre} — {grupo.nombre}</h1>
+            <button onClick={openEditClase} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+              <Settings2 className="h-3 w-3" />
+              {clase.horario || "Sin horario"}{clase.aula ? ` · ${clase.aula}` : ""}
+            </button>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <StatusIndicator />
