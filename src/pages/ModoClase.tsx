@@ -19,7 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebounceCallback } from "@/hooks/useDebounce";
 
-type ModoActivo = "asistencia" | "notas" | "observaciones" | "participacion" | "diario";
+type ModoActivo = "asistencia" | "notas" | "observaciones" | "participacion" | "diario" | "programa";
 type EstadoAsistencia = "presente" | "falta" | "tarde" | "retiro" | null;
 type NivelParticipacion = "alta" | "media" | "baja";
 
