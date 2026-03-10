@@ -67,6 +67,8 @@ export default function Evaluaciones() {
   const [detailContenido, setDetailContenido] = useState<any[]>([]);
   const [detailNotas, setDetailNotas] = useState<any[]>([]);
   const [detailEstudiantes, setDetailEstudiantes] = useState<any[]>([]);
+  const [deletingEvalId, setDeletingEvalId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Load evaluaciones
   useEffect(() => {
