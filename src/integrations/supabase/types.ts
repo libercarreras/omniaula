@@ -622,6 +622,47 @@ export type Database = {
         }
         Relationships: []
       }
+      programas_anuales: {
+        Row: {
+          archivo_nombre: string | null
+          archivo_url: string | null
+          clase_id: string
+          contenido: string | null
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          archivo_nombre?: string | null
+          archivo_url?: string | null
+          clase_id: string
+          contenido?: string | null
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          archivo_nombre?: string | null
+          archivo_url?: string | null
+          clase_id?: string
+          contenido?: string | null
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "programas_anuales_clase_id_fkey"
+            columns: ["clase_id"]
+            isOneToOne: false
+            referencedRelation: "clases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tareas: {
         Row: {
           clase_id: string
