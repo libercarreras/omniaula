@@ -67,6 +67,10 @@ export default function ModoClase() {
   const [uploadingFile, setUploadingFile] = useState(false);
   const [programaEstructura, setProgramaEstructura] = useState<any>(null);
   const [savingEstructura, setSavingEstructura] = useState(false);
+  const [editClaseOpen, setEditClaseOpen] = useState(false);
+  const [editHorario, setEditHorario] = useState("");
+  const [editAula, setEditAula] = useState("");
+  const [savingClase, setSavingClase] = useState(false);
 
   const hoyISO = new Date().toISOString().split("T")[0];
   const isInitialLoad = useRef(true);
