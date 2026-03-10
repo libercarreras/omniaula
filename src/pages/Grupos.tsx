@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Users, UserPlus, Share2, Loader2, FolderOpen, Pencil, Trash2 } from "lucide-react";
+import { Plus, Users, UserPlus, Share2, Loader2, FolderOpen, Pencil, Trash2, BookOpen, Clock, MapPin } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
 import { toast } from "@/hooks/use-toast";
+import { Link } from "react-router-dom";
 
 interface GrupoDB {
   id: string;
@@ -23,11 +24,27 @@ interface GrupoDB {
   studentCount?: number;
 }
 
+interface ClaseDB {
+  id: string;
+  materia_id: string;
+  grupo_id: string;
+  horario: string | null;
+  aula: string | null;
+}
+
+interface MateriaDB {
+  id: string;
+  nombre: string;
+  color: string | null;
+}
+
 export default function Grupos() {
   const { user } = useAuth();
   const { institucionActiva, instituciones } = useInstitucion();
   const [loading, setLoading] = useState(true);
   const [grupos, setGrupos] = useState<GrupoDB[]>([]);
+  const [clases, setClases] = useState<ClaseDB[]>([]);
+  const [materias, setMaterias] = useState<MateriaDB[]>([]);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [selectedGrupo, setSelectedGrupo] = useState<{ id: string; nombre: string } | null>(null);
   const [sharedGrupoIds, setSharedGrupoIds] = useState<Set<string>>(new Set());
@@ -40,13 +57,22 @@ export default function Grupos() {
   const [editingGrupo, setEditingGrupo] = useState<GrupoDB | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<GrupoDB | null>(null);
 
+  // Clase creation state
+  const [claseDialogOpen, setClaseDialogOpen] = useState(false);
+  const [claseGrupoId, setClaseGrupoId] = useState("");
+  const [claseMateriaId, setClaseMateriaId] = useState("");
+  const [claseHorario, setClaseHorario] = useState("");
+  const [claseAula, setClaseAula] = useState("");
+  const [savingClase, setSavingClase] = useState(false);
+
   const fetchData = async () => {
     if (!user || !institucionActiva) return;
     setLoading(true);
-    const [gruposRes, estudiantesRes, sharedRes] = await Promise.all([
+    const [gruposRes, estudiantesRes, sharedRes, materiasRes] = await Promise.all([
       supabase.from("grupos").select("*").eq("institucion_id", institucionActiva.id),
       supabase.from("estudiantes").select("id, grupo_id"),
       supabase.from("grupo_colaboradores").select("grupo_id").eq("colaborador_user_id", user.id).eq("estado", "aceptada"),
+      supabase.from("materias").select("id, nombre, color").eq("user_id", user.id),
     ]);
 
     const countMap: Record<string, number> = {};
@@ -54,9 +80,20 @@ export default function Grupos() {
       countMap[e.grupo_id] = (countMap[e.grupo_id] || 0) + 1;
     });
 
-    const grupoIds = new Set((gruposRes.data || []).map(g => g.id));
-    setGrupos((gruposRes.data || []).map(g => ({ ...g, studentCount: countMap[g.id] || 0 })));
-    if (sharedRes.data) setSharedGrupoIds(new Set(sharedRes.data.filter(d => grupoIds.has(d.grupo_id)).map(d => d.grupo_id)));
+    const grps = (gruposRes.data || []).map(g => ({ ...g, studentCount: countMap[g.id] || 0 }));
+    setGrupos(grps);
+    setMaterias(materiasRes.data || []);
+
+    const grupoIds = grps.map(g => g.id);
+    if (grupoIds.length > 0) {
+      const { data: clasesData } = await supabase.from("clases").select("id, materia_id, grupo_id, horario, aula").in("grupo_id", grupoIds);
+      setClases(clasesData || []);
+    } else {
+      setClases([]);
+    }
+
+    const grupoIdSet = new Set(grps.map(g => g.id));
+    if (sharedRes.data) setSharedGrupoIds(new Set(sharedRes.data.filter(d => grupoIdSet.has(d.grupo_id)).map(d => d.grupo_id)));
     setLoading(false);
   };
 
@@ -131,6 +168,36 @@ export default function Grupos() {
     setDeleteTarget(null);
   };
 
+  const openClaseDialog = (grupoId: string) => {
+    setClaseGrupoId(grupoId);
+    setClaseMateriaId("");
+    setClaseHorario("");
+    setClaseAula("");
+    setClaseDialogOpen(true);
+  };
+
+  const handleCreateClase = async () => {
+    if (!user || !claseMateriaId || !claseGrupoId) return;
+    setSavingClase(true);
+    const { error } = await supabase.from("clases").insert({
+      materia_id: claseMateriaId,
+      grupo_id: claseGrupoId,
+      horario: claseHorario.trim() || null,
+      aula: claseAula.trim() || null,
+      user_id: user.id,
+    });
+    setSavingClase(false);
+    if (error) {
+      toast({ title: "Error", description: "No se pudo crear la clase.", variant: "destructive" });
+      return;
+    }
+    toast({ title: "Clase creada", description: "La clase fue vinculada al grupo correctamente." });
+    setClaseDialogOpen(false);
+    fetchData();
+  };
+
+  const materiaMap = Object.fromEntries(materias.map(m => [m.id, m.nombre]));
+
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   return (
@@ -157,6 +224,7 @@ export default function Grupos() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {grupos.map((grupo) => {
             const isShared = sharedGrupoIds.has(grupo.id);
+            const grupoClases = clases.filter(c => c.grupo_id === grupo.id);
             return (
               <Card key={grupo.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-5">
@@ -185,7 +253,26 @@ export default function Grupos() {
                       </Button>
                     </div>
                   </div>
-                  <div className="mt-3 pt-3 border-t flex gap-2">
+
+                  {/* Clases del grupo */}
+                  {grupoClases.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {grupoClases.map(clase => (
+                        <Link key={clase.id} to={`/clase/${clase.id}`}>
+                          <Badge variant="secondary" className="gap-1 cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors">
+                            <BookOpen className="h-3 w-3" />
+                            {materiaMap[clase.materia_id] || "?"}
+                            {clase.horario && <span className="text-[10px] opacity-70">· {clase.horario}</span>}
+                          </Badge>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="mt-3 pt-3 border-t flex gap-2 flex-wrap">
+                    <Button variant="outline" size="sm" className="gap-1.5" onClick={() => openClaseDialog(grupo.id)}>
+                      <Plus className="h-3.5 w-3.5" /> Crear clase
+                    </Button>
                     <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setSelectedGrupo({ id: grupo.id, nombre: grupo.nombre }); setInviteOpen(true); }}>
                       <UserPlus className="h-3.5 w-3.5" /> Invitar docente
                     </Button>
@@ -197,6 +284,7 @@ export default function Grupos() {
         </div>
       )}
 
+      {/* Dialog crear/editar grupo */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -237,6 +325,48 @@ export default function Grupos() {
         </DialogContent>
       </Dialog>
 
+      {/* Dialog crear clase */}
+      <Dialog open={claseDialogOpen} onOpenChange={setClaseDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nueva clase</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Materia *</Label>
+              <Select value={claseMateriaId} onValueChange={setClaseMateriaId}>
+                <SelectTrigger><SelectValue placeholder="Seleccionar materia" /></SelectTrigger>
+                <SelectContent>
+                  {materias.map(m => (
+                    <SelectItem key={m.id} value={m.id}>{m.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {materias.length === 0 && (
+                <p className="text-xs text-muted-foreground">No tienes materias. <Link to="/materias" className="text-primary underline">Crear una</Link></p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="clase-horario">Horario (opcional)</Label>
+              <Input id="clase-horario" placeholder="Ej: Lunes 8:00-9:30" value={claseHorario} onChange={e => setClaseHorario(e.target.value)} />
+              <p className="text-[11px] text-muted-foreground">Formato sugerido: Día HH:MM-HH:MM</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="clase-aula">Aula (opcional)</Label>
+              <Input id="clase-aula" placeholder="Ej: Aula 3B" value={claseAula} onChange={e => setClaseAula(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClaseDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleCreateClase} disabled={!claseMateriaId || savingClase}>
+              {savingClase && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Crear clase
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete grupo dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, UserX, Plus, Pencil, Trash2 } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Loader2, UserX, Plus, Pencil, Trash2, Upload, FileSpreadsheet } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
@@ -24,6 +25,11 @@ interface GrupoDB {
   nombre: string;
 }
 
+interface CSVRow {
+  nombre_completo: string;
+  numero_lista: number | null;
+}
+
 export default function Estudiantes() {
   const { user } = useAuth();
   const { institucionActiva } = useInstitucion();
@@ -38,6 +44,13 @@ export default function Estudiantes() {
   const [saving, setSaving] = useState(false);
   const [editingEstudiante, setEditingEstudiante] = useState<EstudianteDB | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EstudianteDB | null>(null);
+
+  // CSV import state
+  const [csvDialogOpen, setCsvDialogOpen] = useState(false);
+  const [csvGrupoId, setCsvGrupoId] = useState("");
+  const [csvPreview, setCsvPreview] = useState<CSVRow[]>([]);
+  const [importingSaving, setImportingSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = async () => {
     if (!user || !institucionActiva) return;
@@ -119,6 +132,70 @@ export default function Estudiantes() {
     setDeleteTarget(null);
   };
 
+  // CSV handling
+  const openCsvDialog = () => {
+    setCsvGrupoId("");
+    setCsvPreview([]);
+    setCsvDialogOpen(true);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) {
+        toast({ title: "Archivo vacío", description: "El CSV debe tener al menos una fila de datos.", variant: "destructive" });
+        return;
+      }
+      // Parse header
+      const header = lines[0].toLowerCase().split(/[,;\t]/).map(h => h.trim());
+      const nameIdx = header.findIndex(h => h.includes("nombre"));
+      const numIdx = header.findIndex(h => h.includes("numero") || h.includes("lista") || h.includes("nro"));
+
+      if (nameIdx === -1) {
+        toast({ title: "Formato incorrecto", description: "El CSV debe tener una columna 'nombre_completo' o 'nombre'.", variant: "destructive" });
+        return;
+      }
+
+      const rows: CSVRow[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(/[,;\t]/).map(c => c.trim().replace(/^["']|["']$/g, ""));
+        const nom = cols[nameIdx]?.trim();
+        if (!nom) continue;
+        rows.push({
+          nombre_completo: nom,
+          numero_lista: numIdx >= 0 && cols[numIdx] ? parseInt(cols[numIdx]) || null : null,
+        });
+      }
+      setCsvPreview(rows);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleCsvImport = async () => {
+    if (!user || !csvGrupoId || csvPreview.length === 0) return;
+    setImportingSaving(true);
+    const records = csvPreview.map((r, idx) => ({
+      nombre_completo: r.nombre_completo,
+      numero_lista: r.numero_lista ?? idx + 1,
+      grupo_id: csvGrupoId,
+      user_id: user.id,
+    }));
+    const { error } = await supabase.from("estudiantes").insert(records);
+    setImportingSaving(false);
+    if (error) {
+      toast({ title: "Error", description: "No se pudieron importar los estudiantes.", variant: "destructive" });
+      return;
+    }
+    toast({ title: "Importación exitosa", description: `Se importaron ${records.length} estudiantes.` });
+    setCsvDialogOpen(false);
+    setCsvPreview([]);
+    fetchData();
+  };
+
   const filtered = filtroGrupo === "todos" ? estudiantes : estudiantes.filter(e => e.grupo_id === filtroGrupo);
   const grupoMap = Object.fromEntries(grupos.map(g => [g.id, g.nombre]));
 
@@ -133,7 +210,7 @@ export default function Estudiantes() {
           <h1 className="text-2xl font-display font-bold">Estudiantes</h1>
           {institucionActiva && <p className="text-sm text-muted-foreground">{institucionActiva.nombre}</p>}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <Select value={filtroGrupo} onValueChange={setFiltroGrupo}>
             <SelectTrigger className="w-40"><SelectValue placeholder="Filtrar grupo" /></SelectTrigger>
             <SelectContent>
@@ -141,6 +218,9 @@ export default function Estudiantes() {
               {grupos.map(g => <SelectItem key={g.id} value={g.id}>{g.nombre}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Button variant="outline" className="gap-2" onClick={openCsvDialog}>
+            <Upload className="h-4 w-4" /> Importar CSV
+          </Button>
           <Button size="lg" className="gap-2" onClick={openCreate}>
             <Plus className="h-4 w-4" /> Nuevo estudiante
           </Button>
@@ -152,9 +232,14 @@ export default function Estudiantes() {
           <CardContent className="p-8 text-center space-y-3">
             <UserX className="h-12 w-12 text-muted-foreground mx-auto" />
             <p className="text-muted-foreground">No hay estudiantes registrados.</p>
-            <Button variant="outline" onClick={openCreate} className="gap-2">
-              <Plus className="h-4 w-4" /> Agregar estudiante
-            </Button>
+            <div className="flex gap-3 justify-center">
+              <Button variant="outline" onClick={openCreate} className="gap-2">
+                <Plus className="h-4 w-4" /> Agregar estudiante
+              </Button>
+              <Button variant="outline" onClick={openCsvDialog} className="gap-2">
+                <Upload className="h-4 w-4" /> Importar CSV
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : (
@@ -181,6 +266,7 @@ export default function Estudiantes() {
         </div>
       )}
 
+      {/* Create/Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -215,6 +301,67 @@ export default function Estudiantes() {
         </DialogContent>
       </Dialog>
 
+      {/* CSV Import dialog */}
+      <Dialog open={csvDialogOpen} onOpenChange={setCsvDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="h-5 w-5" /> Importar estudiantes desde CSV
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Grupo destino *</Label>
+              <Select value={csvGrupoId} onValueChange={setCsvGrupoId}>
+                <SelectTrigger><SelectValue placeholder="Seleccionar grupo" /></SelectTrigger>
+                <SelectContent>
+                  {grupos.map(g => <SelectItem key={g.id} value={g.id}>{g.nombre}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Archivo CSV</Label>
+              <Input ref={fileInputRef} type="file" accept=".csv,.txt" onChange={handleFileChange} />
+              <p className="text-[11px] text-muted-foreground">
+                El archivo debe tener columnas: <strong>nombre_completo</strong> (obligatoria) y <strong>numero_lista</strong> (opcional). Separador: coma, punto y coma o tabulación.
+              </p>
+            </div>
+
+            {csvPreview.length > 0 && (
+              <div className="border rounded-lg overflow-hidden max-h-60 overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs">Nombre</TableHead>
+                      <TableHead className="text-xs w-20">N° Lista</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {csvPreview.map((row, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="text-sm py-1.5">{row.nombre_completo}</TableCell>
+                        <TableCell className="text-sm py-1.5">{row.numero_lista || "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <div className="px-3 py-2 bg-muted/50 text-xs text-muted-foreground">
+                  {csvPreview.length} estudiantes detectados
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCsvDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleCsvImport} disabled={!csvGrupoId || csvPreview.length === 0 || importingSaving}>
+              {importingSaving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Importar {csvPreview.length} estudiantes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

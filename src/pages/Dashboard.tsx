@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { BookOpen, AlertTriangle, ClipboardCheck, Users, Plus, Loader2 } from "lucide-react";
+import { BookOpen, AlertTriangle, ClipboardCheck, Users, Plus, Loader2, Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
@@ -8,6 +8,7 @@ import { RadarRiesgo } from "@/components/radar/RadarRiesgo";
 import { InvitacionesPendientes } from "@/components/colaboracion/InvitacionesPendientes";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 interface ClaseWithRelations {
   id: string;
@@ -15,6 +16,25 @@ interface ClaseWithRelations {
   grupo_id: string;
   horario: string | null;
   aula: string | null;
+}
+
+const DIAS_MAP: Record<string, number> = {
+  "domingo": 0, "lunes": 1, "martes": 2, "miercoles": 3, "miércoles": 3,
+  "jueves": 4, "viernes": 5, "sabado": 6, "sábado": 6,
+  "dom": 0, "lun": 1, "mar": 2, "mie": 3, "mié": 3,
+  "jue": 4, "vie": 5, "sab": 6, "sáb": 6,
+};
+
+function parseHorarioDia(horario: string | null): { dia: number | null; hora: string } {
+  if (!horario) return { dia: null, hora: "" };
+  const lower = horario.toLowerCase().trim();
+  for (const [key, val] of Object.entries(DIAS_MAP)) {
+    if (lower.startsWith(key)) {
+      const rest = lower.slice(key.length).trim();
+      return { dia: val, hora: rest };
+    }
+  }
+  return { dia: null, hora: horario };
 }
 
 export default function Dashboard() {
@@ -25,7 +45,6 @@ export default function Dashboard() {
   const [clases, setClases] = useState<ClaseWithRelations[]>([]);
   const [totalEstudiantes, setTotalEstudiantes] = useState(0);
   const [totalEvaluaciones, setTotalEvaluaciones] = useState(0);
-  const [estudiantesEnRiesgo] = useState(0);
   const [materias, setMaterias] = useState<Record<string, string>>({});
   const [grupos, setGrupos] = useState<Record<string, string>>({});
   const [totalMaterias, setTotalMaterias] = useState(0);
@@ -35,7 +54,6 @@ export default function Dashboard() {
     if (!user || !institucionActiva) { setLoading(false); return; }
     const fetchData = async () => {
       setLoading(true);
-      // Get grupos for active institution
       const { data: gruposData } = await supabase
         .from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
       const grupoIds = (gruposData || []).map(g => g.id);
@@ -82,12 +100,30 @@ export default function Dashboard() {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
 
+  const diaHoy = new Date().getDay();
+
+  const { clasesHoy, clasesOtras } = useMemo(() => {
+    const hoyList: ClaseWithRelations[] = [];
+    const otrasList: ClaseWithRelations[] = [];
+    clases.forEach(c => {
+      const { dia } = parseHorarioDia(c.horario);
+      if (dia === diaHoy) hoyList.push(c);
+      else otrasList.push(c);
+    });
+    // Sort today's by hora
+    hoyList.sort((a, b) => {
+      const ha = parseHorarioDia(a.horario).hora;
+      const hb = parseHorarioDia(b.horario).hora;
+      return ha.localeCompare(hb);
+    });
+    return { clasesHoy: hoyList, clasesOtras: otrasList };
+  }, [clases, diaHoy]);
+
   if (loading) {
     return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
   const isNewUser = totalMaterias === 0 && totalGrupos === 0;
-  const hasMateriasOrGrupos = totalMaterias > 0 || totalGrupos > 0;
   const hasClases = clases.length > 0;
 
   return (
@@ -196,18 +232,45 @@ export default function Dashboard() {
             <Card className="bg-destructive/5 border-destructive/20">
               <CardContent className="p-4 flex flex-col items-center text-center">
                 <AlertTriangle className="h-6 w-6 text-destructive mb-1" />
-                <span className="text-2xl font-bold text-destructive">{estudiantesEnRiesgo}</span>
+                <span className="text-2xl font-bold text-destructive">0</span>
                 <span className="text-xs text-muted-foreground">En riesgo</span>
               </CardContent>
             </Card>
           </div>
 
+          {/* Clases de hoy */}
+          {clasesHoy.length > 0 && (
+            <div>
+              <h2 className="font-display font-semibold text-lg mb-3 flex items-center gap-2">
+                <Clock className="h-5 w-5 text-primary" /> Clases de hoy
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {clasesHoy.map((clase) => (
+                  <Link key={clase.id} to={`/clase/${clase.id}`}>
+                    <Card className="hover:shadow-md transition-shadow cursor-pointer border-primary/20">
+                      <CardContent className="p-4">
+                        <p className="font-bold text-lg">{getClaseLabel(clase)}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          {clase.horario && <Badge variant="secondary" className="text-xs">{clase.horario}</Badge>}
+                          {clase.aula && <span className="text-xs text-muted-foreground">{clase.aula}</span>}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
           <RadarRiesgo />
 
+          {/* Todas las clases */}
           <div>
-            <h2 className="font-display font-semibold text-lg mb-3">Acceso rápido</h2>
+            <h2 className="font-display font-semibold text-lg mb-3">
+              {clasesHoy.length > 0 ? "Otras clases" : "Acceso rápido"}
+            </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {clases.map((clase) => (
+              {(clasesHoy.length > 0 ? clasesOtras : clases).map((clase) => (
                 <Link key={clase.id} to={`/clase/${clase.id}`}>
                   <Card className="hover:shadow-md transition-shadow cursor-pointer">
                     <CardContent className="p-4">
