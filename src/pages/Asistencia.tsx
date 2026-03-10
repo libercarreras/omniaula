@@ -69,10 +69,14 @@ export default function Asistencia() {
     loadData();
   }, [claseSeleccionada, clases, user, hoyISO]);
 
+  const asistenciaRef = useRef(asistencia);
+  asistenciaRef.current = asistencia;
+
   // Auto-save with upsert
   const saveAsistenciaFn = useCallback(async () => {
     if (!user || !claseSeleccionada) return;
-    const entries = Object.entries(asistencia).filter(([, estado]) => estado !== null);
+    const currentAsistencia = asistenciaRef.current;
+    const entries = Object.entries(currentAsistencia).filter(([, estado]) => estado !== null);
     for (const [estudiante_id, estado] of entries) {
       const { data: existing } = await supabase.from("asistencia")
         .select("id").eq("clase_id", claseSeleccionada).eq("estudiante_id", estudiante_id).eq("fecha", hoyISO).maybeSingle();
@@ -85,12 +89,12 @@ export default function Asistencia() {
       }
     }
     // Remove records for null entries
-    const nullEntries = Object.entries(asistencia).filter(([, estado]) => estado === null);
+    const nullEntries = Object.entries(currentAsistencia).filter(([, estado]) => estado === null);
     for (const [estudiante_id] of nullEntries) {
       await supabase.from("asistencia").delete()
         .eq("clase_id", claseSeleccionada).eq("estudiante_id", estudiante_id).eq("fecha", hoyISO);
     }
-  }, [asistencia, claseSeleccionada, user, hoyISO]);
+  }, [claseSeleccionada, user, hoyISO]);
 
   const { trigger, status } = useDebounceCallback(saveAsistenciaFn, 1500);
 
