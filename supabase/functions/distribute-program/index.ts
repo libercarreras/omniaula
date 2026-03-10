@@ -74,8 +74,8 @@ serve(async (req) => {
       );
     }
 
-    const diaNum = parseHorarioDia(horario);
-    if (diaNum === null) {
+    const diasNums = parseHorarioDias(horario);
+    if (diasNums.length === 0) {
       return new Response(
         JSON.stringify({ error: "No se pudo determinar el día de clase desde el horario. Configurá el horario de la clase (ej: 'Lunes 08:00')." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -85,7 +85,12 @@ serve(async (req) => {
     const start = new Date(fechaInicio || new Date().toISOString().split("T")[0]);
     const end = new Date(fechaFin || `${start.getFullYear()}-12-15`);
 
-    const availableDates = getClassDates(diaNum, start, end);
+    // Collect dates for all class days, then sort
+    let availableDates: string[] = [];
+    for (const diaNum of diasNums) {
+      availableDates = availableDates.concat(getClassDates(diaNum, start, end));
+    }
+    availableDates.sort();
 
     if (availableDates.length === 0) {
       return new Response(
