@@ -282,7 +282,8 @@ export default function ModoClase() {
     const currentNotas = notasRef.current;
     const entries = Object.entries(currentNotas).filter(([, v]) => v.trim() !== "");
     for (const [key, val] of entries) {
-      const [evaluacion_id, estudiante_id] = key.split("-");
+      const evaluacion_id = key.substring(0, 36);
+      const estudiante_id = key.substring(37);
       const nota = parseFloat(val);
       if (isNaN(nota)) continue;
       const { data: existing } = await supabase.from("notas").select("id").eq("evaluacion_id", evaluacion_id).eq("estudiante_id", estudiante_id).maybeSingle();
