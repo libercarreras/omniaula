@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -10,12 +10,13 @@ import { toast } from "sonner";
 import {
   ArrowLeft, UserCheck, ClipboardCheck, MessageSquare,
   Check, X, Clock, LogOut, CheckCheck, Star,
-  ThumbsUp, AlertCircle, BookX, Brain, History, Loader2, BookOpen, Save,
+  ThumbsUp, AlertCircle, BookX, Brain, History, Loader2, BookOpen, Save, CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StudentDetailSheet } from "@/components/clase/StudentDetailSheet";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useDebounceCallback } from "@/hooks/useDebounce";
 
 type ModoActivo = "asistencia" | "notas" | "observaciones" | "participacion" | "diario";
 type EstadoAsistencia = "presente" | "falta" | "tarde" | "retiro" | null;
@@ -46,16 +47,16 @@ export default function ModoClase() {
   const [obsState, setObsState] = useState<Record<string, string[]>>({});
   const [evaluacionActiva, setEvaluacionActiva] = useState<string | null>(null);
   const [studentDetailId, setStudentDetailId] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
 
   // Diario state
   const [diarioTema, setDiarioTema] = useState("");
   const [diarioActividad, setDiarioActividad] = useState("");
   const [diarioObs, setDiarioObs] = useState("");
   const [diarioId, setDiarioId] = useState<string | null>(null);
-  const [savingDiario, setSavingDiario] = useState(false);
+  const [diarioSugerencias, setDiarioSugerencias] = useState<string[]>([]);
 
   const hoyISO = new Date().toISOString().split("T")[0];
+  const isInitialLoad = useRef(true);
 
   useEffect(() => {
     if (!user || !claseId) return;
@@ -78,12 +79,10 @@ export default function ModoClase() {
       setEstudiantesClase(estRes.data || []);
       setEvaluacionesClase(evRes.data || []);
 
-      // Load today's attendance
       const asistMap: Record<string, EstadoAsistencia> = {};
       (asistRes.data || []).forEach(a => { asistMap[a.estudiante_id] = a.estado as EstadoAsistencia; });
       setAsistencia(asistMap);
 
-      // Load today's diary
       if (diarioRes.data) {
         setDiarioId(diarioRes.data.id);
         setDiarioTema(diarioRes.data.tema_trabajado || "");
@@ -91,7 +90,15 @@ export default function ModoClase() {
         setDiarioObs(diarioRes.data.observaciones || "");
       }
 
-      // Load notas for evaluaciones
+      // Load diary suggestions (last 5 topics from this class)
+      const { data: prevDiarios } = await supabase.from("diario_clase")
+        .select("tema_trabajado").eq("clase_id", claseId)
+        .not("tema_trabajado", "is", null)
+        .neq("fecha", hoyISO)
+        .order("fecha", { ascending: false }).limit(5);
+      const temas = (prevDiarios || []).map(d => d.tema_trabajado).filter(Boolean) as string[];
+      setDiarioSugerencias([...new Set(temas)]);
+
       const evIds = (evRes.data || []).map(e => e.id);
       if (evIds.length > 0) {
         const { data: notasData } = await supabase.from("notas").select("*").in("evaluacion_id", evIds);
@@ -100,7 +107,6 @@ export default function ModoClase() {
         setNotasState(nMap);
       }
 
-      // Load today's observaciones
       const { data: obsData } = await supabase.from("observaciones").select("*").eq("clase_id", claseId).eq("fecha", hoyISO);
       const oMap: Record<string, string[]> = {};
       (obsData || []).forEach(o => {
@@ -110,44 +116,33 @@ export default function ModoClase() {
       setObsState(oMap);
 
       setLoading(false);
+      // Allow auto-save after initial load
+      setTimeout(() => { isInitialLoad.current = false; }, 500);
     };
     fetchAll();
   }, [user, claseId]);
 
   const hoy = new Date().toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" });
 
-  // Save attendance
-  const saveAsistencia = useCallback(async () => {
+  // ========== Auto-save callbacks ==========
+  const saveAsistenciaFn = useCallback(async () => {
     if (!user || !claseId) return;
-    setSaving(true);
-    // Delete today's records and re-insert
     await supabase.from("asistencia").delete().eq("clase_id", claseId).eq("fecha", hoyISO);
     const records = Object.entries(asistencia)
       .filter(([, estado]) => estado !== null)
       .map(([estudiante_id, estado]) => ({
-        clase_id: claseId,
-        estudiante_id,
-        estado: estado!,
-        fecha: hoyISO,
-        user_id: user.id,
+        clase_id: claseId, estudiante_id, estado: estado!, fecha: hoyISO, user_id: user.id,
       }));
-    if (records.length > 0) {
-      await supabase.from("asistencia").insert(records);
-    }
-    setSaving(false);
-    toast.success("Asistencia guardada");
+    if (records.length > 0) await supabase.from("asistencia").insert(records);
   }, [asistencia, claseId, user, hoyISO]);
 
-  // Save notas
-  const saveNotas = useCallback(async () => {
+  const saveNotasFn = useCallback(async () => {
     if (!user || !claseId) return;
-    setSaving(true);
     const entries = Object.entries(notasState).filter(([, v]) => v.trim() !== "");
     for (const [key, val] of entries) {
       const [evaluacion_id, estudiante_id] = key.split("-");
       const nota = parseFloat(val);
       if (isNaN(nota)) continue;
-      // Upsert: check if exists
       const { data: existing } = await supabase.from("notas").select("id").eq("evaluacion_id", evaluacion_id).eq("estudiante_id", estudiante_id).maybeSingle();
       if (existing) {
         await supabase.from("notas").update({ nota }).eq("id", existing.id);
@@ -155,39 +150,26 @@ export default function ModoClase() {
         await supabase.from("notas").insert({ evaluacion_id, estudiante_id, nota, user_id: user.id });
       }
     }
-    setSaving(false);
-    toast.success("Notas guardadas");
   }, [notasState, user, claseId]);
 
-  // Save observaciones
-  const saveObservaciones = useCallback(async () => {
+  const saveObservacionesFn = useCallback(async () => {
     if (!user || !claseId) return;
-    setSaving(true);
     await supabase.from("observaciones").delete().eq("clase_id", claseId).eq("fecha", hoyISO);
     const records: any[] = [];
     Object.entries(obsState).forEach(([estudiante_id, tipos]) => {
       tipos.forEach(tipo => {
         records.push({
-          clase_id: claseId,
-          estudiante_id,
-          tipo: tipo as any,
+          clase_id: claseId, estudiante_id, tipo: tipo as any,
           descripcion: tagObservaciones.find(t => t.tipo === tipo)?.label || tipo,
-          fecha: hoyISO,
-          user_id: user.id,
+          fecha: hoyISO, user_id: user.id,
         });
       });
     });
-    if (records.length > 0) {
-      await supabase.from("observaciones").insert(records);
-    }
-    setSaving(false);
-    toast.success("Observaciones guardadas");
+    if (records.length > 0) await supabase.from("observaciones").insert(records);
   }, [obsState, claseId, user, hoyISO]);
 
-  // Save diario
-  const saveDiario = useCallback(async () => {
+  const saveDiarioFn = useCallback(async () => {
     if (!user || !claseId) return;
-    setSavingDiario(true);
     if (diarioId) {
       await supabase.from("diario_clase").update({
         tema_trabajado: diarioTema || null,
@@ -200,28 +182,45 @@ export default function ModoClase() {
         tema_trabajado: diarioTema || null,
         actividad_realizada: diarioActividad || null,
         observaciones: diarioObs || null,
-        user_id: user.id,
-        fecha: hoyISO,
+        user_id: user.id, fecha: hoyISO,
       }).select("id").maybeSingle();
       if (data) setDiarioId(data.id);
     }
-    setSavingDiario(false);
-    toast.success("Diario guardado");
   }, [diarioTema, diarioActividad, diarioObs, diarioId, claseId, user, hoyISO]);
 
-  const handleSave = () => {
-    if (modoActivo === "asistencia") saveAsistencia();
-    else if (modoActivo === "notas") saveNotas();
-    else if (modoActivo === "observaciones") saveObservaciones();
-    else if (modoActivo === "diario") saveDiario();
-  };
+  const asistDebounce = useDebounceCallback(saveAsistenciaFn, 2000);
+  const notasDebounce = useDebounceCallback(saveNotasFn, 2500);
+  const obsDebounce = useDebounceCallback(saveObservacionesFn, 2000);
+  const diarioDebounce = useDebounceCallback(saveDiarioFn, 3000);
+
+  // Get current active save status
+  const currentStatus = modoActivo === "asistencia" ? asistDebounce.status
+    : modoActivo === "notas" ? notasDebounce.status
+    : modoActivo === "observaciones" ? obsDebounce.status
+    : modoActivo === "diario" ? diarioDebounce.status : "idle";
 
   const asistenciaStats = useMemo(() => {
     const total = estudiantesClase.length;
     const presentes = Object.values(asistencia).filter(v => v === "presente").length;
     const faltas = Object.values(asistencia).filter(v => v === "falta").length;
-    return { total, presentes, faltas };
+    const tardes = Object.values(asistencia).filter(v => v === "tarde").length;
+    return { total, presentes, faltas, tardes };
   }, [asistencia, estudiantesClase.length]);
+
+  const notasStats = useMemo(() => {
+    if (!evaluacionActiva) return null;
+    const vals = Object.entries(notasState)
+      .filter(([k, v]) => k.startsWith(evaluacionActiva) && v.trim() !== "")
+      .map(([, v]) => parseFloat(v))
+      .filter(n => !isNaN(n));
+    if (vals.length === 0) return null;
+    const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+    return { count: vals.length, avg: avg.toFixed(1) };
+  }, [notasState, evaluacionActiva]);
+
+  const obsStats = useMemo(() => {
+    return Object.values(obsState).reduce((acc, arr) => acc + arr.length, 0);
+  }, [obsState]);
 
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
@@ -235,13 +234,18 @@ export default function ModoClase() {
   }
 
   const marcarAsistencia = (estId: string, estado: EstadoAsistencia) => {
-    setAsistencia(prev => ({ ...prev, [estId]: prev[estId] === estado ? null : estado }));
+    setAsistencia(prev => {
+      const next = { ...prev, [estId]: prev[estId] === estado ? null : estado };
+      return next;
+    });
+    if (!isInitialLoad.current) asistDebounce.trigger();
   };
 
   const marcarTodosPresentes = () => {
     const nueva: Record<string, EstadoAsistencia> = {};
     estudiantesClase.forEach(e => { nueva[e.id] = "presente"; });
     setAsistencia(nueva);
+    if (!isInitialLoad.current) asistDebounce.trigger();
     toast.success("✓ Todos presentes");
   };
 
@@ -255,6 +259,19 @@ export default function ModoClase() {
       const next = current.includes(obsId) ? current.filter(id => id !== obsId) : [...current, obsId];
       return { ...prev, [estId]: next };
     });
+    if (!isInitialLoad.current) obsDebounce.trigger();
+  };
+
+  const handleNotaChange = (key: string, value: string) => {
+    setNotasState(prev => ({ ...prev, [key]: value }));
+    if (!isInitialLoad.current) notasDebounce.trigger();
+  };
+
+  const handleDiarioChange = (field: "tema" | "actividad" | "obs", value: string) => {
+    if (field === "tema") setDiarioTema(value);
+    else if (field === "actividad") setDiarioActividad(value);
+    else setDiarioObs(value);
+    if (!isInitialLoad.current) diarioDebounce.trigger();
   };
 
   const modos = [
@@ -270,6 +287,20 @@ export default function ModoClase() {
     return parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}` : name.substring(0, 2);
   };
 
+  const StatusIndicator = () => {
+    if (currentStatus === "idle") return null;
+    return (
+      <div className={cn(
+        "flex items-center gap-1.5 text-xs font-medium transition-all animate-in fade-in",
+        currentStatus === "saved" ? "text-success" : "text-muted-foreground"
+      )}>
+        {currentStatus === "pending" && <><span className="h-1.5 w-1.5 rounded-full bg-warning animate-pulse" /> Cambios pendientes</>}
+        {currentStatus === "saving" && <><Loader2 className="h-3 w-3 animate-spin" /> Guardando...</>}
+        {currentStatus === "saved" && <><CheckCircle2 className="h-3 w-3" /> Guardado ✓</>}
+      </div>
+    );
+  };
+
   return (
     <div className="max-w-4xl mx-auto pb-6">
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-sm border-b -mx-4 px-4 pt-1 pb-2 md:-mx-0 md:px-0">
@@ -279,6 +310,7 @@ export default function ModoClase() {
             <h1 className="text-base font-display font-bold truncate">{materia.nombre} — {grupo.nombre}</h1>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
+            <StatusIndicator />
             <span className="text-[10px] text-muted-foreground capitalize">{hoy}</span>
             <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{estudiantesClase.length}</Badge>
           </div>
@@ -292,16 +324,16 @@ export default function ModoClase() {
         </div>
       </div>
 
+      {/* Context bar per mode */}
       {modoActivo === "asistencia" && (
         <div className="flex items-center justify-between py-2 gap-2">
           <Button size="sm" className="gap-1.5 bg-success hover:bg-success/90 text-success-foreground h-10 text-sm font-semibold" onClick={marcarTodosPresentes}>
             <CheckCheck className="h-4 w-4" />Todos presentes
           </Button>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">{asistenciaStats.presentes}P · {asistenciaStats.faltas}F</span>
-            <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5 h-10">
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Guardar
-            </Button>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="text-success font-semibold">{asistenciaStats.presentes}P</span>
+            <span className="text-destructive font-semibold">{asistenciaStats.faltas}F</span>
+            <span className="text-warning font-semibold">{asistenciaStats.tardes}T</span>
           </div>
         </div>
       )}
@@ -317,43 +349,49 @@ export default function ModoClase() {
           ) : (
             <p className="text-sm text-muted-foreground py-1">Sin evaluaciones creadas para esta clase.</p>
           )}
-          {evaluacionActiva && (
-            <div className="flex justify-end">
-              <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5 h-9">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Guardar notas
-              </Button>
+          {notasStats && (
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span>{notasStats.count} calificadas</span>
+              <span className="font-semibold text-primary">Promedio: {notasStats.avg}</span>
             </div>
           )}
         </div>
       )}
 
       {modoActivo === "observaciones" && (
-        <div className="flex justify-end py-2">
-          <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5 h-9">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Guardar obs.
-          </Button>
+        <div className="flex items-center justify-between py-2">
+          <span className="text-xs text-muted-foreground">{obsStats} observaciones registradas hoy</span>
         </div>
       )}
 
       {/* Diario tab */}
       {modoActivo === "diario" && (
         <div className="space-y-4 py-3">
+          {diarioSugerencias.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[11px] text-muted-foreground font-medium">Temas anteriores:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {diarioSugerencias.map((tema, i) => (
+                  <button key={i} onClick={() => handleDiarioChange("tema", tema)}
+                    className="px-2.5 py-1.5 rounded-lg bg-muted/60 text-xs text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors border border-transparent hover:border-primary/20">
+                    {tema}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="space-y-2">
             <Label>Tema trabajado</Label>
-            <Input placeholder="Ej: Fracciones equivalentes" value={diarioTema} onChange={e => setDiarioTema(e.target.value)} />
+            <Input placeholder="Ej: Fracciones equivalentes" value={diarioTema} onChange={e => handleDiarioChange("tema", e.target.value)} />
           </div>
           <div className="space-y-2">
             <Label>Actividades realizadas</Label>
-            <Textarea placeholder="Describe las actividades de la clase..." value={diarioActividad} onChange={e => setDiarioActividad(e.target.value)} rows={3} />
+            <Textarea placeholder="Describe las actividades de la clase..." value={diarioActividad} onChange={e => handleDiarioChange("actividad", e.target.value)} rows={3} />
           </div>
           <div className="space-y-2">
             <Label>Observaciones generales</Label>
-            <Textarea placeholder="Observaciones de la clase..." value={diarioObs} onChange={e => setDiarioObs(e.target.value)} rows={3} />
+            <Textarea placeholder="Observaciones de la clase..." value={diarioObs} onChange={e => handleDiarioChange("obs", e.target.value)} rows={3} />
           </div>
-          <Button onClick={handleSave} disabled={savingDiario} className="gap-1.5 w-full">
-            {savingDiario ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {diarioId ? "Actualizar diario" : "Guardar diario"}
-          </Button>
         </div>
       )}
 
@@ -385,7 +423,7 @@ export default function ModoClase() {
                           { v: "tarde", icon: Clock, active: "bg-warning text-warning-foreground" },
                           { v: "retiro", icon: LogOut, active: "bg-muted-foreground text-background" },
                         ] as const).map(btn => (
-                          <button key={btn.v} className={cn("h-11 w-11 rounded-xl flex items-center justify-center transition-all active:scale-95", estado === btn.v ? btn.active : "bg-muted/50 text-muted-foreground hover:bg-muted")} onClick={() => marcarAsistencia(est.id, btn.v)}>
+                          <button key={btn.v} className={cn("h-11 w-11 rounded-xl flex items-center justify-center transition-all active:scale-95", estado === btn.v ? `${btn.active} animate-in zoom-in-95 duration-150` : "bg-muted/50 text-muted-foreground hover:bg-muted")} onClick={() => marcarAsistencia(est.id, btn.v)}>
                             <btn.icon className="h-5 w-5" />
                           </button>
                         ))}
@@ -403,7 +441,7 @@ export default function ModoClase() {
                       </>
                     )}
                     {modoActivo === "notas" && evaluacionActiva && (
-                      <Input type="number" inputMode="decimal" placeholder="—" className="w-16 h-11 text-center text-lg font-bold rounded-xl border-2 focus:border-primary" value={notasState[`${evaluacionActiva}-${est.id}`] || ""} onChange={e => setNotasState(prev => ({ ...prev, [`${evaluacionActiva}-${est.id}`]: e.target.value }))} />
+                      <Input type="number" inputMode="decimal" placeholder="—" className="w-16 h-11 text-center text-lg font-bold rounded-xl border-2 focus:border-primary" value={notasState[`${evaluacionActiva}-${est.id}`] || ""} onChange={e => handleNotaChange(`${evaluacionActiva}-${est.id}`, e.target.value)} />
                     )}
                     {modoActivo === "observaciones" && (
                       <button className="h-9 w-9 rounded-lg flex items-center justify-center bg-muted/50 text-muted-foreground" onClick={() => setStudentDetailId(est.id)}><History className="h-4 w-4" /></button>
@@ -415,7 +453,7 @@ export default function ModoClase() {
                     {tagObservaciones.map(tag => {
                       const isActive = (obsState[est.id] || []).includes(tag.tipo);
                       return (
-                        <button key={tag.id} onClick={() => toggleObservacion(est.id, tag.tipo)} className={cn("inline-flex items-center gap-1 px-2.5 py-2 rounded-xl text-xs font-medium border transition-all active:scale-95", isActive ? tag.color : "bg-muted/30 text-muted-foreground border-transparent hover:bg-muted/60")}>
+                        <button key={tag.id} onClick={() => toggleObservacion(est.id, tag.tipo)} className={cn("inline-flex items-center gap-1 px-2.5 py-2 rounded-xl text-xs font-medium border transition-all active:scale-95", isActive ? `${tag.color} animate-in zoom-in-95 duration-150` : "bg-muted/30 text-muted-foreground border-transparent hover:bg-muted/60")}>
                           <tag.icon className="h-3.5 w-3.5" />{tag.label}
                         </button>
                       );

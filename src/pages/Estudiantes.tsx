@@ -7,7 +7,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, UserX, Plus, Pencil, Trash2, Upload, FileSpreadsheet } from "lucide-react";
+import { Loader2, UserX, Plus, Pencil, Trash2, Upload, FileSpreadsheet, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
@@ -30,6 +30,10 @@ interface CSVRow {
   numero_lista: number | null;
 }
 
+function normalizeName(name: string): string {
+  return name.trim().replace(/\s+/g, " ").split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+}
+
 export default function Estudiantes() {
   const { user } = useAuth();
   const { institucionActiva } = useInstitucion();
@@ -44,6 +48,7 @@ export default function Estudiantes() {
   const [saving, setSaving] = useState(false);
   const [editingEstudiante, setEditingEstudiante] = useState<EstudianteDB | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EstudianteDB | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
   // CSV import state
   const [csvDialogOpen, setCsvDialogOpen] = useState(false);
@@ -67,11 +72,22 @@ export default function Estudiantes() {
 
   useEffect(() => { fetchData(); }, [user, institucionActiva]);
 
+  const checkDuplicate = (name: string, groupId: string) => {
+    const normalized = normalizeName(name).toLowerCase();
+    const existing = estudiantes.find(e =>
+      e.grupo_id === groupId &&
+      e.nombre_completo.toLowerCase() === normalized &&
+      e.id !== editingEstudiante?.id
+    );
+    setDuplicateWarning(existing ? `Ya existe "${existing.nombre_completo}" en este grupo` : null);
+  };
+
   const openCreate = () => {
     setEditingEstudiante(null);
     setNombre("");
     setGrupoId("");
     setNumeroLista("");
+    setDuplicateWarning(null);
     setDialogOpen(true);
   };
 
@@ -80,16 +96,26 @@ export default function Estudiantes() {
     setNombre(est.nombre_completo);
     setGrupoId(est.grupo_id);
     setNumeroLista(est.numero_lista?.toString() || "");
+    setDuplicateWarning(null);
     setDialogOpen(true);
+  };
+
+  const handleNameBlur = () => {
+    if (nombre.trim()) {
+      const normalized = normalizeName(nombre);
+      setNombre(normalized);
+      if (grupoId) checkDuplicate(normalized, grupoId);
+    }
   };
 
   const handleSave = async () => {
     if (!user || !nombre.trim() || !grupoId) return;
     setSaving(true);
+    const finalName = normalizeName(nombre);
 
     if (editingEstudiante) {
       const { error } = await supabase.from("estudiantes").update({
-        nombre_completo: nombre.trim(),
+        nombre_completo: finalName,
         grupo_id: grupoId,
         numero_lista: numeroLista ? parseInt(numeroLista) : null,
       }).eq("id", editingEstudiante.id);
@@ -98,10 +124,10 @@ export default function Estudiantes() {
         toast({ title: "Error", description: "No se pudo actualizar el estudiante.", variant: "destructive" });
         return;
       }
-      toast({ title: "Estudiante actualizado", description: `"${nombre.trim()}" fue actualizado correctamente.` });
+      toast({ title: "Estudiante actualizado", description: `"${finalName}" fue actualizado correctamente.` });
     } else {
       const { error } = await supabase.from("estudiantes").insert({
-        nombre_completo: nombre.trim(),
+        nombre_completo: finalName,
         grupo_id: grupoId,
         numero_lista: numeroLista ? parseInt(numeroLista) : null,
         user_id: user.id,
@@ -111,11 +137,12 @@ export default function Estudiantes() {
         toast({ title: "Error", description: "No se pudo crear el estudiante.", variant: "destructive" });
         return;
       }
-      toast({ title: "Estudiante agregado", description: `"${nombre.trim()}" fue registrado correctamente.` });
+      toast({ title: "Estudiante agregado", description: `"${finalName}" fue registrado correctamente.` });
     }
 
     setNombre(""); setGrupoId(""); setNumeroLista("");
     setEditingEstudiante(null);
+    setDuplicateWarning(null);
     setDialogOpen(false);
     fetchData();
   };
@@ -150,7 +177,6 @@ export default function Estudiantes() {
         toast({ title: "Archivo vacío", description: "El CSV debe tener al menos una fila de datos.", variant: "destructive" });
         return;
       }
-      // Parse header
       const header = lines[0].toLowerCase().split(/[,;\t]/).map(h => h.trim());
       const nameIdx = header.findIndex(h => h.includes("nombre"));
       const numIdx = header.findIndex(h => h.includes("numero") || h.includes("lista") || h.includes("nro"));
@@ -166,7 +192,7 @@ export default function Estudiantes() {
         const nom = cols[nameIdx]?.trim();
         if (!nom) continue;
         rows.push({
-          nombre_completo: nom,
+          nombre_completo: normalizeName(nom),
           numero_lista: numIdx >= 0 && cols[numIdx] ? parseInt(cols[numIdx]) || null : null,
         });
       }
@@ -275,11 +301,25 @@ export default function Estudiantes() {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label htmlFor="est-nombre">Nombre completo</Label>
-              <Input id="est-nombre" placeholder="Ej: Juan Pérez" value={nombre} onChange={e => setNombre(e.target.value)} />
+              <Input id="est-nombre" placeholder="Ej: Juan Pérez" value={nombre}
+                onChange={e => {
+                  setNombre(e.target.value);
+                  setDuplicateWarning(null);
+                }}
+                onBlur={handleNameBlur}
+              />
+              {duplicateWarning && (
+                <p className="text-xs text-warning flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" /> {duplicateWarning}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Grupo</Label>
-              <Select value={grupoId} onValueChange={setGrupoId}>
+              <Select value={grupoId} onValueChange={v => {
+                setGrupoId(v);
+                if (nombre.trim()) checkDuplicate(nombre, v);
+              }}>
                 <SelectTrigger><SelectValue placeholder="Seleccionar grupo" /></SelectTrigger>
                 <SelectContent>
                   {grupos.map(g => <SelectItem key={g.id} value={g.id}>{g.nombre}</SelectItem>)}
