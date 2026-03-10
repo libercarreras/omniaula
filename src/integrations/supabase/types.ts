@@ -243,6 +243,50 @@ export type Database = {
           },
         ]
       }
+      evaluacion_contenido: {
+        Row: {
+          created_at: string
+          enunciado: string
+          evaluacion_id: string
+          id: string
+          opciones: Json | null
+          orden: number
+          puntos: number | null
+          tipo_pregunta: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          enunciado: string
+          evaluacion_id: string
+          id?: string
+          opciones?: Json | null
+          orden?: number
+          puntos?: number | null
+          tipo_pregunta?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          enunciado?: string
+          evaluacion_id?: string
+          id?: string
+          opciones?: Json | null
+          orden?: number
+          puntos?: number | null
+          tipo_pregunta?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evaluacion_contenido_evaluacion_id_fkey"
+            columns: ["evaluacion_id"]
+            isOneToOne: false
+            referencedRelation: "evaluaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       evaluaciones: {
         Row: {
           clase_id: string
