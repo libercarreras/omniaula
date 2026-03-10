@@ -697,6 +697,32 @@ export default function ModoClase() {
       )}
 
       <StudentDetailSheet studentId={studentDetailId} claseId={claseId || ""} open={!!studentDetailId} onClose={() => setStudentDetailId(null)} />
+
+      <Dialog open={editClaseOpen} onOpenChange={setEditClaseOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar clase</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="edit-horario">Horario</Label>
+              <Input id="edit-horario" placeholder="Ej: Lunes 8:00-9:30" value={editHorario} onChange={e => setEditHorario(e.target.value)} />
+              <p className="text-[11px] text-muted-foreground">Formato sugerido: Día HH:MM-HH:MM</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-aula">Aula</Label>
+              <Input id="edit-aula" placeholder="Ej: Aula 12" value={editAula} onChange={e => setEditAula(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditClaseOpen(false)}>Cancelar</Button>
+            <Button onClick={saveClaseDetails} disabled={savingClase}>
+              {savingClase ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
