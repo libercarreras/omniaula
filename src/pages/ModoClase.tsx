@@ -6,12 +6,13 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import {
   ArrowLeft, UserCheck, ClipboardCheck, MessageSquare,
   Check, X, Clock, LogOut, CheckCheck, Star,
   ThumbsUp, AlertCircle, BookX, Brain, History, Loader2, BookOpen, Save, CheckCircle2,
-  FileText, Upload, Trash2, Settings2,
+  FileText, Upload, Trash2, Settings2, LayoutDashboard, CalendarCheck,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { EstructuraPrograma } from "@/components/programa/EstructuraPrograma";
@@ -22,7 +23,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebounceCallback } from "@/hooks/useDebounce";
 
-type ModoActivo = "asistencia" | "notas" | "observaciones" | "participacion" | "diario" | "programa";
+type ModoActivo = "resumen" | "asistencia" | "notas" | "observaciones" | "diario";
 type EstadoAsistencia = "presente" | "falta" | "tarde" | "retiro" | null;
 type NivelParticipacion = "alta" | "media" | "baja";
 
@@ -44,13 +45,14 @@ export default function ModoClase() {
   const [estudiantesClase, setEstudiantesClase] = useState<any[]>([]);
   const [evaluacionesClase, setEvaluacionesClase] = useState<any[]>([]);
 
-  const [modoActivo, setModoActivo] = useState<ModoActivo>("asistencia");
+  const [modoActivo, setModoActivo] = useState<ModoActivo>("resumen");
   const [asistencia, setAsistencia] = useState<Record<string, EstadoAsistencia>>({});
   const [participacion, setParticipacion] = useState<Record<string, NivelParticipacion | null>>({});
   const [notasState, setNotasState] = useState<Record<string, string>>({});
   const [obsState, setObsState] = useState<Record<string, string[]>>({});
   const [evaluacionActiva, setEvaluacionActiva] = useState<string | null>(null);
   const [studentDetailId, setStudentDetailId] = useState<string | null>(null);
+  const [showProgramaDialog, setShowProgramaDialog] = useState(false);
 
   // Diario state
   const [diarioTema, setDiarioTema] = useState("");
@@ -58,6 +60,10 @@ export default function ModoClase() {
   const [diarioObs, setDiarioObs] = useState("");
   const [diarioId, setDiarioId] = useState<string | null>(null);
   const [diarioSugerencias, setDiarioSugerencias] = useState<string[]>([]);
+
+  // Planificacion de hoy
+  const [temaPlanificado, setTemaPlanificado] = useState<string | null>(null);
+  const [planEstado, setPlanEstado] = useState<string | null>(null);
 
   // Programa anual state
   const [programaContenido, setProgramaContenido] = useState("");
@@ -103,6 +109,24 @@ export default function ModoClase() {
   const hoyISO = new Date().toISOString().split("T")[0];
   const isInitialLoad = useRef(true);
 
+  // Refs for stale closure fix
+  const asistenciaRef = useRef(asistencia);
+  asistenciaRef.current = asistencia;
+  const notasRef = useRef(notasState);
+  notasRef.current = notasState;
+  const obsRef = useRef(obsState);
+  obsRef.current = obsState;
+  const diarioTemaRef = useRef(diarioTema);
+  diarioTemaRef.current = diarioTema;
+  const diarioActividadRef = useRef(diarioActividad);
+  diarioActividadRef.current = diarioActividad;
+  const diarioObsRef = useRef(diarioObs);
+  diarioObsRef.current = diarioObs;
+  const diarioIdRef = useRef(diarioId);
+  diarioIdRef.current = diarioId;
+  const participacionRef = useRef(participacion);
+  participacionRef.current = participacion;
+
   useEffect(() => {
     if (!user || !claseId) return;
     const fetchAll = async () => {
@@ -111,13 +135,15 @@ export default function ModoClase() {
       if (!claseData) { setLoading(false); return; }
       setClase(claseData);
 
-      const [matRes, grpRes, estRes, evRes, asistRes, diarioRes] = await Promise.all([
+      const [matRes, grpRes, estRes, evRes, asistRes, diarioRes, planRes, partRes] = await Promise.all([
         supabase.from("materias").select("*").eq("id", claseData.materia_id).maybeSingle(),
         supabase.from("grupos").select("*").eq("id", claseData.grupo_id).maybeSingle(),
         supabase.from("estudiantes").select("*").eq("grupo_id", claseData.grupo_id).order("nombre_completo"),
         supabase.from("evaluaciones").select("*").eq("clase_id", claseId),
         supabase.from("asistencia").select("*").eq("clase_id", claseId).eq("fecha", hoyISO),
         supabase.from("diario_clase").select("*").eq("clase_id", claseId).eq("fecha", hoyISO).maybeSingle(),
+        supabase.from("planificacion_clases").select("tema_titulo, estado").eq("clase_id", claseId).eq("fecha", hoyISO),
+        supabase.from("participacion_clase" as any).select("*").eq("clase_id", claseId).eq("fecha", hoyISO),
       ]);
       setMateria(matRes.data);
       setGrupo(grpRes.data);
@@ -128,11 +154,26 @@ export default function ModoClase() {
       (asistRes.data || []).forEach(a => { asistMap[a.estudiante_id] = a.estado as EstadoAsistencia; });
       setAsistencia(asistMap);
 
+      // Load participacion
+      const partMap: Record<string, NivelParticipacion | null> = {};
+      ((partRes.data as any[]) || []).forEach((p: any) => { partMap[p.estudiante_id] = p.nivel; });
+      setParticipacion(partMap);
+
+      // Planificacion de hoy
+      const planData = (planRes.data || []) as any[];
+      if (planData.length > 0) {
+        setTemaPlanificado(planData[0].tema_titulo);
+        setPlanEstado(planData[0].estado);
+      }
+
       if (diarioRes.data) {
         setDiarioId(diarioRes.data.id);
         setDiarioTema(diarioRes.data.tema_trabajado || "");
         setDiarioActividad(diarioRes.data.actividad_realizada || "");
         setDiarioObs(diarioRes.data.observaciones || "");
+      } else if (planData.length > 0 && planData[0].tema_titulo) {
+        // Auto-fill diario from planificacion
+        setDiarioTema(planData[0].tema_titulo);
       }
 
       // Load diary suggestions (last 5 topics from this class)
@@ -177,7 +218,6 @@ export default function ModoClase() {
       }
 
       setLoading(false);
-      // Allow auto-save after initial load
       setTimeout(() => { isInitialLoad.current = false; }, 500);
     };
     fetchAll();
@@ -185,10 +225,11 @@ export default function ModoClase() {
 
   const hoy = new Date().toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" });
 
-  // ========== Auto-save callbacks ==========
+  // ========== Auto-save callbacks (using refs to prevent stale closures) ==========
   const saveAsistenciaFn = useCallback(async () => {
     if (!user || !claseId) return;
-    for (const [estudiante_id, estado] of Object.entries(asistencia)) {
+    const currentAsist = asistenciaRef.current;
+    for (const [estudiante_id, estado] of Object.entries(currentAsist)) {
       if (estado) {
         const { data: existing } = await supabase.from("asistencia")
           .select("id").eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", hoyISO).maybeSingle();
@@ -201,11 +242,12 @@ export default function ModoClase() {
         await supabase.from("asistencia").delete().eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", hoyISO);
       }
     }
-  }, [asistencia, claseId, user, hoyISO]);
+  }, [claseId, user, hoyISO]);
 
   const saveNotasFn = useCallback(async () => {
     if (!user || !claseId) return;
-    const entries = Object.entries(notasState).filter(([, v]) => v.trim() !== "");
+    const currentNotas = notasRef.current;
+    const entries = Object.entries(currentNotas).filter(([, v]) => v.trim() !== "");
     for (const [key, val] of entries) {
       const [evaluacion_id, estudiante_id] = key.split("-");
       const nota = parseFloat(val);
@@ -217,13 +259,14 @@ export default function ModoClase() {
         await supabase.from("notas").insert({ evaluacion_id, estudiante_id, nota, user_id: user.id });
       }
     }
-  }, [notasState, user, claseId]);
+  }, [user, claseId]);
 
   const saveObservacionesFn = useCallback(async () => {
     if (!user || !claseId) return;
+    const currentObs = obsRef.current;
     await supabase.from("observaciones").delete().eq("clase_id", claseId).eq("fecha", hoyISO);
     const records: any[] = [];
-    Object.entries(obsState).forEach(([estudiante_id, tipos]) => {
+    Object.entries(currentObs).forEach(([estudiante_id, tipos]) => {
       tipos.forEach(tipo => {
         records.push({
           clase_id: claseId, estudiante_id, tipo: tipo as any,
@@ -233,30 +276,33 @@ export default function ModoClase() {
       });
     });
     if (records.length > 0) await supabase.from("observaciones").insert(records);
-  }, [obsState, claseId, user, hoyISO]);
+  }, [claseId, user, hoyISO]);
 
   const saveDiarioFn = useCallback(async () => {
     if (!user || !claseId) return;
-    let currentDiarioId = diarioId;
-    if (diarioId) {
+    const tema = diarioTemaRef.current;
+    const actividad = diarioActividadRef.current;
+    const obs = diarioObsRef.current;
+    let currentDiarioId = diarioIdRef.current;
+    if (currentDiarioId) {
       await supabase.from("diario_clase").update({
-        tema_trabajado: diarioTema || null,
-        actividad_realizada: diarioActividad || null,
-        observaciones: diarioObs || null,
-      }).eq("id", diarioId);
+        tema_trabajado: tema || null,
+        actividad_realizada: actividad || null,
+        observaciones: obs || null,
+      }).eq("id", currentDiarioId);
     } else {
       const { data } = await supabase.from("diario_clase").insert({
         clase_id: claseId,
-        tema_trabajado: diarioTema || null,
-        actividad_realizada: diarioActividad || null,
-        observaciones: diarioObs || null,
+        tema_trabajado: tema || null,
+        actividad_realizada: actividad || null,
+        observaciones: obs || null,
         user_id: user.id, fecha: hoyISO,
       }).select("id").maybeSingle();
       if (data) { setDiarioId(data.id); currentDiarioId = data.id; }
     }
 
-    // Auto-update planificacion: if there's a topic planned for today, mark as completed
-    if (diarioTema && diarioTema.trim()) {
+    // Auto-update planificacion
+    if (tema && tema.trim()) {
       const { data: todayPlan } = await supabase
         .from("planificacion_clases")
         .select("id, estado")
@@ -269,7 +315,25 @@ export default function ModoClase() {
           .eq("id", todayPlan[0].id);
       }
     }
-  }, [diarioTema, diarioActividad, diarioObs, diarioId, claseId, user, hoyISO]);
+  }, [claseId, user, hoyISO]);
+
+  const saveParticipacionFn = useCallback(async () => {
+    if (!user || !claseId) return;
+    const currentPart = participacionRef.current;
+    for (const [estudiante_id, nivel] of Object.entries(currentPart)) {
+      if (nivel) {
+        const { data: existing } = await (supabase.from("participacion_clase" as any) as any)
+          .select("id").eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", hoyISO).maybeSingle();
+        if (existing) {
+          await (supabase.from("participacion_clase" as any) as any).update({ nivel }).eq("id", existing.id);
+        } else {
+          await (supabase.from("participacion_clase" as any) as any).insert({ clase_id: claseId, estudiante_id, nivel, fecha: hoyISO, user_id: user.id });
+        }
+      } else {
+        await (supabase.from("participacion_clase" as any) as any).delete().eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", hoyISO);
+      }
+    }
+  }, [claseId, user, hoyISO]);
 
   const saveProgramaFn = useCallback(async () => {
     if (!user || !claseId) return;
@@ -294,14 +358,14 @@ export default function ModoClase() {
   const notasDebounce = useDebounceCallback(saveNotasFn, 2500);
   const obsDebounce = useDebounceCallback(saveObservacionesFn, 2000);
   const diarioDebounce = useDebounceCallback(saveDiarioFn, 3000);
+  const partDebounce = useDebounceCallback(saveParticipacionFn, 2000);
   const programaDebounce = useDebounceCallback(saveProgramaFn, 3000);
 
   // Get current active save status
   const currentStatus = modoActivo === "asistencia" ? asistDebounce.status
     : modoActivo === "notas" ? notasDebounce.status
     : modoActivo === "observaciones" ? obsDebounce.status
-    : modoActivo === "diario" ? diarioDebounce.status
-    : modoActivo === "programa" ? programaDebounce.status : "idle";
+    : modoActivo === "diario" ? diarioDebounce.status : "idle";
 
   const asistenciaStats = useMemo(() => {
     const total = estudiantesClase.length;
@@ -325,6 +389,11 @@ export default function ModoClase() {
   const obsStats = useMemo(() => {
     return Object.values(obsState).reduce((acc, arr) => acc + arr.length, 0);
   }, [obsState]);
+
+  const partStats = useMemo(() => {
+    const vals = Object.values(participacion).filter(Boolean);
+    return { alta: vals.filter(v => v === "alta").length, media: vals.filter(v => v === "media").length, baja: vals.filter(v => v === "baja").length };
+  }, [participacion]);
 
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
@@ -355,6 +424,7 @@ export default function ModoClase() {
 
   const marcarParticipacion = (estId: string, nivel: NivelParticipacion) => {
     setParticipacion(prev => ({ ...prev, [estId]: prev[estId] === nivel ? null : nivel }));
+    if (!isInitialLoad.current) partDebounce.trigger();
   };
 
   const toggleObservacion = (estId: string, obsId: string) => {
@@ -394,7 +464,6 @@ export default function ModoClase() {
       setUploadingFile(false);
       return;
     }
-    const { data: urlData } = supabase.storage.from("programas").getPublicUrl(path);
     setProgramaArchivoUrl(path);
     setProgramaArchivoNombre(file.name);
     setUploadingFile(false);
@@ -412,12 +481,11 @@ export default function ModoClase() {
   };
 
   const modos = [
+    { id: "resumen" as const, label: "Resumen", icon: LayoutDashboard },
     { id: "asistencia" as const, label: "Asist.", icon: UserCheck },
     { id: "notas" as const, label: "Notas", icon: ClipboardCheck },
     { id: "observaciones" as const, label: "Obs.", icon: MessageSquare },
-    { id: "participacion" as const, label: "Partic.", icon: Star },
     { id: "diario" as const, label: "Diario", icon: BookOpen },
-    { id: "programa" as const, label: "Progr.", icon: FileText },
   ];
 
   const getInitials = (name: string) => {
@@ -462,6 +530,14 @@ export default function ModoClase() {
     toast.success("Clase actualizada");
   };
 
+  const planEstadoLabel: Record<string, { label: string; color: string }> = {
+    pendiente: { label: "Pendiente", color: "bg-muted text-muted-foreground" },
+    completado: { label: "Completado", color: "bg-success/10 text-success" },
+    parcial: { label: "Parcial", color: "bg-warning/10 text-warning" },
+    suspendido: { label: "Suspendido", color: "bg-destructive/10 text-destructive" },
+    reprogramado: { label: "Reprogramado", color: "bg-primary/10 text-primary" },
+  };
+
   return (
     <div className="max-w-4xl mx-auto pb-6">
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-sm border-b -mx-4 px-4 pt-1 pb-2 md:-mx-0 md:px-0">
@@ -478,9 +554,14 @@ export default function ModoClase() {
             <StatusIndicator />
             <span className="text-[10px] text-muted-foreground capitalize">{hoy}</span>
             <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{estudiantesClase.length}</Badge>
+            {programaEstructura && (
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowProgramaDialog(true)}>
+                <FileText className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
-        <div className="grid grid-cols-6 gap-1">
+        <div className="grid grid-cols-5 gap-1">
           {modos.map(modo => (
             <button key={modo.id} className={cn("flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium transition-all", modoActivo === modo.id ? "bg-primary text-primary-foreground shadow-md" : "bg-muted/50 text-muted-foreground hover:bg-muted")} onClick={() => setModoActivo(modo.id)}>
               <modo.icon className="h-3.5 w-3.5" />{modo.label}
@@ -488,6 +569,93 @@ export default function ModoClase() {
           ))}
         </div>
       </div>
+
+      {/* ========== RESUMEN TAB ========== */}
+      {modoActivo === "resumen" && (
+        <div className="space-y-3 py-3">
+          {/* Tema planificado */}
+          {temaPlanificado && (
+            <Card className="border-l-4 border-l-primary">
+              <CardContent className="p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><CalendarCheck className="h-3 w-3" /> Tema planificado para hoy</p>
+                    <p className="text-sm font-semibold mt-0.5 truncate">{temaPlanificado}</p>
+                  </div>
+                  {planEstado && planEstadoLabel[planEstado] && (
+                    <Badge className={cn("text-[10px] shrink-0", planEstadoLabel[planEstado].color)}>{planEstadoLabel[planEstado].label}</Badge>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Asistencia resumen */}
+          <Card>
+            <CardContent className="p-3">
+              <button className="w-full text-left" onClick={() => setModoActivo("asistencia")}>
+                <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><UserCheck className="h-3 w-3" /> Asistencia</p>
+                <div className="flex items-center gap-4 mt-1.5">
+                  <span className="text-lg font-bold text-success">{asistenciaStats.presentes}<span className="text-xs font-normal text-muted-foreground ml-0.5">P</span></span>
+                  <span className="text-lg font-bold text-destructive">{asistenciaStats.faltas}<span className="text-xs font-normal text-muted-foreground ml-0.5">F</span></span>
+                  <span className="text-lg font-bold text-warning">{asistenciaStats.tardes}<span className="text-xs font-normal text-muted-foreground ml-0.5">T</span></span>
+                  <span className="text-xs text-muted-foreground ml-auto">de {asistenciaStats.total}</span>
+                </div>
+              </button>
+            </CardContent>
+          </Card>
+
+          {/* Participacion resumen */}
+          {(partStats.alta + partStats.media + partStats.baja > 0) && (
+            <Card>
+              <CardContent className="p-3">
+                <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><Star className="h-3 w-3" /> Participación</p>
+                <div className="flex items-center gap-4 mt-1.5">
+                  <span className="text-lg font-bold text-success">{partStats.alta}<span className="text-xs font-normal text-muted-foreground ml-0.5">Alta</span></span>
+                  <span className="text-lg font-bold text-warning">{partStats.media}<span className="text-xs font-normal text-muted-foreground ml-0.5">Media</span></span>
+                  <span className="text-lg font-bold text-destructive">{partStats.baja}<span className="text-xs font-normal text-muted-foreground ml-0.5">Baja</span></span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Notas resumen */}
+          {evaluacionesClase.length > 0 && (
+            <Card>
+              <CardContent className="p-3">
+                <button className="w-full text-left" onClick={() => setModoActivo("notas")}>
+                  <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><ClipboardCheck className="h-3 w-3" /> Evaluaciones</p>
+                  <p className="text-sm mt-1">{evaluacionesClase.length} evaluación{evaluacionesClase.length > 1 ? "es" : ""} configurada{evaluacionesClase.length > 1 ? "s" : ""}</p>
+                </button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Observaciones resumen */}
+          <Card>
+            <CardContent className="p-3">
+              <button className="w-full text-left" onClick={() => setModoActivo("observaciones")}>
+                <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><MessageSquare className="h-3 w-3" /> Observaciones hoy</p>
+                <p className="text-sm font-semibold mt-1">{obsStats} registrada{obsStats !== 1 ? "s" : ""}</p>
+              </button>
+            </CardContent>
+          </Card>
+
+          {/* Diario resumen */}
+          <Card>
+            <CardContent className="p-3">
+              <button className="w-full text-left" onClick={() => setModoActivo("diario")}>
+                <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><BookOpen className="h-3 w-3" /> Diario de clase</p>
+                {diarioTema ? (
+                  <p className="text-sm mt-1 truncate"><span className="font-medium">Tema:</span> {diarioTema}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground mt-1">Sin completar</p>
+                )}
+              </button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Context bar per mode */}
       {modoActivo === "asistencia" && (
@@ -532,6 +700,12 @@ export default function ModoClase() {
       {/* Diario tab */}
       {modoActivo === "diario" && (
         <div className="space-y-4 py-3">
+          {temaPlanificado && !diarioId && (
+            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-primary/5 border border-primary/20">
+              <CalendarCheck className="h-4 w-4 text-primary shrink-0" />
+              <p className="text-xs text-primary"><span className="font-medium">Tema planificado:</span> {temaPlanificado}</p>
+            </div>
+          )}
           {diarioSugerencias.length > 0 && (
             <div className="space-y-1">
               <p className="text-[11px] text-muted-foreground font-medium">Temas anteriores:</p>
@@ -560,104 +734,8 @@ export default function ModoClase() {
         </div>
       )}
 
-      {/* Programa anual tab */}
-      {modoActivo === "programa" && (
-        <div className="space-y-4 py-3">
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold">Contenido del programa anual</Label>
-            <Textarea
-              placeholder="Pegá aquí el contenido del programa anual de la asignatura: unidades temáticas, objetivos, contenidos, bibliografía..."
-              value={programaContenido}
-              onChange={e => handleProgramaChange(e.target.value)}
-              rows={8}
-              className="text-sm leading-relaxed"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold">Archivo adjunto</Label>
-            {programaArchivoNombre ? (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/40 border">
-                <FileText className="h-5 w-5 text-primary shrink-0" />
-                <span className="text-sm font-medium truncate flex-1">{programaArchivoNombre}</span>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={handleRemoveFile}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <label className="flex items-center gap-2 p-4 rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 cursor-pointer transition-colors">
-                {uploadingFile ? (
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                ) : (
-                  <Upload className="h-5 w-5 text-muted-foreground" />
-                )}
-                <span className="text-sm text-muted-foreground">
-                  {uploadingFile ? "Subiendo..." : "Subir archivo (PDF, DOC, imagen)"}
-                </span>
-                <input type="file" className="hidden" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt" onChange={handleProgramaFileUpload} disabled={uploadingFile} />
-              </label>
-            )}
-          </div>
-
-          {/* AI Structure Analysis */}
-          {programaContenido && (
-            <div className="space-y-2 pt-2 border-t">
-              <Label className="text-sm font-semibold">Estructura del programa</Label>
-              <EstructuraPrograma
-                contenido={programaContenido}
-                estructuraGuardada={programaEstructura}
-                saving={savingEstructura}
-                onSave={async (est) => {
-                  setSavingEstructura(true);
-                  try {
-                    if (programaId) {
-                      await supabase.from("programas_anuales").update({
-                        contenido_estructurado: est as any,
-                      }).eq("id", programaId);
-                    } else {
-                      const { data } = await supabase.from("programas_anuales").insert({
-                        clase_id: claseId!, user_id: user!.id,
-                        contenido: programaContenido || null,
-                        contenido_estructurado: est as any,
-                      }).select("id").maybeSingle();
-                      if (data) setProgramaId(data.id);
-                    }
-                    setProgramaEstructura(est);
-                  } catch {
-                    toast.error("Error al guardar la estructura");
-                  } finally {
-                    setSavingEstructura(false);
-                  }
-                }}
-              />
-            </div>
-          )}
-
-          {/* Planificación Timeline */}
-          {programaEstructura && (
-            <div className="space-y-2 pt-2 border-t">
-              <Label className="text-sm font-semibold">Planificación anual</Label>
-              <PlanificacionTimeline
-                claseId={claseId!}
-                userId={user!.id}
-                horario={clase?.horario || null}
-                estructura={programaEstructura}
-              />
-            </div>
-          )}
-
-          {!programaContenido && !programaArchivoNombre && (
-            <div className="text-center py-6 text-muted-foreground">
-              <FileText className="h-10 w-10 mx-auto mb-2 opacity-40" />
-              <p className="text-sm">Aún no hay programa cargado para esta clase.</p>
-              <p className="text-xs mt-1">Pegá el texto del programa o subí un archivo.</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Student list for non-diario/programa modes */}
-      {modoActivo !== "diario" && modoActivo !== "programa" && (
+      {/* Student list for asistencia/notas/observaciones */}
+      {(modoActivo === "asistencia" || modoActivo === "notas" || modoActivo === "observaciones") && (
         <div className="space-y-1.5 mt-1">
           {estudiantesClase.map((est, idx) => {
             const estado = asistencia[est.id];
@@ -688,17 +766,16 @@ export default function ModoClase() {
                             <btn.icon className="h-5 w-5" />
                           </button>
                         ))}
-                      </>
-                    )}
-                    {modoActivo === "participacion" && (
-                      <>
-                        {([
-                          { v: "alta" as const, label: "A", color: "bg-success text-success-foreground" },
-                          { v: "media" as const, label: "M", color: "bg-warning text-warning-foreground" },
-                          { v: "baja" as const, label: "B", color: "bg-destructive text-destructive-foreground" },
-                        ]).map(opt => (
-                          <button key={opt.v} className={cn("h-11 w-11 rounded-xl flex items-center justify-center text-sm font-bold transition-all active:scale-95", participacion[est.id] === opt.v ? opt.color : "bg-muted/50 text-muted-foreground hover:bg-muted")} onClick={() => marcarParticipacion(est.id, opt.v)}>{opt.label}</button>
-                        ))}
+                        {/* Participacion inline */}
+                        <div className="ml-1 border-l pl-1 flex items-center gap-0.5">
+                          {([
+                            { v: "alta" as const, label: "A", color: "bg-success text-success-foreground" },
+                            { v: "media" as const, label: "M", color: "bg-warning text-warning-foreground" },
+                            { v: "baja" as const, label: "B", color: "bg-destructive text-destructive-foreground" },
+                          ]).map(opt => (
+                            <button key={opt.v} className={cn("h-9 w-9 rounded-lg flex items-center justify-center text-xs font-bold transition-all active:scale-95", participacion[est.id] === opt.v ? opt.color : "bg-muted/30 text-muted-foreground/50 hover:bg-muted/60")} onClick={() => marcarParticipacion(est.id, opt.v)}>{opt.label}</button>
+                          ))}
+                        </div>
                       </>
                     )}
                     {modoActivo === "notas" && evaluacionActiva && (
@@ -729,6 +806,90 @@ export default function ModoClase() {
 
       <StudentDetailSheet studentId={studentDetailId} claseId={claseId || ""} open={!!studentDetailId} onClose={() => setStudentDetailId(null)} />
 
+      {/* Programa Dialog */}
+      <Dialog open={showProgramaDialog} onOpenChange={setShowProgramaDialog}>
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Programa y planificación</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">Contenido del programa anual</Label>
+              <Textarea
+                placeholder="Pegá aquí el contenido del programa anual..."
+                value={programaContenido}
+                onChange={e => handleProgramaChange(e.target.value)}
+                rows={6}
+                className="text-sm leading-relaxed"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">Archivo adjunto</Label>
+              {programaArchivoNombre ? (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/40 border">
+                  <FileText className="h-5 w-5 text-primary shrink-0" />
+                  <span className="text-sm font-medium truncate flex-1">{programaArchivoNombre}</span>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={handleRemoveFile}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <label className="flex items-center gap-2 p-4 rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 cursor-pointer transition-colors">
+                  {uploadingFile ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : <Upload className="h-5 w-5 text-muted-foreground" />}
+                  <span className="text-sm text-muted-foreground">{uploadingFile ? "Subiendo..." : "Subir archivo"}</span>
+                  <input type="file" className="hidden" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt" onChange={handleProgramaFileUpload} disabled={uploadingFile} />
+                </label>
+              )}
+            </div>
+
+            {programaContenido && (
+              <div className="space-y-2 pt-2 border-t">
+                <Label className="text-sm font-semibold">Estructura del programa</Label>
+                <EstructuraPrograma
+                  contenido={programaContenido}
+                  estructuraGuardada={programaEstructura}
+                  saving={savingEstructura}
+                  onSave={async (est) => {
+                    setSavingEstructura(true);
+                    try {
+                      if (programaId) {
+                        await supabase.from("programas_anuales").update({ contenido_estructurado: est as any }).eq("id", programaId);
+                      } else {
+                        const { data } = await supabase.from("programas_anuales").insert({
+                          clase_id: claseId!, user_id: user!.id,
+                          contenido: programaContenido || null,
+                          contenido_estructurado: est as any,
+                        }).select("id").maybeSingle();
+                        if (data) setProgramaId(data.id);
+                      }
+                      setProgramaEstructura(est);
+                    } catch {
+                      toast.error("Error al guardar la estructura");
+                    } finally {
+                      setSavingEstructura(false);
+                    }
+                  }}
+                />
+              </div>
+            )}
+
+            {programaEstructura && (
+              <div className="space-y-2 pt-2 border-t">
+                <Label className="text-sm font-semibold">Planificación anual</Label>
+                <PlanificacionTimeline
+                  claseId={claseId!}
+                  userId={user!.id}
+                  horario={clase?.horario || null}
+                  estructura={programaEstructura}
+                />
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Clase Dialog */}
       <Dialog open={editClaseOpen} onOpenChange={setEditClaseOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
