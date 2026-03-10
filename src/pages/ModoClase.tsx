@@ -14,6 +14,7 @@ import {
   FileText, Upload, Trash2,
 } from "lucide-react";
 import { EstructuraPrograma } from "@/components/programa/EstructuraPrograma";
+import { PlanificacionTimeline } from "@/components/programa/PlanificacionTimeline";
 import { cn } from "@/lib/utils";
 import { StudentDetailSheet } from "@/components/clase/StudentDetailSheet";
 import { supabase } from "@/integrations/supabase/client";
