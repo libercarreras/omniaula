@@ -218,6 +218,25 @@ export default function Evaluaciones() {
     }
   };
 
+  const handleDeleteEval = async (evalId: string) => {
+    setDeleting(true);
+    try {
+      await supabase.from("evaluacion_contenido").delete().eq("evaluacion_id", evalId);
+      await supabase.from("notas").delete().eq("evaluacion_id", evalId);
+      const { error } = await supabase.from("evaluaciones").delete().eq("id", evalId);
+      if (error) throw error;
+      setEvaluaciones(prev => prev.filter(e => e.id !== evalId));
+      setContenidos(prev => { const n = { ...prev }; delete n[evalId]; return n; });
+      setDetailEval(null);
+      setDeletingEvalId(null);
+      toast.success("Evaluación eliminada");
+    } catch (e: any) {
+      toast.error(e.message || "Error al eliminar");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const removeQuestion = (idx: number) => setPreguntas(prev => prev.filter((_, i) => i !== idx));
   const updateQuestion = (idx: number, field: string, value: any) => {
     setPreguntas(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
