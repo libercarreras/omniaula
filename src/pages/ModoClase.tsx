@@ -132,13 +132,19 @@ export default function ModoClase() {
   // ========== Auto-save callbacks ==========
   const saveAsistenciaFn = useCallback(async () => {
     if (!user || !claseId) return;
-    await supabase.from("asistencia").delete().eq("clase_id", claseId).eq("fecha", hoyISO);
-    const records = Object.entries(asistencia)
-      .filter(([, estado]) => estado !== null)
-      .map(([estudiante_id, estado]) => ({
-        clase_id: claseId, estudiante_id, estado: estado!, fecha: hoyISO, user_id: user.id,
-      }));
-    if (records.length > 0) await supabase.from("asistencia").insert(records);
+    for (const [estudiante_id, estado] of Object.entries(asistencia)) {
+      if (estado) {
+        const { data: existing } = await supabase.from("asistencia")
+          .select("id").eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", hoyISO).maybeSingle();
+        if (existing) {
+          await supabase.from("asistencia").update({ estado }).eq("id", existing.id);
+        } else {
+          await supabase.from("asistencia").insert({ clase_id: claseId, estudiante_id, estado, fecha: hoyISO, user_id: user.id });
+        }
+      } else {
+        await supabase.from("asistencia").delete().eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", hoyISO);
+      }
+    }
   }, [asistencia, claseId, user, hoyISO]);
 
   const saveNotasFn = useCallback(async () => {
