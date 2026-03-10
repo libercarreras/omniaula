@@ -568,9 +568,16 @@ export default function Evaluaciones() {
                 <Button variant="outline" onClick={() => setStep(2)} className="gap-1">
                   <ChevronLeft className="h-4 w-4" /> Anterior
                 </Button>
-                <Button onClick={handleSave} disabled={saving || !nombre.trim()} className="gap-2">
-                  {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando...</> : <><Plus className="h-4 w-4" /> Crear evaluación</>}
-                </Button>
+                <div className="flex gap-2">
+                  {preguntas.length > 0 && (
+                    <Button variant="outline" className="gap-2" onClick={() => printEvaluacion(nombre || "Evaluación", fecha, selectedClaseId, preguntas)}>
+                      <Printer className="h-4 w-4" /> Imprimir
+                    </Button>
+                  )}
+                  <Button onClick={handleSave} disabled={saving || !nombre.trim()} className="gap-2">
+                    {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando...</> : <><Plus className="h-4 w-4" /> Crear evaluación</>}
+                  </Button>
+                </div>
               </div>
             </div>
           )}
