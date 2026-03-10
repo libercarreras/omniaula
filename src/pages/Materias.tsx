@@ -59,26 +59,29 @@ export default function Materias() {
     setDialogOpen(true);
   };
 
+  const normalizeName = (n: string) => n.trim().replace(/\s+/g, " ").split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+
   const handleSave = async () => {
     if (!user || !nombre.trim()) return;
     setSaving(true);
+    const finalName = normalizeName(nombre);
 
     if (editingMateria) {
-      const { error } = await supabase.from("materias").update({ nombre: nombre.trim(), institucion_id: institucionId || null }).eq("id", editingMateria.id);
+      const { error } = await supabase.from("materias").update({ nombre: finalName, institucion_id: institucionId || null }).eq("id", editingMateria.id);
       setSaving(false);
       if (error) {
         toast({ title: "Error", description: "No se pudo actualizar la materia.", variant: "destructive" });
         return;
       }
-      toast({ title: "Materia actualizada", description: `"${nombre.trim()}" fue actualizada correctamente.` });
+      toast({ title: "Materia actualizada", description: `"${finalName}" fue actualizada correctamente.` });
     } else {
-      const { error } = await supabase.from("materias").insert({ nombre: nombre.trim(), user_id: user.id, institucion_id: institucionId || null });
+      const { error } = await supabase.from("materias").insert({ nombre: finalName, user_id: user.id, institucion_id: institucionId || null });
       setSaving(false);
       if (error) {
         toast({ title: "Error", description: "No se pudo crear la materia.", variant: "destructive" });
         return;
       }
-      toast({ title: "Materia creada", description: `"${nombre.trim()}" fue agregada correctamente.` });
+      toast({ title: "Materia creada", description: `"${finalName}" fue agregada correctamente.` });
     }
 
     setNombre("");

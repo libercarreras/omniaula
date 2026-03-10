@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { BookOpen, AlertTriangle, ClipboardCheck, Users, Plus, Loader2, Clock } from "lucide-react";
+import { BookOpen, AlertTriangle, ClipboardCheck, Users, Plus, Loader2, Clock, ArrowRight, CalendarDays } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
@@ -37,6 +37,8 @@ function parseHorarioDia(horario: string | null): { dia: number | null; hora: st
   return { dia: null, hora: horario };
 }
 
+const DIAS_NOMBRE = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+
 export default function Dashboard() {
   const { profile, user } = useAuth();
   const { institucionActiva } = useInstitucion();
@@ -47,6 +49,7 @@ export default function Dashboard() {
   const [totalEvaluaciones, setTotalEvaluaciones] = useState(0);
   const [materias, setMaterias] = useState<Record<string, string>>({});
   const [grupos, setGrupos] = useState<Record<string, string>>({});
+  const [estudiantesPorGrupo, setEstudiantesPorGrupo] = useState<Record<string, number>>({});
   const [totalMaterias, setTotalMaterias] = useState(0);
   const [totalGrupos, setTotalGrupos] = useState(0);
 
@@ -72,7 +75,7 @@ export default function Dashboard() {
       const [clasesRes, materiasRes, estudiantesRes, evaluacionesRes] = await Promise.all([
         supabase.from("clases").select("*").in("grupo_id", grupoIds),
         supabase.from("materias").select("id, nombre"),
-        supabase.from("estudiantes").select("id").in("grupo_id", grupoIds),
+        supabase.from("estudiantes").select("id, grupo_id").in("grupo_id", grupoIds),
         supabase.from("evaluaciones").select("id, clase_id"),
       ]);
 
@@ -80,6 +83,11 @@ export default function Dashboard() {
       (materiasRes.data || []).forEach(m => { matMap[m.id] = m.nombre; });
       setMaterias(matMap);
       setTotalMaterias((materiasRes.data || []).length);
+
+      // Count students per group
+      const epg: Record<string, number> = {};
+      (estudiantesRes.data || []).forEach(e => { epg[e.grupo_id] = (epg[e.grupo_id] || 0) + 1; });
+      setEstudiantesPorGrupo(epg);
 
       const clasesInst = clasesRes.data || [];
       setClases(clasesInst);
@@ -102,21 +110,27 @@ export default function Dashboard() {
 
   const diaHoy = new Date().getDay();
 
-  const { clasesHoy, clasesOtras } = useMemo(() => {
+  const { clasesHoy, clasesManana, clasesOtras } = useMemo(() => {
     const hoyList: ClaseWithRelations[] = [];
+    const mananaList: ClaseWithRelations[] = [];
     const otrasList: ClaseWithRelations[] = [];
+    const diaManana = (diaHoy + 1) % 7;
+
     clases.forEach(c => {
       const { dia } = parseHorarioDia(c.horario);
       if (dia === diaHoy) hoyList.push(c);
+      else if (dia === diaManana) mananaList.push(c);
       else otrasList.push(c);
     });
-    // Sort today's by hora
-    hoyList.sort((a, b) => {
+    // Sort by hora
+    const sortByHora = (a: ClaseWithRelations, b: ClaseWithRelations) => {
       const ha = parseHorarioDia(a.horario).hora;
       const hb = parseHorarioDia(b.horario).hora;
       return ha.localeCompare(hb);
-    });
-    return { clasesHoy: hoyList, clasesOtras: otrasList };
+    };
+    hoyList.sort(sortByHora);
+    mananaList.sort(sortByHora);
+    return { clasesHoy: hoyList, clasesManana: mananaList, clasesOtras: otrasList };
   }, [clases, diaHoy]);
 
   if (loading) {
@@ -125,6 +139,28 @@ export default function Dashboard() {
 
   const isNewUser = totalMaterias === 0 && totalGrupos === 0;
   const hasClases = clases.length > 0;
+
+  const ClaseCard = ({ clase, prominent = false }: { clase: ClaseWithRelations; prominent?: boolean }) => (
+    <Card className={prominent ? "border-primary/30 bg-primary/5 hover:shadow-md transition-shadow" : "hover:shadow-md transition-shadow"}>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className={prominent ? "font-bold text-lg" : "font-bold"}>{getClaseLabel(clase)}</p>
+            <div className="flex items-center gap-2 mt-1">
+              {clase.horario && <Badge variant="secondary" className="text-xs">{clase.horario}</Badge>}
+              {clase.aula && <span className="text-xs text-muted-foreground">{clase.aula}</span>}
+              <span className="text-xs text-muted-foreground">{estudiantesPorGrupo[clase.grupo_id] || 0} estudiantes</span>
+            </div>
+          </div>
+          <Link to={`/clase/${clase.id}`}>
+            <Button size={prominent ? "default" : "sm"} className="gap-1.5 shrink-0">
+              <ArrowRight className="h-4 w-4" /> {prominent ? "Iniciar clase" : "Ir"}
+            </Button>
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -244,19 +280,23 @@ export default function Dashboard() {
               <h2 className="font-display font-semibold text-lg mb-3 flex items-center gap-2">
                 <Clock className="h-5 w-5 text-primary" /> Clases de hoy
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-3">
                 {clasesHoy.map((clase) => (
-                  <Link key={clase.id} to={`/clase/${clase.id}`}>
-                    <Card className="hover:shadow-md transition-shadow cursor-pointer border-primary/20">
-                      <CardContent className="p-4">
-                        <p className="font-bold text-lg">{getClaseLabel(clase)}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          {clase.horario && <Badge variant="secondary" className="text-xs">{clase.horario}</Badge>}
-                          {clase.aula && <span className="text-xs text-muted-foreground">{clase.aula}</span>}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
+                  <ClaseCard key={clase.id} clase={clase} prominent />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Si no hay clases hoy, mostrar próximas */}
+          {clasesHoy.length === 0 && clasesManana.length > 0 && (
+            <div>
+              <h2 className="font-display font-semibold text-lg mb-3 flex items-center gap-2">
+                <CalendarDays className="h-5 w-5 text-muted-foreground" /> Próximas clases — {DIAS_NOMBRE[(diaHoy + 1) % 7]}
+              </h2>
+              <div className="space-y-3">
+                {clasesManana.map((clase) => (
+                  <ClaseCard key={clase.id} clase={clase} />
                 ))}
               </div>
             </div>
@@ -265,23 +305,18 @@ export default function Dashboard() {
           <RadarRiesgo />
 
           {/* Todas las clases */}
-          <div>
-            <h2 className="font-display font-semibold text-lg mb-3">
-              {clasesHoy.length > 0 ? "Otras clases" : "Acceso rápido"}
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {(clasesHoy.length > 0 ? clasesOtras : clases).map((clase) => (
-                <Link key={clase.id} to={`/clase/${clase.id}`}>
-                  <Card className="hover:shadow-md transition-shadow cursor-pointer">
-                    <CardContent className="p-4">
-                      <p className="font-bold text-lg">{getClaseLabel(clase)}</p>
-                      <p className="text-sm text-muted-foreground">{clase.horario || "Sin horario"}</p>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
+          {(clasesHoy.length > 0 ? clasesOtras : [...clasesManana.length > 0 ? clasesOtras : clases]).length > 0 && (
+            <div>
+              <h2 className="font-display font-semibold text-lg mb-3">
+                {clasesHoy.length > 0 || clasesManana.length > 0 ? "Otras clases" : "Acceso rápido"}
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {(clasesHoy.length > 0 ? clasesOtras : clasesManana.length > 0 ? clasesOtras : clases).map((clase) => (
+                  <ClaseCard key={clase.id} clase={clase} />
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
     </div>
