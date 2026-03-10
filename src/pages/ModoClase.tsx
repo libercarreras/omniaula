@@ -115,6 +115,11 @@ export default function ModoClase() {
       });
       setObsState(oMap);
 
+      // Auto-detect: if no attendance for today, switch to attendance tab
+      if ((asistRes.data || []).length === 0) {
+        setModoActivo("asistencia");
+      }
+
       setLoading(false);
       // Allow auto-save after initial load
       setTimeout(() => { isInitialLoad.current = false; }, 500);
