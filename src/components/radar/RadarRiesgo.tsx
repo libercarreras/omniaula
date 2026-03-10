@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useInstitucion } from "@/hooks/useInstitucion";
 
 interface EstudianteRiesgo {
   id: string;
@@ -14,12 +14,72 @@ interface EstudianteRiesgo {
 
 export function RadarRiesgo() {
   const { user } = useAuth();
+  const { institucionActiva } = useInstitucion();
   const [estudiantesRiesgo, setEstudiantesRiesgo] = useState<EstudianteRiesgo[]>([]);
 
   useEffect(() => {
-    // Placeholder: will calculate from real data when enough records exist
-    // For now show nothing until real attendance/grades data is available
-  }, [user]);
+    if (!user || !institucionActiva) return;
+    const analyze = async () => {
+      // Get grupos for institution
+      const { data: grupos } = await supabase.from("grupos").select("id").eq("institucion_id", institucionActiva.id);
+      const grupoIds = (grupos || []).map(g => g.id);
+      if (grupoIds.length === 0) return;
+
+      // Get estudiantes
+      const { data: estudiantes } = await supabase.from("estudiantes").select("id, nombre_completo, grupo_id").in("grupo_id", grupoIds);
+      if (!estudiantes || estudiantes.length === 0) return;
+
+      // Get clases
+      const { data: clases } = await supabase.from("clases").select("id").in("grupo_id", grupoIds);
+      const claseIds = (clases || []).map(c => c.id);
+      if (claseIds.length === 0) return;
+
+      // Get asistencia (last 30 days)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const { data: asistencia } = await supabase.from("asistencia").select("estudiante_id, estado").in("clase_id", claseIds).gte("fecha", thirtyDaysAgo.toISOString().split("T")[0]);
+
+      // Get notas
+      const { data: evaluaciones } = await supabase.from("evaluaciones").select("id").in("clase_id", claseIds);
+      const evIds = (evaluaciones || []).map(e => e.id);
+      let notasData: any[] = [];
+      if (evIds.length > 0) {
+        const { data } = await supabase.from("notas").select("estudiante_id, nota").in("evaluacion_id", evIds);
+        notasData = data || [];
+      }
+
+      // Analyze per student
+      const riesgo: EstudianteRiesgo[] = [];
+      for (const est of estudiantes) {
+        const motivos: string[] = [];
+        const estAsist = (asistencia || []).filter(a => a.estudiante_id === est.id);
+        if (estAsist.length >= 3) {
+          const faltas = estAsist.filter(a => a.estado === "falta").length;
+          const pctFaltas = faltas / estAsist.length;
+          if (pctFaltas > 0.3) motivos.push(`${Math.round(pctFaltas * 100)}% de inasistencias (${faltas}/${estAsist.length})`);
+        }
+
+        const estNotas = notasData.filter(n => n.estudiante_id === est.id && n.nota !== null);
+        if (estNotas.length >= 2) {
+          const promedio = estNotas.reduce((s: number, n: any) => s + Number(n.nota), 0) / estNotas.length;
+          if (promedio < 6) motivos.push(`Promedio bajo: ${promedio.toFixed(1)}`);
+        }
+
+        if (motivos.length > 0) {
+          riesgo.push({
+            id: est.id,
+            nombre: est.nombre_completo,
+            motivos,
+            recomendacion: motivos.some(m => m.includes("inasistencias"))
+              ? "Contactar a la familia para conocer la situación."
+              : "Reforzar contenidos y ofrecer acompañamiento personalizado.",
+          });
+        }
+      }
+      setEstudiantesRiesgo(riesgo);
+    };
+    analyze();
+  }, [user, institucionActiva]);
 
   if (estudiantesRiesgo.length === 0) return null;
 
@@ -28,10 +88,10 @@ export function RadarRiesgo() {
       <CardHeader className="pb-3">
         <CardTitle className="text-lg flex items-center gap-2">
           <AlertTriangle className="h-5 w-5 text-destructive" />
-          Estudiantes que requieren atención
+          Estudiantes que requieren atención ({estudiantesRiesgo.length})
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Detectados automáticamente según asistencia, notas y participación
+          Detectados automáticamente según asistencia y notas
         </p>
       </CardHeader>
       <CardContent className="space-y-3">

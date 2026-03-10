@@ -1,29 +1,31 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   ArrowLeft, UserCheck, ClipboardCheck, MessageSquare,
   Check, X, Clock, LogOut, CheckCheck, Star,
-  ThumbsUp, AlertCircle, BookX, Brain, History, Loader2,
+  ThumbsUp, AlertCircle, BookX, Brain, History, Loader2, BookOpen, Save,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StudentDetailSheet } from "@/components/clase/StudentDetailSheet";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
-type ModoActivo = "asistencia" | "notas" | "observaciones" | "participacion";
+type ModoActivo = "asistencia" | "notas" | "observaciones" | "participacion" | "diario";
 type EstadoAsistencia = "presente" | "falta" | "tarde" | "retiro" | null;
 type NivelParticipacion = "alta" | "media" | "baja";
 
 const tagObservaciones = [
-  { id: "buen_desempeno", label: "Buen desempeño", icon: ThumbsUp, color: "bg-success/10 text-success border-success/30" },
-  { id: "necesita_apoyo", label: "Necesita apoyo", icon: AlertCircle, color: "bg-warning/10 text-warning border-warning/30" },
-  { id: "no_entrega_tareas", label: "No entrega tareas", icon: BookX, color: "bg-destructive/10 text-destructive border-destructive/30" },
-  { id: "dificultad_contenidos", label: "Dificultad", icon: Brain, color: "bg-primary/10 text-primary border-primary/30" },
+  { id: "participacion", label: "Buen desempeño", icon: ThumbsUp, color: "bg-success/10 text-success border-success/30", tipo: "participacion" as const },
+  { id: "actitud", label: "Necesita apoyo", icon: AlertCircle, color: "bg-warning/10 text-warning border-warning/30", tipo: "actitud" as const },
+  { id: "cumplimiento_tareas", label: "No entrega tareas", icon: BookX, color: "bg-destructive/10 text-destructive border-destructive/30", tipo: "cumplimiento_tareas" as const },
+  { id: "dificultad_contenidos", label: "Dificultad", icon: Brain, color: "bg-primary/10 text-primary border-primary/30", tipo: "dificultad_contenidos" as const },
 ];
 
 export default function ModoClase() {
@@ -44,40 +46,175 @@ export default function ModoClase() {
   const [obsState, setObsState] = useState<Record<string, string[]>>({});
   const [evaluacionActiva, setEvaluacionActiva] = useState<string | null>(null);
   const [studentDetailId, setStudentDetailId] = useState<string | null>(null);
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // Diario state
+  const [diarioTema, setDiarioTema] = useState("");
+  const [diarioActividad, setDiarioActividad] = useState("");
+  const [diarioObs, setDiarioObs] = useState("");
+  const [diarioId, setDiarioId] = useState<string | null>(null);
+  const [savingDiario, setSavingDiario] = useState(false);
+
+  const hoyISO = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
     if (!user || !claseId) return;
-    const fetch = async () => {
+    const fetchAll = async () => {
       setLoading(true);
       const { data: claseData } = await supabase.from("clases").select("*").eq("id", claseId).maybeSingle();
       if (!claseData) { setLoading(false); return; }
       setClase(claseData);
 
-      const [matRes, grpRes, estRes, evRes] = await Promise.all([
+      const [matRes, grpRes, estRes, evRes, asistRes, diarioRes] = await Promise.all([
         supabase.from("materias").select("*").eq("id", claseData.materia_id).maybeSingle(),
         supabase.from("grupos").select("*").eq("id", claseData.grupo_id).maybeSingle(),
         supabase.from("estudiantes").select("*").eq("grupo_id", claseData.grupo_id).order("nombre_completo"),
         supabase.from("evaluaciones").select("*").eq("clase_id", claseId),
+        supabase.from("asistencia").select("*").eq("clase_id", claseId).eq("fecha", hoyISO),
+        supabase.from("diario_clase").select("*").eq("clase_id", claseId).eq("fecha", hoyISO).maybeSingle(),
       ]);
       setMateria(matRes.data);
       setGrupo(grpRes.data);
       setEstudiantesClase(estRes.data || []);
       setEvaluacionesClase(evRes.data || []);
+
+      // Load today's attendance
+      const asistMap: Record<string, EstadoAsistencia> = {};
+      (asistRes.data || []).forEach(a => { asistMap[a.estudiante_id] = a.estado as EstadoAsistencia; });
+      setAsistencia(asistMap);
+
+      // Load today's diary
+      if (diarioRes.data) {
+        setDiarioId(diarioRes.data.id);
+        setDiarioTema(diarioRes.data.tema_trabajado || "");
+        setDiarioActividad(diarioRes.data.actividad_realizada || "");
+        setDiarioObs(diarioRes.data.observaciones || "");
+      }
+
+      // Load notas for evaluaciones
+      const evIds = (evRes.data || []).map(e => e.id);
+      if (evIds.length > 0) {
+        const { data: notasData } = await supabase.from("notas").select("*").in("evaluacion_id", evIds);
+        const nMap: Record<string, string> = {};
+        (notasData || []).forEach(n => { if (n.nota !== null) nMap[`${n.evaluacion_id}-${n.estudiante_id}`] = String(n.nota); });
+        setNotasState(nMap);
+      }
+
+      // Load today's observaciones
+      const { data: obsData } = await supabase.from("observaciones").select("*").eq("clase_id", claseId).eq("fecha", hoyISO);
+      const oMap: Record<string, string[]> = {};
+      (obsData || []).forEach(o => {
+        if (!oMap[o.estudiante_id]) oMap[o.estudiante_id] = [];
+        oMap[o.estudiante_id].push(o.tipo);
+      });
+      setObsState(oMap);
+
       setLoading(false);
     };
-    fetch();
+    fetchAll();
   }, [user, claseId]);
 
   const hoy = new Date().toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" });
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const hasData = Object.keys(asistencia).length > 0 || Object.keys(participacion).length > 0 || Object.keys(notasState).length > 0 || Object.keys(obsState).length > 0;
-      if (hasData) setLastSaved(new Date());
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [asistencia, participacion, notasState, obsState]);
+  // Save attendance
+  const saveAsistencia = useCallback(async () => {
+    if (!user || !claseId) return;
+    setSaving(true);
+    // Delete today's records and re-insert
+    await supabase.from("asistencia").delete().eq("clase_id", claseId).eq("fecha", hoyISO);
+    const records = Object.entries(asistencia)
+      .filter(([, estado]) => estado !== null)
+      .map(([estudiante_id, estado]) => ({
+        clase_id: claseId,
+        estudiante_id,
+        estado: estado!,
+        fecha: hoyISO,
+        user_id: user.id,
+      }));
+    if (records.length > 0) {
+      await supabase.from("asistencia").insert(records);
+    }
+    setSaving(false);
+    toast.success("Asistencia guardada");
+  }, [asistencia, claseId, user, hoyISO]);
+
+  // Save notas
+  const saveNotas = useCallback(async () => {
+    if (!user || !claseId) return;
+    setSaving(true);
+    const entries = Object.entries(notasState).filter(([, v]) => v.trim() !== "");
+    for (const [key, val] of entries) {
+      const [evaluacion_id, estudiante_id] = key.split("-");
+      const nota = parseFloat(val);
+      if (isNaN(nota)) continue;
+      // Upsert: check if exists
+      const { data: existing } = await supabase.from("notas").select("id").eq("evaluacion_id", evaluacion_id).eq("estudiante_id", estudiante_id).maybeSingle();
+      if (existing) {
+        await supabase.from("notas").update({ nota }).eq("id", existing.id);
+      } else {
+        await supabase.from("notas").insert({ evaluacion_id, estudiante_id, nota, user_id: user.id });
+      }
+    }
+    setSaving(false);
+    toast.success("Notas guardadas");
+  }, [notasState, user, claseId]);
+
+  // Save observaciones
+  const saveObservaciones = useCallback(async () => {
+    if (!user || !claseId) return;
+    setSaving(true);
+    await supabase.from("observaciones").delete().eq("clase_id", claseId).eq("fecha", hoyISO);
+    const records: any[] = [];
+    Object.entries(obsState).forEach(([estudiante_id, tipos]) => {
+      tipos.forEach(tipo => {
+        records.push({
+          clase_id: claseId,
+          estudiante_id,
+          tipo: tipo as any,
+          descripcion: tagObservaciones.find(t => t.tipo === tipo)?.label || tipo,
+          fecha: hoyISO,
+          user_id: user.id,
+        });
+      });
+    });
+    if (records.length > 0) {
+      await supabase.from("observaciones").insert(records);
+    }
+    setSaving(false);
+    toast.success("Observaciones guardadas");
+  }, [obsState, claseId, user, hoyISO]);
+
+  // Save diario
+  const saveDiario = useCallback(async () => {
+    if (!user || !claseId) return;
+    setSavingDiario(true);
+    if (diarioId) {
+      await supabase.from("diario_clase").update({
+        tema_trabajado: diarioTema || null,
+        actividad_realizada: diarioActividad || null,
+        observaciones: diarioObs || null,
+      }).eq("id", diarioId);
+    } else {
+      const { data } = await supabase.from("diario_clase").insert({
+        clase_id: claseId,
+        tema_trabajado: diarioTema || null,
+        actividad_realizada: diarioActividad || null,
+        observaciones: diarioObs || null,
+        user_id: user.id,
+        fecha: hoyISO,
+      }).select("id").maybeSingle();
+      if (data) setDiarioId(data.id);
+    }
+    setSavingDiario(false);
+    toast.success("Diario guardado");
+  }, [diarioTema, diarioActividad, diarioObs, diarioId, claseId, user, hoyISO]);
+
+  const handleSave = () => {
+    if (modoActivo === "asistencia") saveAsistencia();
+    else if (modoActivo === "notas") saveNotas();
+    else if (modoActivo === "observaciones") saveObservaciones();
+    else if (modoActivo === "diario") saveDiario();
+  };
 
   const asistenciaStats = useMemo(() => {
     const total = estudiantesClase.length;
@@ -121,10 +258,11 @@ export default function ModoClase() {
   };
 
   const modos = [
-    { id: "asistencia" as const, label: "Asistencia", icon: UserCheck },
+    { id: "asistencia" as const, label: "Asist.", icon: UserCheck },
     { id: "notas" as const, label: "Notas", icon: ClipboardCheck },
     { id: "observaciones" as const, label: "Obs.", icon: MessageSquare },
     { id: "participacion" as const, label: "Partic.", icon: Star },
+    { id: "diario" as const, label: "Diario", icon: BookOpen },
   ];
 
   const getInitials = (name: string) => {
@@ -145,7 +283,7 @@ export default function ModoClase() {
             <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{estudiantesClase.length}</Badge>
           </div>
         </div>
-        <div className="grid grid-cols-4 gap-1">
+        <div className="grid grid-cols-5 gap-1">
           {modos.map(modo => (
             <button key={modo.id} className={cn("flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium transition-all", modoActivo === modo.id ? "bg-primary text-primary-foreground shadow-md" : "bg-muted/50 text-muted-foreground hover:bg-muted")} onClick={() => setModoActivo(modo.id)}>
               <modo.icon className="h-3.5 w-3.5" />{modo.label}
@@ -159,12 +297,17 @@ export default function ModoClase() {
           <Button size="sm" className="gap-1.5 bg-success hover:bg-success/90 text-success-foreground h-10 text-sm font-semibold" onClick={marcarTodosPresentes}>
             <CheckCheck className="h-4 w-4" />Todos presentes
           </Button>
-          <div className="text-right"><span className="text-xs text-muted-foreground block">{asistenciaStats.presentes}P · {asistenciaStats.faltas}F</span></div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{asistenciaStats.presentes}P · {asistenciaStats.faltas}F</span>
+            <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5 h-10">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Guardar
+            </Button>
+          </div>
         </div>
       )}
 
       {modoActivo === "notas" && (
-        <div className="py-2">
+        <div className="py-2 space-y-2">
           {evaluacionesClase.length > 0 ? (
             <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
               {evaluacionesClase.map(ev => (
@@ -172,84 +315,116 @@ export default function ModoClase() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground py-1">Sin evaluaciones</p>
+            <p className="text-sm text-muted-foreground py-1">Sin evaluaciones creadas para esta clase.</p>
+          )}
+          {evaluacionActiva && (
+            <div className="flex justify-end">
+              <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5 h-9">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Guardar notas
+              </Button>
+            </div>
           )}
         </div>
       )}
 
-      <div className="space-y-1.5 mt-1">
-        {estudiantesClase.map((est, idx) => {
-          const estado = asistencia[est.id];
-          const estadoBg = estado === "presente" ? "border-l-success" : estado === "falta" ? "border-l-destructive" : estado === "tarde" ? "border-l-warning" : estado === "retiro" ? "border-l-muted-foreground" : "border-l-transparent";
+      {modoActivo === "observaciones" && (
+        <div className="flex justify-end py-2">
+          <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5 h-9">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Guardar obs.
+          </Button>
+        </div>
+      )}
 
-          return (
-            <div key={est.id} className={cn("bg-card rounded-lg border border-l-4 p-3 transition-all", estadoBg)}>
-              <div className="flex items-center gap-2.5">
-                <button className="flex items-center gap-2.5 min-w-0 flex-1 text-left" onClick={() => setStudentDetailId(est.id)}>
-                  <Avatar className="h-9 w-9 shrink-0">
-                    <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">{getInitials(est.nombre_completo)}</AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0">
-                    <p className="font-medium text-sm truncate leading-tight">{est.nombre_completo}</p>
-                    <p className="text-[10px] text-muted-foreground">#{idx + 1}</p>
-                  </div>
-                </button>
-                <div className="flex items-center gap-0.5 shrink-0">
-                  {modoActivo === "asistencia" && (
-                    <>
-                      {([
-                        { v: "presente", icon: Check, active: "bg-success text-success-foreground" },
-                        { v: "falta", icon: X, active: "bg-destructive text-destructive-foreground" },
-                        { v: "tarde", icon: Clock, active: "bg-warning text-warning-foreground" },
-                        { v: "retiro", icon: LogOut, active: "bg-muted-foreground text-background" },
-                      ] as const).map(btn => (
-                        <button key={btn.v} className={cn("h-11 w-11 rounded-xl flex items-center justify-center transition-all active:scale-95", estado === btn.v ? btn.active : "bg-muted/50 text-muted-foreground hover:bg-muted")} onClick={() => marcarAsistencia(est.id, btn.v)}>
-                          <btn.icon className="h-5 w-5" />
-                        </button>
-                      ))}
-                    </>
-                  )}
-                  {modoActivo === "participacion" && (
-                    <>
-                      {([
-                        { v: "alta" as const, label: "A", color: "bg-success text-success-foreground" },
-                        { v: "media" as const, label: "M", color: "bg-warning text-warning-foreground" },
-                        { v: "baja" as const, label: "B", color: "bg-destructive text-destructive-foreground" },
-                      ]).map(opt => (
-                        <button key={opt.v} className={cn("h-11 w-11 rounded-xl flex items-center justify-center text-sm font-bold transition-all active:scale-95", participacion[est.id] === opt.v ? opt.color : "bg-muted/50 text-muted-foreground hover:bg-muted")} onClick={() => marcarParticipacion(est.id, opt.v)}>{opt.label}</button>
-                      ))}
-                    </>
-                  )}
-                  {modoActivo === "notas" && evaluacionActiva && (
-                    <Input type="number" inputMode="decimal" placeholder="—" className="w-16 h-11 text-center text-lg font-bold rounded-xl border-2 focus:border-primary" value={notasState[`${evaluacionActiva}-${est.id}`] || ""} onChange={e => setNotasState(prev => ({ ...prev, [`${evaluacionActiva}-${est.id}`]: e.target.value }))} />
-                  )}
-                  {modoActivo === "observaciones" && (
-                    <button className="h-9 w-9 rounded-lg flex items-center justify-center bg-muted/50 text-muted-foreground" onClick={() => setStudentDetailId(est.id)}><History className="h-4 w-4" /></button>
-                  )}
-                </div>
-              </div>
-              {modoActivo === "observaciones" && (
-                <div className="flex flex-wrap gap-1.5 mt-2 ml-[46px]">
-                  {tagObservaciones.map(tag => {
-                    const isActive = (obsState[est.id] || []).includes(tag.id);
-                    return (
-                      <button key={tag.id} onClick={() => toggleObservacion(est.id, tag.id)} className={cn("inline-flex items-center gap-1 px-2.5 py-2 rounded-xl text-xs font-medium border transition-all active:scale-95", isActive ? tag.color : "bg-muted/30 text-muted-foreground border-transparent hover:bg-muted/60")}>
-                        <tag.icon className="h-3.5 w-3.5" />{tag.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {lastSaved && (
-        <div className="fixed bottom-20 md:bottom-4 left-1/2 -translate-x-1/2 z-40">
-          <div className="bg-success/90 text-success-foreground px-4 py-1.5 rounded-full text-xs font-medium shadow-lg flex items-center gap-1.5 backdrop-blur-sm">
-            <Check className="h-3 w-3" />Guardado automáticamente
+      {/* Diario tab */}
+      {modoActivo === "diario" && (
+        <div className="space-y-4 py-3">
+          <div className="space-y-2">
+            <Label>Tema trabajado</Label>
+            <Input placeholder="Ej: Fracciones equivalentes" value={diarioTema} onChange={e => setDiarioTema(e.target.value)} />
           </div>
+          <div className="space-y-2">
+            <Label>Actividades realizadas</Label>
+            <Textarea placeholder="Describe las actividades de la clase..." value={diarioActividad} onChange={e => setDiarioActividad(e.target.value)} rows={3} />
+          </div>
+          <div className="space-y-2">
+            <Label>Observaciones generales</Label>
+            <Textarea placeholder="Observaciones de la clase..." value={diarioObs} onChange={e => setDiarioObs(e.target.value)} rows={3} />
+          </div>
+          <Button onClick={handleSave} disabled={savingDiario} className="gap-1.5 w-full">
+            {savingDiario ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {diarioId ? "Actualizar diario" : "Guardar diario"}
+          </Button>
+        </div>
+      )}
+
+      {/* Student list for non-diario modes */}
+      {modoActivo !== "diario" && (
+        <div className="space-y-1.5 mt-1">
+          {estudiantesClase.map((est, idx) => {
+            const estado = asistencia[est.id];
+            const estadoBg = estado === "presente" ? "border-l-success" : estado === "falta" ? "border-l-destructive" : estado === "tarde" ? "border-l-warning" : estado === "retiro" ? "border-l-muted-foreground" : "border-l-transparent";
+
+            return (
+              <div key={est.id} className={cn("bg-card rounded-lg border border-l-4 p-3 transition-all", estadoBg)}>
+                <div className="flex items-center gap-2.5">
+                  <button className="flex items-center gap-2.5 min-w-0 flex-1 text-left" onClick={() => setStudentDetailId(est.id)}>
+                    <Avatar className="h-9 w-9 shrink-0">
+                      <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">{getInitials(est.nombre_completo)}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate leading-tight">{est.nombre_completo}</p>
+                      <p className="text-[10px] text-muted-foreground">#{idx + 1}</p>
+                    </div>
+                  </button>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    {modoActivo === "asistencia" && (
+                      <>
+                        {([
+                          { v: "presente", icon: Check, active: "bg-success text-success-foreground" },
+                          { v: "falta", icon: X, active: "bg-destructive text-destructive-foreground" },
+                          { v: "tarde", icon: Clock, active: "bg-warning text-warning-foreground" },
+                          { v: "retiro", icon: LogOut, active: "bg-muted-foreground text-background" },
+                        ] as const).map(btn => (
+                          <button key={btn.v} className={cn("h-11 w-11 rounded-xl flex items-center justify-center transition-all active:scale-95", estado === btn.v ? btn.active : "bg-muted/50 text-muted-foreground hover:bg-muted")} onClick={() => marcarAsistencia(est.id, btn.v)}>
+                            <btn.icon className="h-5 w-5" />
+                          </button>
+                        ))}
+                      </>
+                    )}
+                    {modoActivo === "participacion" && (
+                      <>
+                        {([
+                          { v: "alta" as const, label: "A", color: "bg-success text-success-foreground" },
+                          { v: "media" as const, label: "M", color: "bg-warning text-warning-foreground" },
+                          { v: "baja" as const, label: "B", color: "bg-destructive text-destructive-foreground" },
+                        ]).map(opt => (
+                          <button key={opt.v} className={cn("h-11 w-11 rounded-xl flex items-center justify-center text-sm font-bold transition-all active:scale-95", participacion[est.id] === opt.v ? opt.color : "bg-muted/50 text-muted-foreground hover:bg-muted")} onClick={() => marcarParticipacion(est.id, opt.v)}>{opt.label}</button>
+                        ))}
+                      </>
+                    )}
+                    {modoActivo === "notas" && evaluacionActiva && (
+                      <Input type="number" inputMode="decimal" placeholder="—" className="w-16 h-11 text-center text-lg font-bold rounded-xl border-2 focus:border-primary" value={notasState[`${evaluacionActiva}-${est.id}`] || ""} onChange={e => setNotasState(prev => ({ ...prev, [`${evaluacionActiva}-${est.id}`]: e.target.value }))} />
+                    )}
+                    {modoActivo === "observaciones" && (
+                      <button className="h-9 w-9 rounded-lg flex items-center justify-center bg-muted/50 text-muted-foreground" onClick={() => setStudentDetailId(est.id)}><History className="h-4 w-4" /></button>
+                    )}
+                  </div>
+                </div>
+                {modoActivo === "observaciones" && (
+                  <div className="flex flex-wrap gap-1.5 mt-2 ml-[46px]">
+                    {tagObservaciones.map(tag => {
+                      const isActive = (obsState[est.id] || []).includes(tag.tipo);
+                      return (
+                        <button key={tag.id} onClick={() => toggleObservacion(est.id, tag.tipo)} className={cn("inline-flex items-center gap-1 px-2.5 py-2 rounded-xl text-xs font-medium border transition-all active:scale-95", isActive ? tag.color : "bg-muted/30 text-muted-foreground border-transparent hover:bg-muted/60")}>
+                          <tag.icon className="h-3.5 w-3.5" />{tag.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
