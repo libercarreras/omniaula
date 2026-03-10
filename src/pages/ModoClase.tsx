@@ -557,6 +557,19 @@ export default function ModoClase() {
             </div>
           )}
 
+          {/* Planificación Timeline */}
+          {programaEstructura && (
+            <div className="space-y-2 pt-2 border-t">
+              <Label className="text-sm font-semibold">Planificación anual</Label>
+              <PlanificacionTimeline
+                claseId={claseId!}
+                userId={user!.id}
+                horario={clase?.horario || null}
+                estructura={programaEstructura}
+              />
+            </div>
+          )}
+
           {!programaContenido && !programaArchivoNombre && (
             <div className="text-center py-6 text-muted-foreground">
               <FileText className="h-10 w-10 mx-auto mb-2 opacity-40" />
