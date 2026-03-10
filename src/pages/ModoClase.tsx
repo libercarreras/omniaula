@@ -479,8 +479,57 @@ export default function ModoClase() {
         </div>
       )}
 
-      {/* Student list for non-diario modes */}
-      {modoActivo !== "diario" && (
+      {/* Programa anual tab */}
+      {modoActivo === "programa" && (
+        <div className="space-y-4 py-3">
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Contenido del programa anual</Label>
+            <Textarea
+              placeholder="Pegá aquí el contenido del programa anual de la asignatura: unidades temáticas, objetivos, contenidos, bibliografía..."
+              value={programaContenido}
+              onChange={e => handleProgramaChange(e.target.value)}
+              rows={12}
+              className="text-sm leading-relaxed"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Archivo adjunto</Label>
+            {programaArchivoNombre ? (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/40 border">
+                <FileText className="h-5 w-5 text-primary shrink-0" />
+                <span className="text-sm font-medium truncate flex-1">{programaArchivoNombre}</span>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={handleRemoveFile}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <label className="flex items-center gap-2 p-4 rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 cursor-pointer transition-colors">
+                {uploadingFile ? (
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                ) : (
+                  <Upload className="h-5 w-5 text-muted-foreground" />
+                )}
+                <span className="text-sm text-muted-foreground">
+                  {uploadingFile ? "Subiendo..." : "Subir archivo (PDF, DOC, imagen)"}
+                </span>
+                <input type="file" className="hidden" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt" onChange={handleProgramaFileUpload} disabled={uploadingFile} />
+              </label>
+            )}
+          </div>
+
+          {!programaContenido && !programaArchivoNombre && (
+            <div className="text-center py-6 text-muted-foreground">
+              <FileText className="h-10 w-10 mx-auto mb-2 opacity-40" />
+              <p className="text-sm">Aún no hay programa cargado para esta clase.</p>
+              <p className="text-xs mt-1">Pegá el texto del programa o subí un archivo.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Student list for non-diario/programa modes */}
+      {modoActivo !== "diario" && modoActivo !== "programa" && (
         <div className="space-y-1.5 mt-1">
           {estudiantesClase.map((est, idx) => {
             const estado = asistencia[est.id];
