@@ -335,7 +335,7 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
 
                             {/* Status buttons */}
                             <div className="flex items-center gap-0.5 shrink-0">
-                              {(["completado", "suspendido"] as const).map(est => {
+                              {(["completado", "parcial", "suspendido"] as const).map(est => {
                                 const c = ESTADO_CONFIG[est];
                                 return (
                                   <button
