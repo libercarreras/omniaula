@@ -1,0 +1,1 @@
+ALTER TABLE public.programas_anuales ADD COLUMN IF NOT EXISTS contenido_estructurado jsonb;
