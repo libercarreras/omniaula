@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.generate-diary-summary]
 verify_jwt = false
+
+[functions.parse-program]
+verify_jwt = false

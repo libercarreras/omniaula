@@ -13,6 +13,7 @@ import {
   ThumbsUp, AlertCircle, BookX, Brain, History, Loader2, BookOpen, Save, CheckCircle2,
   FileText, Upload, Trash2,
 } from "lucide-react";
+import { EstructuraPrograma } from "@/components/programa/EstructuraPrograma";
 import { cn } from "@/lib/utils";
 import { StudentDetailSheet } from "@/components/clase/StudentDetailSheet";
 import { supabase } from "@/integrations/supabase/client";
@@ -62,6 +63,8 @@ export default function ModoClase() {
   const [programaArchivoUrl, setProgramaArchivoUrl] = useState<string | null>(null);
   const [programaArchivoNombre, setProgramaArchivoNombre] = useState<string | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [programaEstructura, setProgramaEstructura] = useState<any>(null);
+  const [savingEstructura, setSavingEstructura] = useState(false);
 
   const hoyISO = new Date().toISOString().split("T")[0];
   const isInitialLoad = useRef(true);
@@ -131,6 +134,7 @@ export default function ModoClase() {
         setProgramaContenido(progData.contenido || "");
         setProgramaArchivoUrl(progData.archivo_url || null);
         setProgramaArchivoNombre(progData.archivo_nombre || null);
+        setProgramaEstructura((progData as any).contenido_estructurado || null);
       }
 
       // Auto-detect: if no attendance for today, switch to attendance tab
@@ -488,7 +492,7 @@ export default function ModoClase() {
               placeholder="Pegá aquí el contenido del programa anual de la asignatura: unidades temáticas, objetivos, contenidos, bibliografía..."
               value={programaContenido}
               onChange={e => handleProgramaChange(e.target.value)}
-              rows={12}
+              rows={8}
               className="text-sm leading-relaxed"
             />
           </div>
@@ -517,6 +521,40 @@ export default function ModoClase() {
               </label>
             )}
           </div>
+
+          {/* AI Structure Analysis */}
+          {programaContenido && (
+            <div className="space-y-2 pt-2 border-t">
+              <Label className="text-sm font-semibold">Estructura del programa</Label>
+              <EstructuraPrograma
+                contenido={programaContenido}
+                estructuraGuardada={programaEstructura}
+                saving={savingEstructura}
+                onSave={async (est) => {
+                  setSavingEstructura(true);
+                  try {
+                    if (programaId) {
+                      await supabase.from("programas_anuales").update({
+                        contenido_estructurado: est as any,
+                      }).eq("id", programaId);
+                    } else {
+                      const { data } = await supabase.from("programas_anuales").insert({
+                        clase_id: claseId!, user_id: user!.id,
+                        contenido: programaContenido || null,
+                        contenido_estructurado: est as any,
+                      }).select("id").maybeSingle();
+                      if (data) setProgramaId(data.id);
+                    }
+                    setProgramaEstructura(est);
+                  } catch {
+                    toast.error("Error al guardar la estructura");
+                  } finally {
+                    setSavingEstructura(false);
+                  }
+                }}
+              />
+            </div>
+          )}
 
           {!programaContenido && !programaArchivoNombre && (
             <div className="text-center py-6 text-muted-foreground">

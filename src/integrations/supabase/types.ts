@@ -628,6 +628,7 @@ export type Database = {
           archivo_url: string | null
           clase_id: string
           contenido: string | null
+          contenido_estructurado: Json | null
           created_at: string
           id: string
           updated_at: string
@@ -638,6 +639,7 @@ export type Database = {
           archivo_url?: string | null
           clase_id: string
           contenido?: string | null
+          contenido_estructurado?: Json | null
           created_at?: string
           id?: string
           updated_at?: string
@@ -648,6 +650,7 @@ export type Database = {
           archivo_url?: string | null
           clase_id?: string
           contenido?: string | null
+          contenido_estructurado?: Json | null
           created_at?: string
           id?: string
           updated_at?: string
