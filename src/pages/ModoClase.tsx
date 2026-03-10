@@ -11,8 +11,9 @@ import {
   ArrowLeft, UserCheck, ClipboardCheck, MessageSquare,
   Check, X, Clock, LogOut, CheckCheck, Star,
   ThumbsUp, AlertCircle, BookX, Brain, History, Loader2, BookOpen, Save, CheckCircle2,
-  FileText, Upload, Trash2,
+  FileText, Upload, Trash2, Settings2,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { EstructuraPrograma } from "@/components/programa/EstructuraPrograma";
 import { PlanificacionTimeline } from "@/components/programa/PlanificacionTimeline";
 import { cn } from "@/lib/utils";
