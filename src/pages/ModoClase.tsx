@@ -11,8 +11,9 @@ import {
   ArrowLeft, UserCheck, ClipboardCheck, MessageSquare,
   Check, X, Clock, LogOut, CheckCheck, Star,
   ThumbsUp, AlertCircle, BookX, Brain, History, Loader2, BookOpen, Save, CheckCircle2,
-  FileText, Upload, Trash2,
+  FileText, Upload, Trash2, Settings2,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { EstructuraPrograma } from "@/components/programa/EstructuraPrograma";
 import { PlanificacionTimeline } from "@/components/programa/PlanificacionTimeline";
 import { cn } from "@/lib/utils";
@@ -66,6 +67,10 @@ export default function ModoClase() {
   const [uploadingFile, setUploadingFile] = useState(false);
   const [programaEstructura, setProgramaEstructura] = useState<any>(null);
   const [savingEstructura, setSavingEstructura] = useState(false);
+  const [editClaseOpen, setEditClaseOpen] = useState(false);
+  const [editHorario, setEditHorario] = useState("");
+  const [editAula, setEditAula] = useState("");
+  const [savingClase, setSavingClase] = useState(false);
 
   const hoyISO = new Date().toISOString().split("T")[0];
   const isInitialLoad = useRef(true);
@@ -406,6 +411,26 @@ export default function ModoClase() {
     );
   };
 
+  const openEditClase = () => {
+    setEditHorario(clase?.horario || "");
+    setEditAula(clase?.aula || "");
+    setEditClaseOpen(true);
+  };
+
+  const saveClaseDetails = async () => {
+    if (!claseId) return;
+    setSavingClase(true);
+    const { error } = await supabase.from("clases").update({
+      horario: editHorario.trim() || null,
+      aula: editAula.trim() || null,
+    }).eq("id", claseId);
+    setSavingClase(false);
+    if (error) { toast.error("Error al guardar"); return; }
+    setClase((prev: any) => ({ ...prev, horario: editHorario.trim() || null, aula: editAula.trim() || null }));
+    setEditClaseOpen(false);
+    toast.success("Clase actualizada");
+  };
+
   return (
     <div className="max-w-4xl mx-auto pb-6">
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-sm border-b -mx-4 px-4 pt-1 pb-2 md:-mx-0 md:px-0">
@@ -413,6 +438,10 @@ export default function ModoClase() {
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="shrink-0 h-8 w-8"><ArrowLeft className="h-4 w-4" /></Button>
           <div className="min-w-0 flex-1">
             <h1 className="text-base font-display font-bold truncate">{materia.nombre} — {grupo.nombre}</h1>
+            <button onClick={openEditClase} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+              <Settings2 className="h-3 w-3" />
+              {clase.horario || "Sin horario"}{clase.aula ? ` · ${clase.aula}` : ""}
+            </button>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <StatusIndicator />
@@ -668,6 +697,32 @@ export default function ModoClase() {
       )}
 
       <StudentDetailSheet studentId={studentDetailId} claseId={claseId || ""} open={!!studentDetailId} onClose={() => setStudentDetailId(null)} />
+
+      <Dialog open={editClaseOpen} onOpenChange={setEditClaseOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar clase</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="edit-horario">Horario</Label>
+              <Input id="edit-horario" placeholder="Ej: Lunes 8:00-9:30" value={editHorario} onChange={e => setEditHorario(e.target.value)} />
+              <p className="text-[11px] text-muted-foreground">Formato sugerido: Día HH:MM-HH:MM</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-aula">Aula</Label>
+              <Input id="edit-aula" placeholder="Ej: Aula 12" value={editAula} onChange={e => setEditAula(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditClaseOpen(false)}>Cancelar</Button>
+            <Button onClick={saveClaseDetails} disabled={savingClase}>
+              {savingClase ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
