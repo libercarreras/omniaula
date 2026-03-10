@@ -324,12 +324,46 @@ export default function ModoClase() {
     if (!isInitialLoad.current) diarioDebounce.trigger();
   };
 
+  const handleProgramaChange = (value: string) => {
+    setProgramaContenido(value);
+    if (!isInitialLoad.current) programaDebounce.trigger();
+  };
+
+  const handleProgramaFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user || !claseId) return;
+    setUploadingFile(true);
+    const path = `${user.id}/${claseId}/${file.name}`;
+    const { error } = await supabase.storage.from("programas").upload(path, file, { upsert: true });
+    if (error) {
+      toast.error("Error al subir archivo");
+      setUploadingFile(false);
+      return;
+    }
+    const { data: urlData } = supabase.storage.from("programas").getPublicUrl(path);
+    setProgramaArchivoUrl(path);
+    setProgramaArchivoNombre(file.name);
+    setUploadingFile(false);
+    programaDebounce.trigger();
+    toast.success("Archivo subido correctamente");
+  };
+
+  const handleRemoveFile = async () => {
+    if (!programaArchivoUrl) return;
+    await supabase.storage.from("programas").remove([programaArchivoUrl]);
+    setProgramaArchivoUrl(null);
+    setProgramaArchivoNombre(null);
+    programaDebounce.trigger();
+    toast.success("Archivo eliminado");
+  };
+
   const modos = [
     { id: "asistencia" as const, label: "Asist.", icon: UserCheck },
     { id: "notas" as const, label: "Notas", icon: ClipboardCheck },
     { id: "observaciones" as const, label: "Obs.", icon: MessageSquare },
     { id: "participacion" as const, label: "Partic.", icon: Star },
     { id: "diario" as const, label: "Diario", icon: BookOpen },
+    { id: "programa" as const, label: "Progr.", icon: FileText },
   ];
 
   const getInitials = (name: string) => {
