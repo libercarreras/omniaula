@@ -217,16 +217,37 @@ export default function ModoClase() {
     }
   }, [diarioTema, diarioActividad, diarioObs, diarioId, claseId, user, hoyISO]);
 
+  const saveProgramaFn = useCallback(async () => {
+    if (!user || !claseId) return;
+    if (programaId) {
+      await supabase.from("programas_anuales").update({
+        contenido: programaContenido || null,
+        archivo_url: programaArchivoUrl,
+        archivo_nombre: programaArchivoNombre,
+      }).eq("id", programaId);
+    } else {
+      const { data } = await supabase.from("programas_anuales").insert({
+        clase_id: claseId, user_id: user.id,
+        contenido: programaContenido || null,
+        archivo_url: programaArchivoUrl,
+        archivo_nombre: programaArchivoNombre,
+      }).select("id").maybeSingle();
+      if (data) setProgramaId(data.id);
+    }
+  }, [programaContenido, programaArchivoUrl, programaArchivoNombre, programaId, claseId, user]);
+
   const asistDebounce = useDebounceCallback(saveAsistenciaFn, 2000);
   const notasDebounce = useDebounceCallback(saveNotasFn, 2500);
   const obsDebounce = useDebounceCallback(saveObservacionesFn, 2000);
   const diarioDebounce = useDebounceCallback(saveDiarioFn, 3000);
+  const programaDebounce = useDebounceCallback(saveProgramaFn, 3000);
 
   // Get current active save status
   const currentStatus = modoActivo === "asistencia" ? asistDebounce.status
     : modoActivo === "notas" ? notasDebounce.status
     : modoActivo === "observaciones" ? obsDebounce.status
-    : modoActivo === "diario" ? diarioDebounce.status : "idle";
+    : modoActivo === "diario" ? diarioDebounce.status
+    : modoActivo === "programa" ? programaDebounce.status : "idle";
 
   const asistenciaStats = useMemo(() => {
     const total = estudiantesClase.length;
