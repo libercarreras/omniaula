@@ -220,6 +220,73 @@ export default function Evaluaciones() {
     setPreguntas(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
   };
 
+  const printEvaluacion = (evalNombre: string, evalFecha: string, claseId: string, questions: { tipo_pregunta: string; enunciado: string; opciones?: any[]; puntos: number }[]) => {
+    const cls = clases.find(c => c.id === claseId);
+    const materiaName = cls ? (materias[cls.materia_id] || "") : "";
+    const grupoName = cls ? (grupos.find(g => g.id === cls.grupo_id)?.nombre || "") : "";
+    const fechaFormatted = evalFecha || new Date().toISOString().split("T")[0];
+
+    const questionsHtml = questions.map((q, i) => {
+      let body = "";
+      if (q.opciones && q.opciones.length > 0) {
+        body = q.opciones.map((o: any, oi: number) =>
+          `<div style="margin:4px 0 4px 16px;font-size:14px;">${String.fromCharCode(65 + oi)}) ${o.texto}</div>`
+        ).join("");
+      } else {
+        body = Array(3).fill('<div style="border-bottom:1px solid #ccc;height:28px;margin:4px 0;"></div>').join("");
+      }
+      return `
+        <div style="margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;">
+            <strong style="font-size:14px;">${i + 1}. ${q.enunciado}</strong>
+            <span style="font-size:12px;color:#666;white-space:nowrap;margin-left:8px;">(${q.puntos} pts)</span>
+          </div>
+          ${body}
+        </div>
+      `;
+    }).join("");
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${evalNombre}</title>
+      <style>
+        body{font-family:Arial,Helvetica,sans-serif;margin:32px;color:#222;}
+        .header{border-bottom:2px solid #222;padding-bottom:12px;margin-bottom:20px;}
+        .header h1{margin:0 0 4px 0;font-size:20px;}
+        .meta{display:flex;gap:24px;font-size:13px;color:#555;margin-bottom:8px;}
+        .name-line{margin-top:12px;font-size:14px;}
+        .name-line span{display:inline-block;border-bottom:1px solid #222;width:300px;margin-left:8px;}
+        @media print{body{margin:20mm;}}
+      </style></head><body>
+        <div class="header">
+          <h1>${evalNombre}</h1>
+          <div class="meta">
+            <span>Materia: ${materiaName}</span>
+            <span>Grupo: ${grupoName}</span>
+            <span>Fecha: ${fechaFormatted}</span>
+          </div>
+          <div class="name-line">Nombre y Apellido:<span></span></div>
+        </div>
+        ${questionsHtml}
+      </body></html>`;
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.left = "-9999px";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(html);
+      doc.close();
+      iframe.contentWindow?.focus();
+      setTimeout(() => {
+        iframe.contentWindow?.print();
+        setTimeout(() => document.body.removeChild(iframe), 1000);
+      }, 300);
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   const canAdvanceStep1 = selectedGrupoId && selectedClaseId && fechaDesde && fechaHasta;
