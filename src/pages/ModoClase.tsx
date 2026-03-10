@@ -14,6 +14,7 @@ import {
   FileText, Upload, Trash2,
 } from "lucide-react";
 import { EstructuraPrograma } from "@/components/programa/EstructuraPrograma";
+import { PlanificacionTimeline } from "@/components/programa/PlanificacionTimeline";
 import { cn } from "@/lib/utils";
 import { StudentDetailSheet } from "@/components/clase/StudentDetailSheet";
 import { supabase } from "@/integrations/supabase/client";
@@ -203,6 +204,7 @@ export default function ModoClase() {
 
   const saveDiarioFn = useCallback(async () => {
     if (!user || !claseId) return;
+    let currentDiarioId = diarioId;
     if (diarioId) {
       await supabase.from("diario_clase").update({
         tema_trabajado: diarioTema || null,
@@ -217,7 +219,22 @@ export default function ModoClase() {
         observaciones: diarioObs || null,
         user_id: user.id, fecha: hoyISO,
       }).select("id").maybeSingle();
-      if (data) setDiarioId(data.id);
+      if (data) { setDiarioId(data.id); currentDiarioId = data.id; }
+    }
+
+    // Auto-update planificacion: if there's a topic planned for today, mark as completed
+    if (diarioTema && diarioTema.trim()) {
+      const { data: todayPlan } = await supabase
+        .from("planificacion_clases")
+        .select("id, estado")
+        .eq("clase_id", claseId)
+        .eq("fecha", hoyISO)
+        .eq("estado", "pendiente" as any);
+      if (todayPlan && todayPlan.length > 0) {
+        await supabase.from("planificacion_clases")
+          .update({ estado: "completado" as any, diario_id: currentDiarioId })
+          .eq("id", todayPlan[0].id);
+      }
     }
   }, [diarioTema, diarioActividad, diarioObs, diarioId, claseId, user, hoyISO]);
 
@@ -552,6 +569,19 @@ export default function ModoClase() {
                     setSavingEstructura(false);
                   }
                 }}
+              />
+            </div>
+          )}
+
+          {/* Planificación Timeline */}
+          {programaEstructura && (
+            <div className="space-y-2 pt-2 border-t">
+              <Label className="text-sm font-semibold">Planificación anual</Label>
+              <PlanificacionTimeline
+                claseId={claseId!}
+                userId={user!.id}
+                horario={clase?.horario || null}
+                estructura={programaEstructura}
               />
             </div>
           )}

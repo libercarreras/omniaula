@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.parse-program]
 verify_jwt = false
+
+[functions.distribute-program]
+verify_jwt = false
