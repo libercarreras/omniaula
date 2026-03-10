@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Loader2, ClipboardCheck, Sparkles, FileText, ListChecks, Shuffle, ChevronRight, ChevronLeft, Trash2, GripVertical, CheckCircle2 } from "lucide-react";
+import { Plus, Loader2, ClipboardCheck, Sparkles, FileText, ListChecks, Shuffle, ChevronRight, ChevronLeft, Trash2, GripVertical, CheckCircle2, Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
