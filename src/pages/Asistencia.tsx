@@ -81,10 +81,10 @@ export default function Asistencia() {
       const { data: existing } = await supabase.from("asistencia")
         .select("id").eq("clase_id", claseSeleccionada).eq("estudiante_id", estudiante_id).eq("fecha", hoyISO).maybeSingle();
       if (existing) {
-        await supabase.from("asistencia").update({ estado: estado! }).eq("id", existing.id);
+        await supabase.from("asistencia").update({ estado: estado as "presente" | "falta" | "tarde" }).eq("id", existing.id);
       } else {
         await supabase.from("asistencia").insert({
-          clase_id: claseSeleccionada, estudiante_id, estado: estado!, fecha: hoyISO, user_id: user.id,
+          clase_id: claseSeleccionada, estudiante_id, estado: estado as "presente" | "falta" | "tarde", fecha: hoyISO, user_id: user.id,
         });
       }
     }
