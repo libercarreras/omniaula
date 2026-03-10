@@ -56,6 +56,13 @@ export default function ModoClase() {
   const [diarioId, setDiarioId] = useState<string | null>(null);
   const [diarioSugerencias, setDiarioSugerencias] = useState<string[]>([]);
 
+  // Programa anual state
+  const [programaContenido, setProgramaContenido] = useState("");
+  const [programaId, setProgramaId] = useState<string | null>(null);
+  const [programaArchivoUrl, setProgramaArchivoUrl] = useState<string | null>(null);
+  const [programaArchivoNombre, setProgramaArchivoNombre] = useState<string | null>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+
   const hoyISO = new Date().toISOString().split("T")[0];
   const isInitialLoad = useRef(true);
 
