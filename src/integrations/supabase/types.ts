@@ -527,6 +527,51 @@ export type Database = {
           },
         ]
       }
+      participacion_clase: {
+        Row: {
+          clase_id: string
+          created_at: string
+          estudiante_id: string
+          fecha: string
+          id: string
+          nivel: Database["public"]["Enums"]["nivel_participacion"]
+          user_id: string
+        }
+        Insert: {
+          clase_id: string
+          created_at?: string
+          estudiante_id: string
+          fecha?: string
+          id?: string
+          nivel: Database["public"]["Enums"]["nivel_participacion"]
+          user_id: string
+        }
+        Update: {
+          clase_id?: string
+          created_at?: string
+          estudiante_id?: string
+          fecha?: string
+          id?: string
+          nivel?: Database["public"]["Enums"]["nivel_participacion"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "participacion_clase_clase_id_fkey"
+            columns: ["clase_id"]
+            isOneToOne: false
+            referencedRelation: "clases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "participacion_clase_estudiante_id_fkey"
+            columns: ["estudiante_id"]
+            isOneToOne: false
+            referencedRelation: "estudiantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_limits: {
         Row: {
           analisis_completo: boolean
@@ -820,6 +865,7 @@ export type Database = {
         | "parcial"
         | "suspendido"
         | "reprogramado"
+      nivel_participacion: "alta" | "media" | "baja"
       tipo_evaluacion:
         | "prueba_escrita"
         | "oral"
@@ -970,6 +1016,7 @@ export const Constants = {
         "suspendido",
         "reprogramado",
       ],
+      nivel_participacion: ["alta", "media", "baja"],
       tipo_evaluacion: [
         "prueba_escrita",
         "oral",
