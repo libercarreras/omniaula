@@ -123,6 +123,16 @@ export default function ModoClase() {
       });
       setObsState(oMap);
 
+      // Load programa anual
+      const { data: progData } = await supabase.from("programas_anuales")
+        .select("*").eq("clase_id", claseId).maybeSingle();
+      if (progData) {
+        setProgramaId(progData.id);
+        setProgramaContenido(progData.contenido || "");
+        setProgramaArchivoUrl(progData.archivo_url || null);
+        setProgramaArchivoNombre(progData.archivo_nombre || null);
+      }
+
       // Auto-detect: if no attendance for today, switch to attendance tab
       if ((asistRes.data || []).length === 0) {
         setModoActivo("asistencia");
