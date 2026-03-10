@@ -134,6 +134,7 @@ export default function ModoClase() {
         setProgramaContenido(progData.contenido || "");
         setProgramaArchivoUrl(progData.archivo_url || null);
         setProgramaArchivoNombre(progData.archivo_nombre || null);
+        setProgramaEstructura((progData as any).contenido_estructurado || null);
       }
 
       // Auto-detect: if no attendance for today, switch to attendance tab
