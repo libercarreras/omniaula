@@ -590,7 +590,17 @@ export default function Evaluaciones() {
           {detailEval && (
             <>
               <SheetHeader>
-                <SheetTitle>{detailEval.nombre}</SheetTitle>
+                <div className="flex items-center justify-between">
+                  <SheetTitle>{detailEval.nombre}</SheetTitle>
+                  {detailContenido.length > 0 && (
+                    <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printEvaluacion(
+                      detailEval.nombre, detailEval.fecha, detailEval.clase_id,
+                      detailContenido.map((c: any) => ({ tipo_pregunta: c.tipo_pregunta, enunciado: c.enunciado, opciones: c.opciones as any[], puntos: c.puntos }))
+                    )}>
+                      <Printer className="h-3.5 w-3.5" /> Imprimir
+                    </Button>
+                  )}
+                </div>
                 <SheetDescription>
                   {getClaseLabel(detailEval.clase_id)} · {detailEval.fecha || "Sin fecha"}
                 </SheetDescription>
