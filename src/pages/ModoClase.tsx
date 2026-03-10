@@ -13,6 +13,7 @@ import {
   ThumbsUp, AlertCircle, BookX, Brain, History, Loader2, BookOpen, Save, CheckCircle2,
   FileText, Upload, Trash2,
 } from "lucide-react";
+import { EstructuraPrograma } from "@/components/programa/EstructuraPrograma";
 import { cn } from "@/lib/utils";
 import { StudentDetailSheet } from "@/components/clase/StudentDetailSheet";
 import { supabase } from "@/integrations/supabase/client";
