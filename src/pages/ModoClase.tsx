@@ -11,6 +11,7 @@ import {
   ArrowLeft, UserCheck, ClipboardCheck, MessageSquare,
   Check, X, Clock, LogOut, CheckCheck, Star,
   ThumbsUp, AlertCircle, BookX, Brain, History, Loader2, BookOpen, Save, CheckCircle2,
+  FileText, Upload, Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StudentDetailSheet } from "@/components/clase/StudentDetailSheet";
@@ -18,7 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebounceCallback } from "@/hooks/useDebounce";
 
-type ModoActivo = "asistencia" | "notas" | "observaciones" | "participacion" | "diario";
+type ModoActivo = "asistencia" | "notas" | "observaciones" | "participacion" | "diario" | "programa";
 type EstadoAsistencia = "presente" | "falta" | "tarde" | "retiro" | null;
 type NivelParticipacion = "alta" | "media" | "baja";
 
@@ -54,6 +55,13 @@ export default function ModoClase() {
   const [diarioObs, setDiarioObs] = useState("");
   const [diarioId, setDiarioId] = useState<string | null>(null);
   const [diarioSugerencias, setDiarioSugerencias] = useState<string[]>([]);
+
+  // Programa anual state
+  const [programaContenido, setProgramaContenido] = useState("");
+  const [programaId, setProgramaId] = useState<string | null>(null);
+  const [programaArchivoUrl, setProgramaArchivoUrl] = useState<string | null>(null);
+  const [programaArchivoNombre, setProgramaArchivoNombre] = useState<string | null>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
 
   const hoyISO = new Date().toISOString().split("T")[0];
   const isInitialLoad = useRef(true);
@@ -114,6 +122,16 @@ export default function ModoClase() {
         oMap[o.estudiante_id].push(o.tipo);
       });
       setObsState(oMap);
+
+      // Load programa anual
+      const { data: progData } = await supabase.from("programas_anuales")
+        .select("*").eq("clase_id", claseId).maybeSingle();
+      if (progData) {
+        setProgramaId(progData.id);
+        setProgramaContenido(progData.contenido || "");
+        setProgramaArchivoUrl(progData.archivo_url || null);
+        setProgramaArchivoNombre(progData.archivo_nombre || null);
+      }
 
       // Auto-detect: if no attendance for today, switch to attendance tab
       if ((asistRes.data || []).length === 0) {
@@ -199,16 +217,37 @@ export default function ModoClase() {
     }
   }, [diarioTema, diarioActividad, diarioObs, diarioId, claseId, user, hoyISO]);
 
+  const saveProgramaFn = useCallback(async () => {
+    if (!user || !claseId) return;
+    if (programaId) {
+      await supabase.from("programas_anuales").update({
+        contenido: programaContenido || null,
+        archivo_url: programaArchivoUrl,
+        archivo_nombre: programaArchivoNombre,
+      }).eq("id", programaId);
+    } else {
+      const { data } = await supabase.from("programas_anuales").insert({
+        clase_id: claseId, user_id: user.id,
+        contenido: programaContenido || null,
+        archivo_url: programaArchivoUrl,
+        archivo_nombre: programaArchivoNombre,
+      }).select("id").maybeSingle();
+      if (data) setProgramaId(data.id);
+    }
+  }, [programaContenido, programaArchivoUrl, programaArchivoNombre, programaId, claseId, user]);
+
   const asistDebounce = useDebounceCallback(saveAsistenciaFn, 2000);
   const notasDebounce = useDebounceCallback(saveNotasFn, 2500);
   const obsDebounce = useDebounceCallback(saveObservacionesFn, 2000);
   const diarioDebounce = useDebounceCallback(saveDiarioFn, 3000);
+  const programaDebounce = useDebounceCallback(saveProgramaFn, 3000);
 
   // Get current active save status
   const currentStatus = modoActivo === "asistencia" ? asistDebounce.status
     : modoActivo === "notas" ? notasDebounce.status
     : modoActivo === "observaciones" ? obsDebounce.status
-    : modoActivo === "diario" ? diarioDebounce.status : "idle";
+    : modoActivo === "diario" ? diarioDebounce.status
+    : modoActivo === "programa" ? programaDebounce.status : "idle";
 
   const asistenciaStats = useMemo(() => {
     const total = estudiantesClase.length;
@@ -285,12 +324,46 @@ export default function ModoClase() {
     if (!isInitialLoad.current) diarioDebounce.trigger();
   };
 
+  const handleProgramaChange = (value: string) => {
+    setProgramaContenido(value);
+    if (!isInitialLoad.current) programaDebounce.trigger();
+  };
+
+  const handleProgramaFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user || !claseId) return;
+    setUploadingFile(true);
+    const path = `${user.id}/${claseId}/${file.name}`;
+    const { error } = await supabase.storage.from("programas").upload(path, file, { upsert: true });
+    if (error) {
+      toast.error("Error al subir archivo");
+      setUploadingFile(false);
+      return;
+    }
+    const { data: urlData } = supabase.storage.from("programas").getPublicUrl(path);
+    setProgramaArchivoUrl(path);
+    setProgramaArchivoNombre(file.name);
+    setUploadingFile(false);
+    programaDebounce.trigger();
+    toast.success("Archivo subido correctamente");
+  };
+
+  const handleRemoveFile = async () => {
+    if (!programaArchivoUrl) return;
+    await supabase.storage.from("programas").remove([programaArchivoUrl]);
+    setProgramaArchivoUrl(null);
+    setProgramaArchivoNombre(null);
+    programaDebounce.trigger();
+    toast.success("Archivo eliminado");
+  };
+
   const modos = [
     { id: "asistencia" as const, label: "Asist.", icon: UserCheck },
     { id: "notas" as const, label: "Notas", icon: ClipboardCheck },
     { id: "observaciones" as const, label: "Obs.", icon: MessageSquare },
     { id: "participacion" as const, label: "Partic.", icon: Star },
     { id: "diario" as const, label: "Diario", icon: BookOpen },
+    { id: "programa" as const, label: "Progr.", icon: FileText },
   ];
 
   const getInitials = (name: string) => {
@@ -326,7 +399,7 @@ export default function ModoClase() {
             <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{estudiantesClase.length}</Badge>
           </div>
         </div>
-        <div className="grid grid-cols-5 gap-1">
+        <div className="grid grid-cols-6 gap-1">
           {modos.map(modo => (
             <button key={modo.id} className={cn("flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium transition-all", modoActivo === modo.id ? "bg-primary text-primary-foreground shadow-md" : "bg-muted/50 text-muted-foreground hover:bg-muted")} onClick={() => setModoActivo(modo.id)}>
               <modo.icon className="h-3.5 w-3.5" />{modo.label}
@@ -406,8 +479,57 @@ export default function ModoClase() {
         </div>
       )}
 
-      {/* Student list for non-diario modes */}
-      {modoActivo !== "diario" && (
+      {/* Programa anual tab */}
+      {modoActivo === "programa" && (
+        <div className="space-y-4 py-3">
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Contenido del programa anual</Label>
+            <Textarea
+              placeholder="Pegá aquí el contenido del programa anual de la asignatura: unidades temáticas, objetivos, contenidos, bibliografía..."
+              value={programaContenido}
+              onChange={e => handleProgramaChange(e.target.value)}
+              rows={12}
+              className="text-sm leading-relaxed"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Archivo adjunto</Label>
+            {programaArchivoNombre ? (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/40 border">
+                <FileText className="h-5 w-5 text-primary shrink-0" />
+                <span className="text-sm font-medium truncate flex-1">{programaArchivoNombre}</span>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={handleRemoveFile}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <label className="flex items-center gap-2 p-4 rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 cursor-pointer transition-colors">
+                {uploadingFile ? (
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                ) : (
+                  <Upload className="h-5 w-5 text-muted-foreground" />
+                )}
+                <span className="text-sm text-muted-foreground">
+                  {uploadingFile ? "Subiendo..." : "Subir archivo (PDF, DOC, imagen)"}
+                </span>
+                <input type="file" className="hidden" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt" onChange={handleProgramaFileUpload} disabled={uploadingFile} />
+              </label>
+            )}
+          </div>
+
+          {!programaContenido && !programaArchivoNombre && (
+            <div className="text-center py-6 text-muted-foreground">
+              <FileText className="h-10 w-10 mx-auto mb-2 opacity-40" />
+              <p className="text-sm">Aún no hay programa cargado para esta clase.</p>
+              <p className="text-xs mt-1">Pegá el texto del programa o subí un archivo.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Student list for non-diario/programa modes */}
+      {modoActivo !== "diario" && modoActivo !== "programa" && (
         <div className="space-y-1.5 mt-1">
           {estudiantesClase.map((est, idx) => {
             const estado = asistencia[est.id];
