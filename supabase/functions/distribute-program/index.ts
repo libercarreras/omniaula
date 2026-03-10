@@ -13,13 +13,19 @@ const DIAS_MAP: Record<string, number> = {
   "jue": 4, "vie": 5, "sab": 6, "sáb": 6,
 };
 
-function parseHorarioDia(horario: string | null): number | null {
-  if (!horario) return null;
-  const lower = horario.toLowerCase().trim();
-  for (const [key, val] of Object.entries(DIAS_MAP)) {
-    if (lower.startsWith(key)) return val;
+function parseHorarioDias(horario: string | null): number[] {
+  if (!horario) return [];
+  const lower = horario.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const found: number[] = [];
+  // Sort keys longest first to avoid partial matches
+  const sortedKeys = Object.entries(DIAS_MAP).sort((a, b) => b[0].length - a[0].length);
+  for (const [key, val] of sortedKeys) {
+    const normKey = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (lower.includes(normKey) && !found.includes(val)) {
+      found.push(val);
+    }
   }
-  return null;
+  return found.sort((a, b) => a - b);
 }
 
 function getClassDates(diaNum: number, startDate: Date, endDate: Date): string[] {
