@@ -13,13 +13,19 @@ const DIAS_MAP: Record<string, number> = {
   "jue": 4, "vie": 5, "sab": 6, "sáb": 6,
 };
 
-function parseHorarioDia(horario: string | null): number | null {
-  if (!horario) return null;
-  const lower = horario.toLowerCase().trim();
-  for (const [key, val] of Object.entries(DIAS_MAP)) {
-    if (lower.startsWith(key)) return val;
+function parseHorarioDias(horario: string | null): number[] {
+  if (!horario) return [];
+  const lower = horario.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const found: number[] = [];
+  // Sort keys longest first to avoid partial matches
+  const sortedKeys = Object.entries(DIAS_MAP).sort((a, b) => b[0].length - a[0].length);
+  for (const [key, val] of sortedKeys) {
+    const normKey = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (lower.includes(normKey) && !found.includes(val)) {
+      found.push(val);
+    }
   }
-  return null;
+  return found.sort((a, b) => a - b);
 }
 
 function getClassDates(diaNum: number, startDate: Date, endDate: Date): string[] {
@@ -68,8 +74,8 @@ serve(async (req) => {
       );
     }
 
-    const diaNum = parseHorarioDia(horario);
-    if (diaNum === null) {
+    const diasNums = parseHorarioDias(horario);
+    if (diasNums.length === 0) {
       return new Response(
         JSON.stringify({ error: "No se pudo determinar el día de clase desde el horario. Configurá el horario de la clase (ej: 'Lunes 08:00')." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -79,7 +85,12 @@ serve(async (req) => {
     const start = new Date(fechaInicio || new Date().toISOString().split("T")[0]);
     const end = new Date(fechaFin || `${start.getFullYear()}-12-15`);
 
-    const availableDates = getClassDates(diaNum, start, end);
+    // Collect dates for all class days, then sort
+    let availableDates: string[] = [];
+    for (const diaNum of diasNums) {
+      availableDates = availableDates.concat(getClassDates(diaNum, start, end));
+    }
+    availableDates.sort();
 
     if (availableDates.length === 0) {
       return new Response(
