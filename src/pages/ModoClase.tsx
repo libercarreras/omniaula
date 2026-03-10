@@ -1,38 +1,50 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
-import {
-  ArrowLeft, UserCheck, ClipboardCheck, MessageSquare,
-  Check, X, Clock, LogOut, CheckCheck, Star,
-  ThumbsUp, AlertCircle, BookX, Brain, History, Loader2, BookOpen, Save, CheckCircle2,
-  FileText, Upload, Trash2, Settings2, LayoutDashboard, CalendarCheck,
-} from "lucide-react";
+import { Loader2, FileText, Upload, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { EstructuraPrograma } from "@/components/programa/EstructuraPrograma";
 import { PlanificacionTimeline } from "@/components/programa/PlanificacionTimeline";
 import { cn } from "@/lib/utils";
 import { StudentDetailSheet } from "@/components/clase/StudentDetailSheet";
+import { ClaseHeader } from "@/components/clase/ClaseHeader";
+import { ResumenTab } from "@/components/clase/tabs/ResumenTab";
+import { AsistenciaTab } from "@/components/clase/tabs/AsistenciaTab";
+import { NotasTab } from "@/components/clase/tabs/NotasTab";
+import { ObservacionesTab } from "@/components/clase/tabs/ObservacionesTab";
+import { DiarioTab } from "@/components/clase/tabs/DiarioTab";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebounceCallback } from "@/hooks/useDebounce";
+import { tagObservaciones } from "@/components/clase/types";
+import type { ModoActivo, EstadoAsistencia, NivelParticipacion, TabBadges } from "@/components/clase/types";
 
-type ModoActivo = "resumen" | "asistencia" | "notas" | "observaciones" | "diario";
-type EstadoAsistencia = "presente" | "falta" | "tarde" | "retiro" | null;
-type NivelParticipacion = "alta" | "media" | "baja";
-
-const tagObservaciones = [
-  { id: "participacion", label: "Buen desempeño", icon: ThumbsUp, color: "bg-success/10 text-success border-success/30", tipo: "participacion" as const },
-  { id: "actitud", label: "Necesita apoyo", icon: AlertCircle, color: "bg-warning/10 text-warning border-warning/30", tipo: "actitud" as const },
-  { id: "cumplimiento_tareas", label: "No entrega tareas", icon: BookX, color: "bg-destructive/10 text-destructive border-destructive/30", tipo: "cumplimiento_tareas" as const },
-  { id: "dificultad_contenidos", label: "Dificultad", icon: Brain, color: "bg-primary/10 text-primary border-primary/30", tipo: "dificultad_contenidos" as const },
+const DIAS_SEMANA = [
+  { key: "Lun", label: "Lun" }, { key: "Mar", label: "Mar" }, { key: "Mié", label: "Mié" },
+  { key: "Jue", label: "Jue" }, { key: "Vie", label: "Vie" }, { key: "Sáb", label: "Sáb" },
 ];
+
+const parseHorarioToState = (horario: string | null) => {
+  if (!horario) return { dias: [] as string[], hora: "" };
+  const diasFound: string[] = [];
+  const lower = horario.toLowerCase();
+  const map: Record<string, string> = { lun: "Lun", mar: "Mar", "mié": "Mié", mie: "Mié", jue: "Jue", vie: "Vie", "sáb": "Sáb", sab: "Sáb" };
+  for (const [k, v] of Object.entries(map)) {
+    if (lower.includes(k) && !diasFound.includes(v)) diasFound.push(v);
+  }
+  const horaMatch = horario.match(/(\d{1,2}[:.]\d{2}(?:\s*[-–]\s*\d{1,2}[:.]\d{2})?)/);
+  return { dias: diasFound, hora: horaMatch ? horaMatch[1] : "" };
+};
+
+const buildHorarioString = (dias: string[], hora: string) => {
+  if (dias.length === 0) return null;
+  const ordered = DIAS_SEMANA.filter(d => dias.includes(d.key)).map(d => d.key);
+  return `${ordered.join("/")}${hora ? " " + hora : ""}`;
+};
 
 export default function ModoClase() {
   const { claseId } = useParams<{ claseId: string }>();
@@ -44,6 +56,14 @@ export default function ModoClase() {
   const [grupo, setGrupo] = useState<any>(null);
   const [estudiantesClase, setEstudiantesClase] = useState<any[]>([]);
   const [evaluacionesClase, setEvaluacionesClase] = useState<any[]>([]);
+
+  // Date selector
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const todayISO = new Date().toISOString().split("T")[0];
+  const selectedDateISO = selectedDate.toISOString().split("T")[0];
+  const daysDiff = Math.floor((Date.now() - selectedDate.getTime()) / 86400000);
+  const isReadonly = daysDiff > 7;
+  const isPastDate = selectedDateISO !== todayISO;
 
   const [modoActivo, setModoActivo] = useState<ModoActivo>("resumen");
   const [asistencia, setAsistencia] = useState<Record<string, EstadoAsistencia>>({});
@@ -79,34 +99,6 @@ export default function ModoClase() {
   const [editAula, setEditAula] = useState("");
   const [savingClase, setSavingClase] = useState(false);
 
-  const DIAS_SEMANA = [
-    { key: "Lun", label: "Lun" },
-    { key: "Mar", label: "Mar" },
-    { key: "Mié", label: "Mié" },
-    { key: "Jue", label: "Jue" },
-    { key: "Vie", label: "Vie" },
-    { key: "Sáb", label: "Sáb" },
-  ];
-
-  const parseHorarioToState = (horario: string | null) => {
-    if (!horario) return { dias: [] as string[], hora: "" };
-    const diasFound: string[] = [];
-    const lower = horario.toLowerCase();
-    const map: Record<string, string> = { lun: "Lun", mar: "Mar", "mié": "Mié", mie: "Mié", jue: "Jue", vie: "Vie", "sáb": "Sáb", sab: "Sáb" };
-    for (const [k, v] of Object.entries(map)) {
-      if (lower.includes(k) && !diasFound.includes(v)) diasFound.push(v);
-    }
-    const horaMatch = horario.match(/(\d{1,2}[:.]\d{2}(?:\s*[-–]\s*\d{1,2}[:.]\d{2})?)/);
-    return { dias: diasFound, hora: horaMatch ? horaMatch[1] : "" };
-  };
-
-  const buildHorarioString = (dias: string[], hora: string) => {
-    if (dias.length === 0) return null;
-    const ordered = DIAS_SEMANA.filter(d => dias.includes(d.key)).map(d => d.key);
-    return `${ordered.join("/")}${hora ? " " + hora : ""}`;
-  };
-
-  const hoyISO = new Date().toISOString().split("T")[0];
   const isInitialLoad = useRef(true);
 
   // Refs for stale closure fix
@@ -127,10 +119,12 @@ export default function ModoClase() {
   const participacionRef = useRef(participacion);
   participacionRef.current = participacion;
 
+  // ========== DATA FETCHING ==========
   useEffect(() => {
     if (!user || !claseId) return;
     const fetchAll = async () => {
       setLoading(true);
+      isInitialLoad.current = true;
       const { data: claseData } = await supabase.from("clases").select("*").eq("id", claseId).maybeSingle();
       if (!claseData) { setLoading(false); return; }
       setClase(claseData);
@@ -140,60 +134,107 @@ export default function ModoClase() {
         supabase.from("grupos").select("*").eq("id", claseData.grupo_id).maybeSingle(),
         supabase.from("estudiantes").select("*").eq("grupo_id", claseData.grupo_id).order("nombre_completo"),
         supabase.from("evaluaciones").select("*").eq("clase_id", claseId),
-        supabase.from("asistencia").select("*").eq("clase_id", claseId).eq("fecha", hoyISO),
-        supabase.from("diario_clase").select("*").eq("clase_id", claseId).eq("fecha", hoyISO).maybeSingle(),
-        supabase.from("planificacion_clases").select("tema_titulo, estado").eq("clase_id", claseId).eq("fecha", hoyISO),
-        supabase.from("participacion_clase" as any).select("*").eq("clase_id", claseId).eq("fecha", hoyISO),
+        supabase.from("asistencia").select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO),
+        supabase.from("diario_clase").select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO).maybeSingle(),
+        supabase.from("planificacion_clases").select("tema_titulo, estado").eq("clase_id", claseId).eq("fecha", selectedDateISO),
+        supabase.from("participacion_clase" as any).select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO),
       ]);
       setMateria(matRes.data);
       setGrupo(grpRes.data);
-      setEstudiantesClase(estRes.data || []);
+      const estudiantes = estRes.data || [];
+      setEstudiantesClase(estudiantes);
       setEvaluacionesClase(evRes.data || []);
 
-      const asistMap: Record<string, EstadoAsistencia> = {};
-      (asistRes.data || []).forEach(a => { asistMap[a.estudiante_id] = a.estado as EstadoAsistencia; });
-      setAsistencia(asistMap);
+      // Planificacion
+      const planData = (planRes.data || []) as any[];
+      if (planData.length > 0) {
+        setTemaPlanificado(planData[0].tema_titulo);
+        setPlanEstado(planData[0].estado);
+      } else {
+        setTemaPlanificado(null);
+        setPlanEstado(null);
+      }
 
       // Load participacion
       const partMap: Record<string, NivelParticipacion | null> = {};
       ((partRes.data as any[]) || []).forEach((p: any) => { partMap[p.estudiante_id] = p.nivel; });
       setParticipacion(partMap);
 
-      // Planificacion de hoy
-      const planData = (planRes.data || []) as any[];
-      if (planData.length > 0) {
-        setTemaPlanificado(planData[0].tema_titulo);
-        setPlanEstado(planData[0].estado);
+      // ========== ASISTENCIA: Default all to "presente" if no records ==========
+      const existingAsist = asistRes.data || [];
+      if (existingAsist.length === 0 && !isReadonly) {
+        // Auto-default all to presente
+        const defaultAsist: Record<string, EstadoAsistencia> = {};
+        estudiantes.forEach(e => { defaultAsist[e.id] = "presente"; });
+        setAsistencia(defaultAsist);
+
+        // Persist defaults to DB
+        if (estudiantes.length > 0) {
+          const records = estudiantes.map(e => ({
+            clase_id: claseId,
+            estudiante_id: e.id,
+            estado: "presente" as const,
+            fecha: selectedDateISO,
+            user_id: user.id,
+          }));
+          await supabase.from("asistencia").insert(records);
+        }
+        // Switch to attendance tab for review
+        setModoActivo("asistencia");
+      } else {
+        const asistMap: Record<string, EstadoAsistencia> = {};
+        existingAsist.forEach(a => { asistMap[a.estudiante_id] = a.estado as EstadoAsistencia; });
+        setAsistencia(asistMap);
       }
 
+      // ========== DIARIO: Auto-create if not exists ==========
       if (diarioRes.data) {
         setDiarioId(diarioRes.data.id);
         setDiarioTema(diarioRes.data.tema_trabajado || "");
         setDiarioActividad(diarioRes.data.actividad_realizada || "");
         setDiarioObs(diarioRes.data.observaciones || "");
-      } else if (planData.length > 0 && planData[0].tema_titulo) {
-        // Auto-fill diario from planificacion
-        setDiarioTema(planData[0].tema_titulo);
+      } else if (!isReadonly) {
+        // Auto-create diario entry
+        const autoTema = planData.length > 0 ? planData[0].tema_titulo : null;
+        const { data: newDiario } = await supabase.from("diario_clase").insert({
+          clase_id: claseId, user_id: user.id, fecha: selectedDateISO,
+          tema_trabajado: autoTema || null,
+        }).select("id").maybeSingle();
+        if (newDiario) {
+          setDiarioId(newDiario.id);
+          setDiarioTema(autoTema || "");
+        }
+        setDiarioActividad("");
+        setDiarioObs("");
+      } else {
+        setDiarioId(null);
+        setDiarioTema("");
+        setDiarioActividad("");
+        setDiarioObs("");
       }
 
-      // Load diary suggestions (last 5 topics from this class)
+      // Load diary suggestions
       const { data: prevDiarios } = await supabase.from("diario_clase")
         .select("tema_trabajado").eq("clase_id", claseId)
         .not("tema_trabajado", "is", null)
-        .neq("fecha", hoyISO)
+        .neq("fecha", selectedDateISO)
         .order("fecha", { ascending: false }).limit(5);
       const temas = (prevDiarios || []).map(d => d.tema_trabajado).filter(Boolean) as string[];
       setDiarioSugerencias([...new Set(temas)]);
 
+      // Load notas
       const evIds = (evRes.data || []).map(e => e.id);
       if (evIds.length > 0) {
         const { data: notasData } = await supabase.from("notas").select("*").in("evaluacion_id", evIds);
         const nMap: Record<string, string> = {};
         (notasData || []).forEach(n => { if (n.nota !== null) nMap[`${n.evaluacion_id}-${n.estudiante_id}`] = String(n.nota); });
         setNotasState(nMap);
+      } else {
+        setNotasState({});
       }
 
-      const { data: obsData } = await supabase.from("observaciones").select("*").eq("clase_id", claseId).eq("fecha", hoyISO);
+      // Load observaciones
+      const { data: obsData } = await supabase.from("observaciones").select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO);
       const oMap: Record<string, string[]> = {};
       (obsData || []).forEach(o => {
         if (!oMap[o.estudiante_id]) oMap[o.estudiante_id] = [];
@@ -202,8 +243,7 @@ export default function ModoClase() {
       setObsState(oMap);
 
       // Load programa anual
-      const { data: progData } = await supabase.from("programas_anuales")
-        .select("*").eq("clase_id", claseId).maybeSingle();
+      const { data: progData } = await supabase.from("programas_anuales").select("*").eq("clase_id", claseId).maybeSingle();
       if (progData) {
         setProgramaId(progData.id);
         setProgramaContenido(progData.contenido || "");
@@ -212,37 +252,30 @@ export default function ModoClase() {
         setProgramaEstructura((progData as any).contenido_estructurado || null);
       }
 
-      // Auto-detect: if no attendance for today, switch to attendance tab
-      if ((asistRes.data || []).length === 0) {
-        setModoActivo("asistencia");
-      }
-
       setLoading(false);
       setTimeout(() => { isInitialLoad.current = false; }, 500);
     };
     fetchAll();
-  }, [user, claseId]);
+  }, [user, claseId, selectedDateISO]);
 
-  const hoy = new Date().toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "short" });
-
-  // ========== Auto-save callbacks (using refs to prevent stale closures) ==========
+  // ========== SAVE CALLBACKS ==========
   const saveAsistenciaFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentAsist = asistenciaRef.current;
     for (const [estudiante_id, estado] of Object.entries(currentAsist)) {
       if (estado) {
         const { data: existing } = await supabase.from("asistencia")
-          .select("id").eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", hoyISO).maybeSingle();
+          .select("id").eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO).maybeSingle();
         if (existing) {
           await supabase.from("asistencia").update({ estado }).eq("id", existing.id);
         } else {
-          await supabase.from("asistencia").insert({ clase_id: claseId, estudiante_id, estado, fecha: hoyISO, user_id: user.id });
+          await supabase.from("asistencia").insert({ clase_id: claseId, estudiante_id, estado, fecha: selectedDateISO, user_id: user.id });
         }
       } else {
-        await supabase.from("asistencia").delete().eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", hoyISO);
+        await supabase.from("asistencia").delete().eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO);
       }
     }
-  }, [claseId, user, hoyISO]);
+  }, [claseId, user, selectedDateISO]);
 
   const saveNotasFn = useCallback(async () => {
     if (!user || !claseId) return;
@@ -264,19 +297,19 @@ export default function ModoClase() {
   const saveObservacionesFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentObs = obsRef.current;
-    await supabase.from("observaciones").delete().eq("clase_id", claseId).eq("fecha", hoyISO);
+    await supabase.from("observaciones").delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
     const records: any[] = [];
     Object.entries(currentObs).forEach(([estudiante_id, tipos]) => {
       tipos.forEach(tipo => {
         records.push({
           clase_id: claseId, estudiante_id, tipo: tipo as any,
           descripcion: tagObservaciones.find(t => t.tipo === tipo)?.label || tipo,
-          fecha: hoyISO, user_id: user.id,
+          fecha: selectedDateISO, user_id: user.id,
         });
       });
     });
     if (records.length > 0) await supabase.from("observaciones").insert(records);
-  }, [claseId, user, hoyISO]);
+  }, [claseId, user, selectedDateISO]);
 
   const saveDiarioFn = useCallback(async () => {
     if (!user || !claseId) return;
@@ -296,7 +329,7 @@ export default function ModoClase() {
         tema_trabajado: tema || null,
         actividad_realizada: actividad || null,
         observaciones: obs || null,
-        user_id: user.id, fecha: hoyISO,
+        user_id: user.id, fecha: selectedDateISO,
       }).select("id").maybeSingle();
       if (data) { setDiarioId(data.id); currentDiarioId = data.id; }
     }
@@ -307,15 +340,16 @@ export default function ModoClase() {
         .from("planificacion_clases")
         .select("id, estado")
         .eq("clase_id", claseId)
-        .eq("fecha", hoyISO)
+        .eq("fecha", selectedDateISO)
         .eq("estado", "pendiente" as any);
       if (todayPlan && todayPlan.length > 0) {
         await supabase.from("planificacion_clases")
           .update({ estado: "completado" as any, diario_id: currentDiarioId })
           .eq("id", todayPlan[0].id);
+        setPlanEstado("completado");
       }
     }
-  }, [claseId, user, hoyISO]);
+  }, [claseId, user, selectedDateISO]);
 
   const saveParticipacionFn = useCallback(async () => {
     if (!user || !claseId) return;
@@ -323,17 +357,17 @@ export default function ModoClase() {
     for (const [estudiante_id, nivel] of Object.entries(currentPart)) {
       if (nivel) {
         const { data: existing } = await (supabase.from("participacion_clase" as any) as any)
-          .select("id").eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", hoyISO).maybeSingle();
+          .select("id").eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO).maybeSingle();
         if (existing) {
           await (supabase.from("participacion_clase" as any) as any).update({ nivel }).eq("id", existing.id);
         } else {
-          await (supabase.from("participacion_clase" as any) as any).insert({ clase_id: claseId, estudiante_id, nivel, fecha: hoyISO, user_id: user.id });
+          await (supabase.from("participacion_clase" as any) as any).insert({ clase_id: claseId, estudiante_id, nivel, fecha: selectedDateISO, user_id: user.id });
         }
       } else {
-        await (supabase.from("participacion_clase" as any) as any).delete().eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", hoyISO);
+        await (supabase.from("participacion_clase" as any) as any).delete().eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO);
       }
     }
-  }, [claseId, user, hoyISO]);
+  }, [claseId, user, selectedDateISO]);
 
   const saveProgramaFn = useCallback(async () => {
     if (!user || !claseId) return;
@@ -361,12 +395,12 @@ export default function ModoClase() {
   const partDebounce = useDebounceCallback(saveParticipacionFn, 2000);
   const programaDebounce = useDebounceCallback(saveProgramaFn, 3000);
 
-  // Get current active save status
   const currentStatus = modoActivo === "asistencia" ? asistDebounce.status
     : modoActivo === "notas" ? notasDebounce.status
     : modoActivo === "observaciones" ? obsDebounce.status
     : modoActivo === "diario" ? diarioDebounce.status : "idle";
 
+  // ========== COMPUTED STATS ==========
   const asistenciaStats = useMemo(() => {
     const total = estudiantesClase.length;
     const presentes = Object.values(asistencia).filter(v => v === "presente").length;
@@ -375,42 +409,30 @@ export default function ModoClase() {
     return { total, presentes, faltas, tardes };
   }, [asistencia, estudiantesClase.length]);
 
-  const notasStats = useMemo(() => {
-    if (!evaluacionActiva) return null;
-    const vals = Object.entries(notasState)
-      .filter(([k, v]) => k.startsWith(evaluacionActiva) && v.trim() !== "")
-      .map(([, v]) => parseFloat(v))
-      .filter(n => !isNaN(n));
-    if (vals.length === 0) return null;
-    const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
-    return { count: vals.length, avg: avg.toFixed(1) };
-  }, [notasState, evaluacionActiva]);
-
-  const obsStats = useMemo(() => {
-    return Object.values(obsState).reduce((acc, arr) => acc + arr.length, 0);
-  }, [obsState]);
+  const obsStats = useMemo(() => Object.values(obsState).reduce((acc, arr) => acc + arr.length, 0), [obsState]);
 
   const partStats = useMemo(() => {
     const vals = Object.values(participacion).filter(Boolean);
     return { alta: vals.filter(v => v === "alta").length, media: vals.filter(v => v === "media").length, baja: vals.filter(v => v === "baja").length };
   }, [participacion]);
 
-  if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  const tabBadges = useMemo<TabBadges>(() => ({
+    asistencia: {
+      complete: estudiantesClase.length > 0 && Object.values(asistencia).filter(Boolean).length === estudiantesClase.length,
+      missing: estudiantesClase.length - Object.values(asistencia).filter(Boolean).length,
+    },
+    notas: {
+      sinNota: evaluacionActiva
+        ? estudiantesClase.filter(e => !notasState[`${evaluacionActiva}-${e.id}`]?.trim()).length
+        : 0,
+    },
+    observaciones: { count: obsStats },
+    diario: { complete: !!diarioTema.trim() },
+  }), [estudiantesClase, asistencia, notasState, evaluacionActiva, obsStats, diarioTema]);
 
-  if (!clase || !grupo || !materia) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <p className="text-muted-foreground">Clase no encontrada</p>
-        <Button variant="outline" onClick={() => navigate("/")}>Volver al panel</Button>
-      </div>
-    );
-  }
-
+  // ========== EVENT HANDLERS ==========
   const marcarAsistencia = (estId: string, estado: EstadoAsistencia) => {
-    setAsistencia(prev => {
-      const next = { ...prev, [estId]: prev[estId] === estado ? null : estado };
-      return next;
-    });
+    setAsistencia(prev => ({ ...prev, [estId]: prev[estId] === estado ? null : estado }));
     if (!isInitialLoad.current) asistDebounce.trigger();
   };
 
@@ -459,11 +481,7 @@ export default function ModoClase() {
     setUploadingFile(true);
     const path = `${user.id}/${claseId}/${file.name}`;
     const { error } = await supabase.storage.from("programas").upload(path, file, { upsert: true });
-    if (error) {
-      toast.error("Error al subir archivo");
-      setUploadingFile(false);
-      return;
-    }
+    if (error) { toast.error("Error al subir archivo"); setUploadingFile(false); return; }
     setProgramaArchivoUrl(path);
     setProgramaArchivoNombre(file.name);
     setUploadingFile(false);
@@ -480,31 +498,9 @@ export default function ModoClase() {
     toast.success("Archivo eliminado");
   };
 
-  const modos = [
-    { id: "resumen" as const, label: "Resumen", icon: LayoutDashboard },
-    { id: "asistencia" as const, label: "Asist.", icon: UserCheck },
-    { id: "notas" as const, label: "Notas", icon: ClipboardCheck },
-    { id: "observaciones" as const, label: "Obs.", icon: MessageSquare },
-    { id: "diario" as const, label: "Diario", icon: BookOpen },
-  ];
-
-  const getInitials = (name: string) => {
-    const parts = name.split(" ");
-    return parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}` : name.substring(0, 2);
-  };
-
-  const StatusIndicator = () => {
-    if (currentStatus === "idle") return null;
-    return (
-      <div className={cn(
-        "flex items-center gap-1.5 text-xs font-medium transition-all animate-in fade-in",
-        currentStatus === "saved" ? "text-success" : "text-muted-foreground"
-      )}>
-        {currentStatus === "pending" && <><span className="h-1.5 w-1.5 rounded-full bg-warning animate-pulse" /> Cambios pendientes</>}
-        {currentStatus === "saving" && <><Loader2 className="h-3 w-3 animate-spin" /> Guardando...</>}
-        {currentStatus === "saved" && <><CheckCircle2 className="h-3 w-3" /> Guardado ✓</>}
-      </div>
-    );
+  const handleDateChange = (date: Date) => {
+    setSelectedDate(date);
+    setModoActivo("resumen");
   };
 
   const openEditClase = () => {
@@ -519,10 +515,7 @@ export default function ModoClase() {
     if (!claseId) return;
     setSavingClase(true);
     const newHorario = buildHorarioString(editDias, editHora);
-    const { error } = await supabase.from("clases").update({
-      horario: newHorario,
-      aula: editAula.trim() || null,
-    }).eq("id", claseId);
+    const { error } = await supabase.from("clases").update({ horario: newHorario, aula: editAula.trim() || null }).eq("id", claseId);
     setSavingClase(false);
     if (error) { toast.error("Error al guardar"); return; }
     setClase((prev: any) => ({ ...prev, horario: newHorario, aula: editAula.trim() || null }));
@@ -530,278 +523,101 @@ export default function ModoClase() {
     toast.success("Clase actualizada");
   };
 
-  const planEstadoLabel: Record<string, { label: string; color: string }> = {
-    pendiente: { label: "Pendiente", color: "bg-muted text-muted-foreground" },
-    completado: { label: "Completado", color: "bg-success/10 text-success" },
-    parcial: { label: "Parcial", color: "bg-warning/10 text-warning" },
-    suspendido: { label: "Suspendido", color: "bg-destructive/10 text-destructive" },
-    reprogramado: { label: "Reprogramado", color: "bg-primary/10 text-primary" },
-  };
+  // ========== RENDER ==========
+  if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+
+  if (!clase || !grupo || !materia) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <p className="text-muted-foreground">Clase no encontrada</p>
+        <Button variant="outline" onClick={() => navigate("/")}>Volver al panel</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto pb-6">
-      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-sm border-b -mx-4 px-4 pt-1 pb-2 md:-mx-0 md:px-0">
-        <div className="flex items-center gap-2 mb-2">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="shrink-0 h-8 w-8"><ArrowLeft className="h-4 w-4" /></Button>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-base font-display font-bold truncate">{materia.nombre} — {grupo.nombre}</h1>
-            <button onClick={openEditClase} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
-              <Settings2 className="h-3 w-3" />
-              {clase.horario || "Sin horario"}{clase.aula ? ` · ${clase.aula}` : ""}
-            </button>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <StatusIndicator />
-            <span className="text-[10px] text-muted-foreground capitalize">{hoy}</span>
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{estudiantesClase.length}</Badge>
-            {programaEstructura && (
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowProgramaDialog(true)}>
-                <FileText className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-        </div>
-        <div className="grid grid-cols-5 gap-1">
-          {modos.map(modo => (
-            <button key={modo.id} className={cn("flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium transition-all", modoActivo === modo.id ? "bg-primary text-primary-foreground shadow-md" : "bg-muted/50 text-muted-foreground hover:bg-muted")} onClick={() => setModoActivo(modo.id)}>
-              <modo.icon className="h-3.5 w-3.5" />{modo.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <ClaseHeader
+        materiaName={materia.nombre}
+        grupoName={grupo.nombre}
+        horario={clase.horario}
+        aula={clase.aula}
+        studentCount={estudiantesClase.length}
+        hasProgramaEstructura={!!programaEstructura}
+        modoActivo={modoActivo}
+        selectedDate={selectedDate}
+        isReadonly={isReadonly}
+        isPastDate={isPastDate}
+        saveStatus={currentStatus}
+        tabBadges={tabBadges}
+        onBack={() => navigate(-1)}
+        onEditClase={openEditClase}
+        onShowPrograma={() => setShowProgramaDialog(true)}
+        onModoChange={setModoActivo}
+        onDateChange={handleDateChange}
+      />
 
-      {/* ========== RESUMEN TAB ========== */}
       {modoActivo === "resumen" && (
-        <div className="space-y-3 py-3">
-          {/* Tema planificado */}
-          {temaPlanificado && (
-            <Card className="border-l-4 border-l-primary">
-              <CardContent className="p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><CalendarCheck className="h-3 w-3" /> Tema planificado para hoy</p>
-                    <p className="text-sm font-semibold mt-0.5 truncate">{temaPlanificado}</p>
-                  </div>
-                  {planEstado && planEstadoLabel[planEstado] && (
-                    <Badge className={cn("text-[10px] shrink-0", planEstadoLabel[planEstado].color)}>{planEstadoLabel[planEstado].label}</Badge>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Asistencia resumen */}
-          <Card>
-            <CardContent className="p-3">
-              <button className="w-full text-left" onClick={() => setModoActivo("asistencia")}>
-                <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><UserCheck className="h-3 w-3" /> Asistencia</p>
-                <div className="flex items-center gap-4 mt-1.5">
-                  <span className="text-lg font-bold text-success">{asistenciaStats.presentes}<span className="text-xs font-normal text-muted-foreground ml-0.5">P</span></span>
-                  <span className="text-lg font-bold text-destructive">{asistenciaStats.faltas}<span className="text-xs font-normal text-muted-foreground ml-0.5">F</span></span>
-                  <span className="text-lg font-bold text-warning">{asistenciaStats.tardes}<span className="text-xs font-normal text-muted-foreground ml-0.5">T</span></span>
-                  <span className="text-xs text-muted-foreground ml-auto">de {asistenciaStats.total}</span>
-                </div>
-              </button>
-            </CardContent>
-          </Card>
-
-          {/* Participacion resumen */}
-          {(partStats.alta + partStats.media + partStats.baja > 0) && (
-            <Card>
-              <CardContent className="p-3">
-                <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><Star className="h-3 w-3" /> Participación</p>
-                <div className="flex items-center gap-4 mt-1.5">
-                  <span className="text-lg font-bold text-success">{partStats.alta}<span className="text-xs font-normal text-muted-foreground ml-0.5">Alta</span></span>
-                  <span className="text-lg font-bold text-warning">{partStats.media}<span className="text-xs font-normal text-muted-foreground ml-0.5">Media</span></span>
-                  <span className="text-lg font-bold text-destructive">{partStats.baja}<span className="text-xs font-normal text-muted-foreground ml-0.5">Baja</span></span>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Notas resumen */}
-          {evaluacionesClase.length > 0 && (
-            <Card>
-              <CardContent className="p-3">
-                <button className="w-full text-left" onClick={() => setModoActivo("notas")}>
-                  <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><ClipboardCheck className="h-3 w-3" /> Evaluaciones</p>
-                  <p className="text-sm mt-1">{evaluacionesClase.length} evaluación{evaluacionesClase.length > 1 ? "es" : ""} configurada{evaluacionesClase.length > 1 ? "s" : ""}</p>
-                </button>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Observaciones resumen */}
-          <Card>
-            <CardContent className="p-3">
-              <button className="w-full text-left" onClick={() => setModoActivo("observaciones")}>
-                <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><MessageSquare className="h-3 w-3" /> Observaciones hoy</p>
-                <p className="text-sm font-semibold mt-1">{obsStats} registrada{obsStats !== 1 ? "s" : ""}</p>
-              </button>
-            </CardContent>
-          </Card>
-
-          {/* Diario resumen */}
-          <Card>
-            <CardContent className="p-3">
-              <button className="w-full text-left" onClick={() => setModoActivo("diario")}>
-                <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><BookOpen className="h-3 w-3" /> Diario de clase</p>
-                {diarioTema ? (
-                  <p className="text-sm mt-1 truncate"><span className="font-medium">Tema:</span> {diarioTema}</p>
-                ) : (
-                  <p className="text-sm text-muted-foreground mt-1">Sin completar</p>
-                )}
-              </button>
-            </CardContent>
-          </Card>
-        </div>
+        <ResumenTab
+          temaPlanificado={temaPlanificado}
+          planEstado={planEstado}
+          asistenciaStats={asistenciaStats}
+          partStats={partStats}
+          evaluacionesCount={evaluacionesClase.length}
+          obsStats={obsStats}
+          diarioTema={diarioTema}
+          onNavigate={setModoActivo}
+        />
       )}
 
-      {/* Context bar per mode */}
       {modoActivo === "asistencia" && (
-        <div className="flex items-center justify-between py-2 gap-2">
-          <Button size="sm" className="gap-1.5 bg-success hover:bg-success/90 text-success-foreground h-10 text-sm font-semibold" onClick={marcarTodosPresentes}>
-            <CheckCheck className="h-4 w-4" />Todos presentes
-          </Button>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="text-success font-semibold">{asistenciaStats.presentes}P</span>
-            <span className="text-destructive font-semibold">{asistenciaStats.faltas}F</span>
-            <span className="text-warning font-semibold">{asistenciaStats.tardes}T</span>
-          </div>
-        </div>
+        <AsistenciaTab
+          estudiantes={estudiantesClase}
+          asistencia={asistencia}
+          participacion={participacion}
+          stats={asistenciaStats}
+          isReadonly={isReadonly}
+          onMarcarAsistencia={marcarAsistencia}
+          onMarcarTodosPresentes={marcarTodosPresentes}
+          onMarcarParticipacion={marcarParticipacion}
+          onStudentDetail={setStudentDetailId}
+        />
       )}
 
       {modoActivo === "notas" && (
-        <div className="py-2 space-y-2">
-          {evaluacionesClase.length > 0 ? (
-            <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-              {evaluacionesClase.map(ev => (
-                <button key={ev.id} className={cn("shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition-all", evaluacionActiva === ev.id ? "bg-primary text-primary-foreground" : "bg-muted/50 text-muted-foreground")} onClick={() => setEvaluacionActiva(ev.id)}>{ev.nombre}</button>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground py-1">Sin evaluaciones creadas para esta clase.</p>
-          )}
-          {notasStats && (
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <span>{notasStats.count} calificadas</span>
-              <span className="font-semibold text-primary">Promedio: {notasStats.avg}</span>
-            </div>
-          )}
-        </div>
+        <NotasTab
+          estudiantes={estudiantesClase}
+          evaluaciones={evaluacionesClase}
+          evaluacionActiva={evaluacionActiva}
+          notasState={notasState}
+          isReadonly={isReadonly}
+          onEvaluacionChange={setEvaluacionActiva}
+          onNotaChange={handleNotaChange}
+          onStudentDetail={setStudentDetailId}
+        />
       )}
 
       {modoActivo === "observaciones" && (
-        <div className="flex items-center justify-between py-2">
-          <span className="text-xs text-muted-foreground">{obsStats} observaciones registradas hoy</span>
-        </div>
+        <ObservacionesTab
+          estudiantes={estudiantesClase}
+          obsState={obsState}
+          obsStats={obsStats}
+          isReadonly={isReadonly}
+          onToggleObservacion={toggleObservacion}
+          onStudentDetail={setStudentDetailId}
+        />
       )}
 
-      {/* Diario tab */}
       {modoActivo === "diario" && (
-        <div className="space-y-4 py-3">
-          {temaPlanificado && !diarioId && (
-            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-primary/5 border border-primary/20">
-              <CalendarCheck className="h-4 w-4 text-primary shrink-0" />
-              <p className="text-xs text-primary"><span className="font-medium">Tema planificado:</span> {temaPlanificado}</p>
-            </div>
-          )}
-          {diarioSugerencias.length > 0 && (
-            <div className="space-y-1">
-              <p className="text-[11px] text-muted-foreground font-medium">Temas anteriores:</p>
-              <div className="flex flex-wrap gap-1.5">
-                {diarioSugerencias.map((tema, i) => (
-                  <button key={i} onClick={() => handleDiarioChange("tema", tema)}
-                    className="px-2.5 py-1.5 rounded-lg bg-muted/60 text-xs text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors border border-transparent hover:border-primary/20">
-                    {tema}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          <div className="space-y-2">
-            <Label>Tema trabajado</Label>
-            <Input placeholder="Ej: Fracciones equivalentes" value={diarioTema} onChange={e => handleDiarioChange("tema", e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>Actividades realizadas</Label>
-            <Textarea placeholder="Describe las actividades de la clase..." value={diarioActividad} onChange={e => handleDiarioChange("actividad", e.target.value)} rows={3} />
-          </div>
-          <div className="space-y-2">
-            <Label>Observaciones generales</Label>
-            <Textarea placeholder="Observaciones de la clase..." value={diarioObs} onChange={e => handleDiarioChange("obs", e.target.value)} rows={3} />
-          </div>
-        </div>
-      )}
-
-      {/* Student list for asistencia/notas/observaciones */}
-      {(modoActivo === "asistencia" || modoActivo === "notas" || modoActivo === "observaciones") && (
-        <div className="space-y-1.5 mt-1">
-          {estudiantesClase.map((est, idx) => {
-            const estado = asistencia[est.id];
-            const estadoBg = estado === "presente" ? "border-l-success" : estado === "falta" ? "border-l-destructive" : estado === "tarde" ? "border-l-warning" : estado === "retiro" ? "border-l-muted-foreground" : "border-l-transparent";
-
-            return (
-              <div key={est.id} className={cn("bg-card rounded-lg border border-l-4 p-3 transition-all", estadoBg)}>
-                <div className="flex items-center gap-2.5">
-                  <button className="flex items-center gap-2.5 min-w-0 flex-1 text-left" onClick={() => setStudentDetailId(est.id)}>
-                    <Avatar className="h-9 w-9 shrink-0">
-                      <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">{getInitials(est.nombre_completo)}</AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0">
-                      <p className="font-medium text-sm truncate leading-tight">{est.nombre_completo}</p>
-                      <p className="text-[10px] text-muted-foreground">#{idx + 1}</p>
-                    </div>
-                  </button>
-                  <div className="flex items-center gap-0.5 shrink-0">
-                    {modoActivo === "asistencia" && (
-                      <>
-                        {([
-                          { v: "presente", icon: Check, active: "bg-success text-success-foreground" },
-                          { v: "falta", icon: X, active: "bg-destructive text-destructive-foreground" },
-                          { v: "tarde", icon: Clock, active: "bg-warning text-warning-foreground" },
-                          { v: "retiro", icon: LogOut, active: "bg-muted-foreground text-background" },
-                        ] as const).map(btn => (
-                          <button key={btn.v} className={cn("h-11 w-11 rounded-xl flex items-center justify-center transition-all active:scale-95", estado === btn.v ? `${btn.active} animate-in zoom-in-95 duration-150` : "bg-muted/50 text-muted-foreground hover:bg-muted")} onClick={() => marcarAsistencia(est.id, btn.v)}>
-                            <btn.icon className="h-5 w-5" />
-                          </button>
-                        ))}
-                        {/* Participacion inline */}
-                        <div className="ml-1 border-l pl-1 flex items-center gap-0.5">
-                          {([
-                            { v: "alta" as const, label: "A", color: "bg-success text-success-foreground" },
-                            { v: "media" as const, label: "M", color: "bg-warning text-warning-foreground" },
-                            { v: "baja" as const, label: "B", color: "bg-destructive text-destructive-foreground" },
-                          ]).map(opt => (
-                            <button key={opt.v} className={cn("h-9 w-9 rounded-lg flex items-center justify-center text-xs font-bold transition-all active:scale-95", participacion[est.id] === opt.v ? opt.color : "bg-muted/30 text-muted-foreground/50 hover:bg-muted/60")} onClick={() => marcarParticipacion(est.id, opt.v)}>{opt.label}</button>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                    {modoActivo === "notas" && evaluacionActiva && (
-                      <Input type="number" inputMode="decimal" placeholder="—" className="w-16 h-11 text-center text-lg font-bold rounded-xl border-2 focus:border-primary" value={notasState[`${evaluacionActiva}-${est.id}`] || ""} onChange={e => handleNotaChange(`${evaluacionActiva}-${est.id}`, e.target.value)} />
-                    )}
-                    {modoActivo === "observaciones" && (
-                      <button className="h-9 w-9 rounded-lg flex items-center justify-center bg-muted/50 text-muted-foreground" onClick={() => setStudentDetailId(est.id)}><History className="h-4 w-4" /></button>
-                    )}
-                  </div>
-                </div>
-                {modoActivo === "observaciones" && (
-                  <div className="flex flex-wrap gap-1.5 mt-2 ml-[46px]">
-                    {tagObservaciones.map(tag => {
-                      const isActive = (obsState[est.id] || []).includes(tag.tipo);
-                      return (
-                        <button key={tag.id} onClick={() => toggleObservacion(est.id, tag.tipo)} className={cn("inline-flex items-center gap-1 px-2.5 py-2 rounded-xl text-xs font-medium border transition-all active:scale-95", isActive ? `${tag.color} animate-in zoom-in-95 duration-150` : "bg-muted/30 text-muted-foreground border-transparent hover:bg-muted/60")}>
-                          <tag.icon className="h-3.5 w-3.5" />{tag.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <DiarioTab
+          diarioTema={diarioTema}
+          diarioActividad={diarioActividad}
+          diarioObs={diarioObs}
+          temaPlanificado={temaPlanificado}
+          diarioSugerencias={diarioSugerencias}
+          isReadonly={isReadonly}
+          onChange={handleDiarioChange}
+        />
       )}
 
       <StudentDetailSheet studentId={studentDetailId} claseId={claseId || ""} open={!!studentDetailId} onClose={() => setStudentDetailId(null)} />
@@ -809,30 +625,19 @@ export default function ModoClase() {
       {/* Programa Dialog */}
       <Dialog open={showProgramaDialog} onOpenChange={setShowProgramaDialog}>
         <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Programa y planificación</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Programa y planificación</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label className="text-sm font-semibold">Contenido del programa anual</Label>
-              <Textarea
-                placeholder="Pegá aquí el contenido del programa anual..."
-                value={programaContenido}
-                onChange={e => handleProgramaChange(e.target.value)}
-                rows={6}
-                className="text-sm leading-relaxed"
-              />
+              <Textarea placeholder="Pegá aquí el contenido del programa anual..." value={programaContenido} onChange={e => handleProgramaChange(e.target.value)} rows={6} className="text-sm leading-relaxed" />
             </div>
-
             <div className="space-y-2">
               <Label className="text-sm font-semibold">Archivo adjunto</Label>
               {programaArchivoNombre ? (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/40 border">
                   <FileText className="h-5 w-5 text-primary shrink-0" />
                   <span className="text-sm font-medium truncate flex-1">{programaArchivoNombre}</span>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={handleRemoveFile}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={handleRemoveFile}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               ) : (
                 <label className="flex items-center gap-2 p-4 rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 cursor-pointer transition-colors">
@@ -842,7 +647,6 @@ export default function ModoClase() {
                 </label>
               )}
             </div>
-
             {programaContenido && (
               <div className="space-y-2 pt-2 border-t">
                 <Label className="text-sm font-semibold">Estructura del programa</Label>
@@ -857,32 +661,21 @@ export default function ModoClase() {
                         await supabase.from("programas_anuales").update({ contenido_estructurado: est as any }).eq("id", programaId);
                       } else {
                         const { data } = await supabase.from("programas_anuales").insert({
-                          clase_id: claseId!, user_id: user!.id,
-                          contenido: programaContenido || null,
-                          contenido_estructurado: est as any,
+                          clase_id: claseId!, user_id: user!.id, contenido: programaContenido || null, contenido_estructurado: est as any,
                         }).select("id").maybeSingle();
                         if (data) setProgramaId(data.id);
                       }
                       setProgramaEstructura(est);
-                    } catch {
-                      toast.error("Error al guardar la estructura");
-                    } finally {
-                      setSavingEstructura(false);
-                    }
+                    } catch { toast.error("Error al guardar la estructura"); }
+                    finally { setSavingEstructura(false); }
                   }}
                 />
               </div>
             )}
-
             {programaEstructura && (
               <div className="space-y-2 pt-2 border-t">
                 <Label className="text-sm font-semibold">Planificación anual</Label>
-                <PlanificacionTimeline
-                  claseId={claseId!}
-                  userId={user!.id}
-                  horario={clase?.horario || null}
-                  estructura={programaEstructura}
-                />
+                <PlanificacionTimeline claseId={claseId!} userId={user!.id} horario={clase?.horario || null} estructura={programaEstructura} />
               </div>
             )}
           </div>
@@ -892,25 +685,17 @@ export default function ModoClase() {
       {/* Edit Clase Dialog */}
       <Dialog open={editClaseOpen} onOpenChange={setEditClaseOpen}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Editar clase</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Editar clase</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Días de clase</Label>
               <div className="flex flex-wrap gap-2">
                 {DIAS_SEMANA.map(dia => (
-                  <button
-                    key={dia.key}
-                    type="button"
+                  <button key={dia.key} type="button"
                     onClick={() => setEditDias(prev => prev.includes(dia.key) ? prev.filter(d => d !== dia.key) : [...prev, dia.key])}
-                    className={cn(
-                      "px-3 py-2 rounded-lg text-sm font-medium border transition-all active:scale-95",
-                      editDias.includes(dia.key)
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted"
-                    )}
-                  >
+                    className={cn("px-3 py-2 rounded-lg text-sm font-medium border transition-all active:scale-95",
+                      editDias.includes(dia.key) ? "bg-primary text-primary-foreground border-primary" : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted"
+                    )}>
                     {dia.label}
                   </button>
                 ))}
@@ -928,8 +713,7 @@ export default function ModoClase() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditClaseOpen(false)}>Cancelar</Button>
             <Button onClick={saveClaseDetails} disabled={savingClase}>
-              {savingClase ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              Guardar
+              {savingClase ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null} Guardar
             </Button>
           </DialogFooter>
         </DialogContent>

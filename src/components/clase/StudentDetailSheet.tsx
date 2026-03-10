@@ -1,15 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  UserCheck, ClipboardCheck, MessageSquare, Calendar,
-  Check, X, Clock, Copy, Loader2, Star,
+  UserCheck, ClipboardCheck, MessageSquare,
+  Check, X, Clock, Copy, Loader2, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +21,44 @@ interface StudentDetailSheetProps {
   open: boolean;
   onClose: () => void;
 }
+
+type RiskLevel = "bajo" | "medio" | "alto";
+
+function computeRisk(asistencia: any[], notas: any[], observaciones: any[]): { level: RiskLevel; reasons: string[] } {
+  const reasons: string[] = [];
+  let score = 0;
+
+  // Attendance risk
+  const total = asistencia.length;
+  const faltas = asistencia.filter(a => a.estado === "falta").length;
+  if (total > 0) {
+    const pctFaltas = (faltas / total) * 100;
+    if (pctFaltas >= 30) { score += 3; reasons.push(`${Math.round(pctFaltas)}% de inasistencias`); }
+    else if (pctFaltas >= 15) { score += 1; reasons.push(`${Math.round(pctFaltas)}% de inasistencias`); }
+  }
+
+  // Grade risk
+  const notasVals = notas.filter(n => n.nota !== null).map(n => Number(n.nota));
+  if (notasVals.length > 0) {
+    const avg = notasVals.reduce((a, b) => a + b, 0) / notasVals.length;
+    if (avg < 4) { score += 3; reasons.push(`Promedio ${avg.toFixed(1)}`); }
+    else if (avg < 6) { score += 1; reasons.push(`Promedio ${avg.toFixed(1)}`); }
+  }
+
+  // Negative observations
+  const negativeObs = observaciones.filter(o => ["actitud", "cumplimiento_tareas", "dificultad_contenidos"].includes(o.tipo));
+  if (negativeObs.length >= 5) { score += 2; reasons.push(`${negativeObs.length} observaciones negativas`); }
+  else if (negativeObs.length >= 3) { score += 1; reasons.push(`${negativeObs.length} observaciones negativas`); }
+
+  const level: RiskLevel = score >= 4 ? "alto" : score >= 2 ? "medio" : "bajo";
+  return { level, reasons };
+}
+
+const riskConfig: Record<RiskLevel, { label: string; color: string; bgColor: string }> = {
+  bajo: { label: "Riesgo bajo", color: "text-success", bgColor: "bg-success/10" },
+  medio: { label: "Riesgo medio", color: "text-warning", bgColor: "bg-warning/10" },
+  alto: { label: "Riesgo alto", color: "text-destructive", bgColor: "bg-destructive/10" },
+};
 
 export function StudentDetailSheet({ studentId, claseId, open, onClose }: StudentDetailSheetProps) {
   const [student, setStudent] = useState<any>(null);
@@ -42,13 +80,17 @@ export function StudentDetailSheet({ studentId, claseId, open, onClose }: Studen
       setStudent(estRes.data);
       setObservaciones(obsRes.data || []);
       setAsistenciaHist(asistRes.data || []);
-      // Filter notas to this clase's evaluaciones
       const notasData = (notasRes.data || []).filter((n: any) => n.evaluaciones);
       setNotasHist(notasData);
       setLoading(false);
     };
     fetch();
   }, [studentId, open, claseId]);
+
+  const risk = useMemo(() => {
+    if (!student) return null;
+    return computeRisk(asistenciaHist, notasHist, observaciones);
+  }, [student, asistenciaHist, notasHist, observaciones]);
 
   if (!student && !loading) return null;
 
@@ -57,43 +99,36 @@ export function StudentDetailSheet({ studentId, claseId, open, onClose }: Studen
     return parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}` : (name || "?").substring(0, 2);
   };
 
-  const copiarResumen = () => {
-    if (!student) return;
-    const asistTotal = asistenciaHist.length;
-    const presentes = asistenciaHist.filter(a => a.estado === "presente").length;
-    const pct = asistTotal > 0 ? Math.round((presentes / asistTotal) * 100) : 0;
-    const notasVals = notasHist.filter((n: any) => n.nota !== null).map((n: any) => Number(n.nota));
-    const prom = notasVals.length > 0 ? (notasVals.reduce((a, b) => a + b, 0) / notasVals.length).toFixed(1) : "—";
-    const resumen = [
-      `📋 Resumen: ${student.nombre_completo}`,
-      `Asistencia: ${pct}% (${presentes}/${asistTotal})`,
-      `Promedio: ${prom}`,
-      `Observaciones: ${observaciones.length}`,
-    ].join("\n");
-    navigator.clipboard.writeText(resumen);
-    toast.success("Resumen copiado al portapapeles");
-  };
-
-  const tipoLabel: Record<string, string> = {
-    participacion: "Participación",
-    actitud: "Actitud",
-    cumplimiento_tareas: "Tareas",
-    dificultad_contenidos: "Dificultad",
-  };
-
-  const estadoAsistColor: Record<string, string> = {
-    presente: "bg-success/10 text-success",
-    falta: "bg-destructive/10 text-destructive",
-    tarde: "bg-warning/10 text-warning",
-    retiro: "bg-muted text-muted-foreground",
-  };
-
-  // Stats
   const asistTotal = asistenciaHist.length;
   const presentes = asistenciaHist.filter(a => a.estado === "presente").length;
   const asistPct = asistTotal > 0 ? Math.round((presentes / asistTotal) * 100) : null;
   const notasVals = notasHist.filter((n: any) => n.nota !== null).map((n: any) => Number(n.nota));
   const promedio = notasVals.length > 0 ? (notasVals.reduce((a, b) => a + b, 0) / notasVals.length).toFixed(1) : null;
+
+  const copiarResumen = () => {
+    if (!student) return;
+    const pct = asistPct ?? 0;
+    const prom = promedio ?? "—";
+    const resumen = [
+      `📋 Resumen: ${student.nombre_completo}`,
+      `Asistencia: ${pct}% (${presentes}/${asistTotal})`,
+      `Promedio: ${prom}`,
+      `Observaciones: ${observaciones.length}`,
+      risk ? `Riesgo: ${riskConfig[risk.level].label}` : "",
+    ].filter(Boolean).join("\n");
+    navigator.clipboard.writeText(resumen);
+    toast.success("Resumen copiado al portapapeles");
+  };
+
+  const tipoLabel: Record<string, string> = {
+    participacion: "Participación", actitud: "Actitud",
+    cumplimiento_tareas: "Tareas", dificultad_contenidos: "Dificultad",
+  };
+
+  const estadoAsistColor: Record<string, string> = {
+    presente: "bg-success/10 text-success", falta: "bg-destructive/10 text-destructive",
+    tarde: "bg-warning/10 text-warning", retiro: "bg-muted text-muted-foreground",
+  };
 
   return (
     <Sheet open={open} onOpenChange={v => !v && onClose()}>
@@ -109,15 +144,20 @@ export function StudentDetailSheet({ studentId, claseId, open, onClose }: Studen
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <SheetTitle className="text-left">{student.nombre_completo}</SheetTitle>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
                     {asistPct !== null && (
                       <Badge className={cn("text-[10px]", asistPct >= 80 ? "bg-success/10 text-success" : asistPct >= 60 ? "bg-warning/10 text-warning" : "bg-destructive/10 text-destructive")}>
                         {asistPct}% asist.
                       </Badge>
                     )}
                     {promedio && (
-                      <Badge className="text-[10px] bg-primary/10 text-primary">
-                        Prom: {promedio}
+                      <Badge className="text-[10px] bg-primary/10 text-primary">Prom: {promedio}</Badge>
+                    )}
+                    {/* Risk indicator */}
+                    {risk && risk.level !== "bajo" && (
+                      <Badge className={cn("text-[10px] gap-1", riskConfig[risk.level].bgColor, riskConfig[risk.level].color)}>
+                        <AlertTriangle className="h-2.5 w-2.5" />
+                        {riskConfig[risk.level].label}
                       </Badge>
                     )}
                   </div>
@@ -127,6 +167,18 @@ export function StudentDetailSheet({ studentId, claseId, open, onClose }: Studen
                 </Button>
               </div>
             </SheetHeader>
+
+            {/* Risk details */}
+            {risk && risk.level !== "bajo" && risk.reasons.length > 0 && (
+              <div className={cn("rounded-lg p-3 mb-3 border", riskConfig[risk.level].bgColor)}>
+                <p className={cn("text-xs font-semibold flex items-center gap-1.5 mb-1", riskConfig[risk.level].color)}>
+                  <AlertTriangle className="h-3.5 w-3.5" /> Indicadores de riesgo
+                </p>
+                <ul className="text-xs text-muted-foreground space-y-0.5">
+                  {risk.reasons.map((r, i) => <li key={i}>• {r}</li>)}
+                </ul>
+              </div>
+            )}
 
             <Tabs defaultValue="observaciones" className="w-full">
               <TabsList className="w-full grid grid-cols-3">
