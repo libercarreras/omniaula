@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -69,28 +69,32 @@ export default function Asistencia() {
     loadData();
   }, [claseSeleccionada, clases, user, hoyISO]);
 
+  const asistenciaRef = useRef(asistencia);
+  asistenciaRef.current = asistencia;
+
   // Auto-save with upsert
   const saveAsistenciaFn = useCallback(async () => {
     if (!user || !claseSeleccionada) return;
-    const entries = Object.entries(asistencia).filter(([, estado]) => estado !== null);
+    const currentAsistencia = asistenciaRef.current;
+    const entries = Object.entries(currentAsistencia).filter(([, estado]) => estado !== null);
     for (const [estudiante_id, estado] of entries) {
       const { data: existing } = await supabase.from("asistencia")
         .select("id").eq("clase_id", claseSeleccionada).eq("estudiante_id", estudiante_id).eq("fecha", hoyISO).maybeSingle();
       if (existing) {
-        await supabase.from("asistencia").update({ estado: estado! }).eq("id", existing.id);
+        await supabase.from("asistencia").update({ estado: estado as "presente" | "falta" | "tarde" }).eq("id", existing.id);
       } else {
         await supabase.from("asistencia").insert({
-          clase_id: claseSeleccionada, estudiante_id, estado: estado!, fecha: hoyISO, user_id: user.id,
+          clase_id: claseSeleccionada, estudiante_id, estado: estado as "presente" | "falta" | "tarde", fecha: hoyISO, user_id: user.id,
         });
       }
     }
     // Remove records for null entries
-    const nullEntries = Object.entries(asistencia).filter(([, estado]) => estado === null);
+    const nullEntries = Object.entries(currentAsistencia).filter(([, estado]) => estado === null);
     for (const [estudiante_id] of nullEntries) {
       await supabase.from("asistencia").delete()
         .eq("clase_id", claseSeleccionada).eq("estudiante_id", estudiante_id).eq("fecha", hoyISO);
     }
-  }, [asistencia, claseSeleccionada, user, hoyISO]);
+  }, [claseSeleccionada, user, hoyISO]);
 
   const { trigger, status } = useDebounceCallback(saveAsistenciaFn, 1500);
 

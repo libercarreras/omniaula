@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 
 export function useDebounceCallback(callback: () => Promise<void> | void, delay = 2000) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const callbackRef = useRef(callback);
+  callbackRef.current = callback;
   const [status, setStatus] = useState<"idle" | "pending" | "saving" | "saved">("idle");
 
   const trigger = useCallback(() => {
@@ -10,14 +12,14 @@ export function useDebounceCallback(callback: () => Promise<void> | void, delay 
     timerRef.current = setTimeout(async () => {
       setStatus("saving");
       try {
-        await callback();
+        await callbackRef.current();
         setStatus("saved");
         setTimeout(() => setStatus("idle"), 2000);
       } catch {
         setStatus("idle");
       }
     }, delay);
-  }, [callback, delay]);
+  }, [delay]);
 
   useEffect(() => {
     return () => {
