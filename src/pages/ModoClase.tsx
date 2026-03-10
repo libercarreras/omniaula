@@ -440,7 +440,9 @@ export default function ModoClase() {
   };
 
   const openEditClase = () => {
-    setEditHorario(clase?.horario || "");
+    const parsed = parseHorarioToState(clase?.horario || null);
+    setEditDias(parsed.dias);
+    setEditHora(parsed.hora);
     setEditAula(clase?.aula || "");
     setEditClaseOpen(true);
   };
@@ -448,13 +450,14 @@ export default function ModoClase() {
   const saveClaseDetails = async () => {
     if (!claseId) return;
     setSavingClase(true);
+    const newHorario = buildHorarioString(editDias, editHora);
     const { error } = await supabase.from("clases").update({
-      horario: editHorario.trim() || null,
+      horario: newHorario,
       aula: editAula.trim() || null,
     }).eq("id", claseId);
     setSavingClase(false);
     if (error) { toast.error("Error al guardar"); return; }
-    setClase((prev: any) => ({ ...prev, horario: editHorario.trim() || null, aula: editAula.trim() || null }));
+    setClase((prev: any) => ({ ...prev, horario: newHorario, aula: editAula.trim() || null }));
     setEditClaseOpen(false);
     toast.success("Clase actualizada");
   };
