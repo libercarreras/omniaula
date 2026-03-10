@@ -699,6 +699,28 @@ export default function Evaluaciones() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* === DELETE CONFIRMATION === */}
+      <AlertDialog open={!!deletingEvalId} onOpenChange={(o) => { if (!o) setDeletingEvalId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar evaluación?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará la evaluación, sus preguntas y todas las notas asociadas. No se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleting}
+              onClick={() => deletingEvalId && handleDeleteEval(deletingEvalId)}
+            >
+              {deleting ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Eliminando...</> : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
