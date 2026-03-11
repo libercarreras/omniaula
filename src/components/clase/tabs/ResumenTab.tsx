@@ -24,7 +24,7 @@ const planEstadoLabel: Record<string, { label: string; color: string }> = {
 };
 
 export function ResumenTab({
-  temaPlanificado, planEstado, asistenciaStats, partStats,
+  temaPlanificado, planEstado, asistenciaStats, desempenoCount, desempenoTotal,
   evaluacionesCount, obsStats, diarioTema, onNavigate,
 }: ResumenTabProps) {
   return (
