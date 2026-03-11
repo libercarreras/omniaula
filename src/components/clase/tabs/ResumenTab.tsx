@@ -10,6 +10,7 @@ interface ResumenTabProps {
   asistenciaStats: { total: number; presentes: number; faltas: number; tardes: number };
   desempenoCount: number;
   desempenoTotal: number;
+  evaluacionesCount: number;
   obsStats: number;
   diarioTema: string;
   onNavigate: (modo: ModoActivo) => void;
