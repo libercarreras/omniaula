@@ -134,7 +134,7 @@ export default function ModoClase() {
       if (!claseData) { setLoading(false); return; }
       setClase(claseData);
 
-      const [matRes, grpRes, estRes, evRes, asistRes, diarioRes, planRes, partRes] = await Promise.all([
+      const [matRes, grpRes, estRes, evRes, asistRes, diarioRes, planRes, partRes, desRes] = await Promise.all([
         supabase.from("materias").select("*").eq("id", claseData.materia_id).maybeSingle(),
         supabase.from("grupos").select("*").eq("id", claseData.grupo_id).maybeSingle(),
         supabase.from("estudiantes").select("*").eq("grupo_id", claseData.grupo_id).order("nombre_completo"),
@@ -143,6 +143,8 @@ export default function ModoClase() {
         supabase.from("diario_clase").select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO).maybeSingle(),
         supabase.from("planificacion_clases").select("tema_titulo, estado").eq("clase_id", claseId).eq("fecha", selectedDateISO),
         supabase.from("participacion_clase" as any).select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO),
+        supabase.from("desempeno_diario" as any).select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO),
+      ]);
       ]);
       setMateria(matRes.data);
       setGrupo(grpRes.data);
