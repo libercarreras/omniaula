@@ -8,8 +8,8 @@ interface ResumenTabProps {
   temaPlanificado: string | null;
   planEstado: string | null;
   asistenciaStats: { total: number; presentes: number; faltas: number; tardes: number };
-  partStats: { alta: number; media: number; baja: number };
-  evaluacionesCount: number;
+  desempenoCount: number;
+  desempenoTotal: number;
   obsStats: number;
   diarioTema: string;
   onNavigate: (modo: ModoActivo) => void;
