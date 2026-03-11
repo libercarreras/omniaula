@@ -23,7 +23,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebounceCallback } from "@/hooks/useDebounce";
 import { tagObservaciones } from "@/components/clase/types";
-import type { ModoActivo, EstadoAsistencia, NivelParticipacion, TabBadges } from "@/components/clase/types";
+import type { ModoActivo, EstadoAsistencia, NivelParticipacion, NivelDesempeno, TabBadges } from "@/components/clase/types";
 
 const DIAS_SEMANA = [
   { key: "Lun", label: "Lun" }, { key: "Mar", label: "Mar" }, { key: "Mié", label: "Mié" },
