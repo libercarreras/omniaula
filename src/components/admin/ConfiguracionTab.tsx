@@ -17,7 +17,7 @@ export default function ConfiguracionTab() {
 
   const fetchCurrentIcon = async () => {
     setLoading(true);
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from("app_settings")
       .select("value")
       .eq("key", "pwa_icon_512")
