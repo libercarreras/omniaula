@@ -1,7 +1,7 @@
 import { NavLink as RouterNavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Users, UserCheck, ClipboardCheck, MoreHorizontal,
-  Eye, BookText, Calendar, FileBarChart, BarChart3, GraduationCap, BookOpen, Shield, Building2,
+  Eye, BookText, Calendar, FileBarChart, BarChart3, GraduationCap, BookOpen, Shield, Building2, Settings,
 } from "lucide-react";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
