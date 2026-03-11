@@ -501,6 +501,24 @@ export default function ModoClase() {
     if (!isInitialLoad.current) partDebounce.trigger();
   };
 
+  const cambiarDesempeno = (estId: string, categoria: DesempenoCategoria, nivel: NivelDesempeno) => {
+    setDesempeno(prev => {
+      const current = prev[estId] || { tarea: null, participacion_oral: null, rendimiento_aula: null, conducta: null };
+      return { ...prev, [estId]: { ...current, [categoria]: nivel } };
+    });
+    if (!isInitialLoad.current) desempenoDebounce.trigger();
+  };
+
+  const marcarTodosDesempenoA = () => {
+    const nuevo: Record<string, DesempenoRecord> = {};
+    estudiantesClase.forEach(e => {
+      nuevo[e.id] = { tarea: "A", participacion_oral: "A", rendimiento_aula: "A", conducta: "A" };
+    });
+    setDesempeno(nuevo);
+    if (!isInitialLoad.current) desempenoDebounce.trigger();
+    toast.success("✓ Todos marcados con A");
+  };
+
   const toggleObservacion = (estId: string, obsId: string) => {
     setObsState(prev => {
       const current = prev[estId] || [];
