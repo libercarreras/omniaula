@@ -145,7 +145,6 @@ export default function ModoClase() {
         supabase.from("participacion_clase" as any).select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO),
         supabase.from("desempeno_diario" as any).select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO),
       ]);
-      ]);
       setMateria(matRes.data);
       setGrupo(grpRes.data);
       const estudiantes = estRes.data || [];
