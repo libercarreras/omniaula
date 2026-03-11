@@ -30,22 +30,36 @@ const DIAS_SEMANA = [
   { key: "Jue", label: "Jue" }, { key: "Vie", label: "Vie" }, { key: "Sáb", label: "Sáb" },
 ];
 
+const HORA_OPTIONS = (() => {
+  const opts: string[] = [];
+  for (let h = 7; h <= 22; h++) {
+    opts.push(`${h}:00`);
+    if (h < 22) opts.push(`${h}:30`);
+  }
+  return opts;
+})();
+
 const parseHorarioToState = (horario: string | null) => {
-  if (!horario) return { dias: [] as string[], hora: "" };
+  if (!horario) return { dias: [] as string[], horaInicio: "", horaFin: "" };
   const diasFound: string[] = [];
   const lower = horario.toLowerCase();
   const map: Record<string, string> = { lun: "Lun", mar: "Mar", "mié": "Mié", mie: "Mié", jue: "Jue", vie: "Vie", "sáb": "Sáb", sab: "Sáb" };
   for (const [k, v] of Object.entries(map)) {
     if (lower.includes(k) && !diasFound.includes(v)) diasFound.push(v);
   }
-  const horaMatch = horario.match(/(\d{1,2}[:.]\d{2}(?:\s*[-–]\s*\d{1,2}[:.]\d{2})?)/);
-  return { dias: diasFound, hora: horaMatch ? horaMatch[1] : "" };
+  const rangeMatch = horario.match(/(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})/);
+  if (rangeMatch) {
+    return { dias: diasFound, horaInicio: rangeMatch[1], horaFin: rangeMatch[2] };
+  }
+  const singleMatch = horario.match(/(\d{1,2}:\d{2})/);
+  return { dias: diasFound, horaInicio: singleMatch ? singleMatch[1] : "", horaFin: "" };
 };
 
-const buildHorarioString = (dias: string[], hora: string) => {
+const buildHorarioString = (dias: string[], horaInicio: string, horaFin: string) => {
   if (dias.length === 0) return null;
   const ordered = DIAS_SEMANA.filter(d => dias.includes(d.key)).map(d => d.key);
-  return `${ordered.join("/")}${hora ? " " + hora : ""}`;
+  const horaPart = horaInicio && horaFin ? `${horaInicio}-${horaFin}` : horaInicio || "";
+  return `${ordered.join("/")}${horaPart ? " " + horaPart : ""}`;
 };
 
 export default function ModoClase() {
