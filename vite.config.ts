@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => ({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "pwa-icon-192.png", "pwa-icon-512.png"],
       manifest: {
-        name: "OmniAula — Aula inteligente",
+        id: "/",
         short_name: "OmniAula",
         description: "Aula inteligente para Profesores",
         theme_color: "#2B5EA7",
