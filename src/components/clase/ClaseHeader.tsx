@@ -35,6 +35,7 @@ interface ClaseHeaderProps {
 const modos: { id: ModoActivo; label: string; icon: any }[] = [
   { id: "resumen", label: "Resumen", icon: LayoutDashboard },
   { id: "asistencia", label: "Asist.", icon: UserCheck },
+  { id: "desempeno", label: "Desemp.", icon: TrendingUp },
   { id: "notas", label: "Notas", icon: ClipboardCheck },
   { id: "observaciones", label: "Obs.", icon: MessageSquare },
   { id: "diario", label: "Diario", icon: BookOpen },
