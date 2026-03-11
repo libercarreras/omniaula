@@ -63,6 +63,7 @@ const App = () => (
               <Route path="/clase/:claseId" element={<ModoClase />} />
               <Route path="/perfil" element={<Perfil />} />
               <Route path="/administracion" element={<Administracion />} />
+              <Route path="/configuracion" element={<Configuracion />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />
