@@ -7,12 +7,10 @@ import type { EstadoAsistencia, NivelParticipacion } from "../types";
 interface AsistenciaTabProps {
   estudiantes: any[];
   asistencia: Record<string, EstadoAsistencia>;
-  participacion: Record<string, NivelParticipacion | null>;
   stats: { total: number; presentes: number; faltas: number; tardes: number };
   isReadonly: boolean;
   onMarcarAsistencia: (estId: string, estado: EstadoAsistencia) => void;
   onMarcarTodosPresentes: () => void;
-  onMarcarParticipacion: (estId: string, nivel: NivelParticipacion) => void;
   onStudentDetail: (estId: string) => void;
 }
 
