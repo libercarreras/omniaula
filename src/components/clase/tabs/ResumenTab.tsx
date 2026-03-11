@@ -59,18 +59,14 @@ export function ResumenTab({
         </CardContent>
       </Card>
 
-      {(partStats.alta + partStats.media + partStats.baja > 0) && (
-        <Card>
-          <CardContent className="p-3">
-            <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><Star className="h-3 w-3" /> Participación</p>
-            <div className="flex items-center gap-4 mt-1.5">
-              <span className="text-lg font-bold text-success">{partStats.alta}<span className="text-xs font-normal text-muted-foreground ml-0.5">Alta</span></span>
-              <span className="text-lg font-bold text-warning">{partStats.media}<span className="text-xs font-normal text-muted-foreground ml-0.5">Media</span></span>
-              <span className="text-lg font-bold text-destructive">{partStats.baja}<span className="text-xs font-normal text-muted-foreground ml-0.5">Baja</span></span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardContent className="p-3">
+          <button className="w-full text-left" onClick={() => onNavigate("desempeno")}>
+            <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><TrendingUp className="h-3 w-3" /> Desempeño diario</p>
+            <p className="text-sm font-semibold mt-1">{desempenoCount} de {desempenoTotal} evaluados</p>
+          </button>
+        </CardContent>
+      </Card>
 
       {evaluacionesCount > 0 && (
         <Card>
