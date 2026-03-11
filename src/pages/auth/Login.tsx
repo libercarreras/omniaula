@@ -53,22 +53,25 @@ export default function Login() {
       {/* Intro video overlay */}
       {!introEnded && (
         <div
-          className={`fixed inset-0 z-50 bg-black flex items-center justify-center transition-opacity duration-[600ms] ${
+          className={`fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center transition-opacity duration-[600ms] ${
             videoFading ? "opacity-0" : "opacity-100"
           }`}
         >
-          <video
-            ref={videoRef}
-            src="/intro.mp4"
-            autoPlay
-            muted
-            playsInline
-            onEnded={handleVideoEnd}
-            className="w-full h-full object-cover"
-          />
+          <div className="relative w-[min(92vw,920px)] rounded-2xl overflow-hidden border border-border bg-card shadow-2xl">
+            <video
+              ref={videoRef}
+              src="/intro.mp4"
+              autoPlay
+              muted
+              playsInline
+              preload="auto"
+              onEnded={handleVideoEnd}
+              className="w-full h-auto max-h-[72vh] object-contain bg-muted"
+            />
+          </div>
           <button
             onClick={skipIntro}
-            className="absolute bottom-8 right-8 text-white/60 hover:text-white text-sm font-medium tracking-wide transition-colors duration-200 backdrop-blur-sm bg-white/10 rounded-full px-4 py-2"
+            className="absolute bottom-8 right-8 text-foreground/70 hover:text-foreground text-sm font-medium tracking-wide transition-colors duration-200 backdrop-blur-sm bg-card/70 border border-border rounded-full px-4 py-2"
           >
             Omitir
           </button>
