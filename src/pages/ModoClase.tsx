@@ -167,6 +167,18 @@ export default function ModoClase() {
       ((partRes.data as any[]) || []).forEach((p: any) => { partMap[p.estudiante_id] = p.nivel; });
       setParticipacion(partMap);
 
+      // Load desempeno
+      const desMap: Record<string, DesempenoRecord> = {};
+      ((desRes.data as any[]) || []).forEach((d: any) => {
+        desMap[d.estudiante_id] = {
+          tarea: d.tarea || null,
+          participacion_oral: d.participacion_oral || null,
+          rendimiento_aula: d.rendimiento_aula || null,
+          conducta: d.conducta || null,
+        };
+      });
+      setDesempeno(desMap);
+
       // ========== ASISTENCIA: Default all to "presente" if no records ==========
       const existingAsist = asistRes.data || [];
       if (existingAsist.length === 0 && !isReadonly) {
