@@ -121,6 +121,8 @@ export default function ModoClase() {
   diarioIdRef.current = diarioId;
   const participacionRef = useRef(participacion);
   participacionRef.current = participacion;
+  const desempenoRef = useRef(desempeno);
+  desempenoRef.current = desempeno;
 
   // ========== DATA FETCHING ==========
   useEffect(() => {
