@@ -57,6 +57,11 @@ export function ClaseHeader({
       if (tabBadges.asistencia.missing > 0) return <span className="text-[9px] font-bold text-warning">{tabBadges.asistencia.missing}</span>;
       return null;
     }
+    if (modo === "desempeno") {
+      if (tabBadges.desempeno.count > 0 && tabBadges.desempeno.count === tabBadges.desempeno.total) return <span className="h-1.5 w-1.5 rounded-full bg-success" />;
+      if (tabBadges.desempeno.count > 0) return <span className="text-[9px] font-bold text-primary">{tabBadges.desempeno.count}</span>;
+      return null;
+    }
     if (modo === "notas") {
       if (tabBadges.notas.sinNota > 0) return <span className="text-[9px] font-bold text-warning">{tabBadges.notas.sinNota}</span>;
       return null;
