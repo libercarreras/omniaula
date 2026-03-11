@@ -26,11 +26,6 @@ const asistButtons = [
   { v: "retiro" as const, icon: LogOut, active: "bg-muted-foreground text-background" },
 ];
 
-const partOptions = [
-  { v: "alta" as const, label: "A", color: "bg-success text-success-foreground" },
-  { v: "media" as const, label: "M", color: "bg-warning text-warning-foreground" },
-  { v: "baja" as const, label: "B", color: "bg-destructive text-destructive-foreground" },
-];
 
 export function AsistenciaTab({
   estudiantes, asistencia, participacion, stats, isReadonly,
