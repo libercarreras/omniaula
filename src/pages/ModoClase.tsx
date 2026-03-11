@@ -644,12 +644,21 @@ export default function ModoClase() {
         <AsistenciaTab
           estudiantes={estudiantesClase}
           asistencia={asistencia}
-          participacion={participacion}
           stats={asistenciaStats}
           isReadonly={isReadonly}
           onMarcarAsistencia={marcarAsistencia}
           onMarcarTodosPresentes={marcarTodosPresentes}
-          onMarcarParticipacion={marcarParticipacion}
+          onStudentDetail={setStudentDetailId}
+        />
+      )}
+
+      {modoActivo === "desempeno" && (
+        <DesempenoTab
+          estudiantes={estudiantesClase}
+          desempeno={desempeno}
+          isReadonly={isReadonly}
+          onCambiarDesempeno={cambiarDesempeno}
+          onMarcarTodosA={marcarTodosDesempenoA}
           onStudentDetail={setStudentDetailId}
         />
       )}
