@@ -187,91 +187,108 @@ export default function Administracion() {
             <Shield className="h-6 w-6 text-primary" />
             Administración
           </h1>
-          <p className="text-sm text-muted-foreground">Gestión de cuentas de docentes</p>
+          <p className="text-sm text-muted-foreground">Gestión de cuentas y configuración</p>
         </div>
-        <Button onClick={() => setCreateOpen(true)} className="gap-2">
-          <UserPlus className="h-4 w-4" />
-          Nuevo docente
-        </Button>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar docente..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
-      </div>
+      <Tabs defaultValue="usuarios">
+        <TabsList>
+          <TabsTrigger value="usuarios" className="gap-1.5">
+            <Users className="h-4 w-4" /> Usuarios
+          </TabsTrigger>
+          <TabsTrigger value="configuracion" className="gap-1.5">
+            <Settings className="h-4 w-4" /> Configuración
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Docentes list */}
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : filteredDocentes.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Users className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-            <p className="text-muted-foreground">No se encontraron docentes</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-2">
-          {filteredDocentes.map((docente) => (
-            <Card key={docente.id}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-sm">{docente.nombre || "Sin nombre"}</p>
-                      {docente.roles.includes("admin") && (
-                        <Badge className="text-[10px] px-1.5 bg-primary/10 text-primary border-primary/30">Admin</Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground">{docente.email}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                      Último acceso: {docente.last_sign_in_at
-                        ? new Date(docente.last_sign_in_at).toLocaleDateString("es-AR")
-                        : "Nunca"}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      variant="ghost" size="icon" className="h-8 w-8"
-                      onClick={() => {
-                        setEditForm({ userId: docente.id, nombre: docente.nombre, email: docente.email });
-                        setEditOpen(true);
-                      }}
-                    >
-                      <Edit className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost" size="icon" className="h-8 w-8"
-                      onClick={() => {
-                        setResetForm({ userId: docente.id, nombre: docente.nombre, newPassword: "" });
-                        setResetOpen(true);
-                      }}
-                    >
-                      <KeyRound className="h-3.5 w-3.5" />
-                    </Button>
-                    {!docente.roles.includes("admin") && (
-                      <Button
-                        variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => { setDeleteTarget(docente); setDeleteOpen(true); }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
+        <TabsContent value="usuarios" className="space-y-4 mt-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar docente..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Button onClick={() => setCreateOpen(true)} className="gap-2">
+              <UserPlus className="h-4 w-4" />
+              Nuevo docente
+            </Button>
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : filteredDocentes.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Users className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+                <p className="text-muted-foreground">No se encontraron docentes</p>
               </CardContent>
             </Card>
-          ))}
-        </div>
-      )}
+          ) : (
+            <div className="space-y-2">
+              {filteredDocentes.map((docente) => (
+                <Card key={docente.id}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-medium text-sm">{docente.nombre || "Sin nombre"}</p>
+                          {docente.roles.includes("admin") && (
+                            <Badge className="text-[10px] px-1.5 bg-primary/10 text-primary border-primary/30">Admin</Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{docente.email}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          Último acceso: {docente.last_sign_in_at
+                            ? new Date(docente.last_sign_in_at).toLocaleDateString("es-AR")
+                            : "Nunca"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="ghost" size="icon" className="h-8 w-8"
+                          onClick={() => {
+                            setEditForm({ userId: docente.id, nombre: docente.nombre, email: docente.email });
+                            setEditOpen(true);
+                          }}
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon" className="h-8 w-8"
+                          onClick={() => {
+                            setResetForm({ userId: docente.id, nombre: docente.nombre, newPassword: "" });
+                            setResetOpen(true);
+                          }}
+                        >
+                          <KeyRound className="h-3.5 w-3.5" />
+                        </Button>
+                        {!docente.roles.includes("admin") && (
+                          <Button
+                            variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => { setDeleteTarget(docente); setDeleteOpen(true); }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="configuracion" className="mt-4">
+          <ConfiguracionTab />
+        </TabsContent>
+      </Tabs>
 
       {/* Create Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
