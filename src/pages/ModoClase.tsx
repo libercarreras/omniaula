@@ -632,7 +632,8 @@ export default function ModoClase() {
           temaPlanificado={temaPlanificado}
           planEstado={planEstado}
           asistenciaStats={asistenciaStats}
-          partStats={partStats}
+          desempenoCount={tabBadges.desempeno.count}
+          desempenoTotal={tabBadges.desempeno.total}
           evaluacionesCount={evaluacionesClase.length}
           obsStats={obsStats}
           diarioTema={diarioTema}
