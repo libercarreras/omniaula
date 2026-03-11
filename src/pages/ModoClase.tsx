@@ -464,19 +464,23 @@ export default function ModoClase() {
     return { alta: vals.filter(v => v === "alta").length, media: vals.filter(v => v === "media").length, baja: vals.filter(v => v === "baja").length };
   }, [participacion]);
 
-  const tabBadges = useMemo<TabBadges>(() => ({
-    asistencia: {
-      complete: estudiantesClase.length > 0 && Object.values(asistencia).filter(Boolean).length === estudiantesClase.length,
-      missing: estudiantesClase.length - Object.values(asistencia).filter(Boolean).length,
-    },
-    notas: {
-      sinNota: evaluacionActiva
-        ? estudiantesClase.filter(e => !notasState[`${evaluacionActiva}-${e.id}`]?.trim()).length
-        : 0,
-    },
-    observaciones: { count: obsStats },
-    diario: { complete: !!diarioTema.trim() },
-  }), [estudiantesClase, asistencia, notasState, evaluacionActiva, obsStats, diarioTema]);
+  const tabBadges = useMemo<TabBadges>(() => {
+    const desCount = Object.values(desempeno).filter(d => d.tarea || d.participacion_oral || d.rendimiento_aula || d.conducta).length;
+    return {
+      asistencia: {
+        complete: estudiantesClase.length > 0 && Object.values(asistencia).filter(Boolean).length === estudiantesClase.length,
+        missing: estudiantesClase.length - Object.values(asistencia).filter(Boolean).length,
+      },
+      notas: {
+        sinNota: evaluacionActiva
+          ? estudiantesClase.filter(e => !notasState[`${evaluacionActiva}-${e.id}`]?.trim()).length
+          : 0,
+      },
+      observaciones: { count: obsStats },
+      diario: { complete: !!diarioTema.trim() },
+      desempeno: { count: desCount, total: estudiantesClase.length },
+    };
+  }, [estudiantesClase, asistencia, notasState, evaluacionActiva, obsStats, diarioTema, desempeno]);
 
   // ========== EVENT HANDLERS ==========
   const marcarAsistencia = (estId: string, estado: EstadoAsistencia) => {
