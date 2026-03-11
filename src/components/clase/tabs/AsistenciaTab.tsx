@@ -80,22 +80,6 @@ export function AsistenciaTab({
                       <btn.icon className="h-5 w-5" />
                     </button>
                   ))}
-                  <div className="ml-1 border-l pl-1 flex items-center gap-0.5">
-                    {partOptions.map(opt => (
-                      <button
-                        key={opt.v}
-                        disabled={isReadonly}
-                        className={cn(
-                          "h-9 w-9 rounded-lg flex items-center justify-center text-xs font-bold transition-all active:scale-95",
-                          participacion[est.id] === opt.v ? opt.color : "bg-muted/30 text-muted-foreground/50 hover:bg-muted/60",
-                          isReadonly && "opacity-50 pointer-events-none"
-                        )}
-                        onClick={() => onMarcarParticipacion(est.id, opt.v)}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
                 </div>
               </div>
             </div>
