@@ -4,7 +4,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   ArrowLeft, Settings2, FileText, Loader2, CheckCircle2,
-  UserCheck, ClipboardCheck, MessageSquare, BookOpen, LayoutDashboard,
+  UserCheck, ClipboardCheck, MessageSquare, BookOpen, LayoutDashboard, TrendingUp,
   CalendarIcon, Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
