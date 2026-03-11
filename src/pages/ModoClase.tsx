@@ -798,8 +798,30 @@ export default function ModoClase() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-hora">Horario (opcional)</Label>
-              <Input id="edit-hora" placeholder="Ej: 8:00-9:30" value={editHora} onChange={e => setEditHora(e.target.value)} />
+              <Label>Horario (opcional)</Label>
+              <div className="flex items-center gap-2">
+                <Select value={editHoraInicio} onValueChange={setEditHoraInicio}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Inicio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {HORA_OPTIONS.map(h => (
+                      <SelectItem key={h} value={h}>{h}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="text-muted-foreground">—</span>
+                <Select value={editHoraFin} onValueChange={setEditHoraFin}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Fin" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {HORA_OPTIONS.map(h => (
+                      <SelectItem key={h} value={h}>{h}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-aula">Aula</Label>
