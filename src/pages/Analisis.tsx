@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, BarChart3, Loader2 } from "lucide-react";
+import { AlertTriangle, BarChart3, Loader2, Users, TrendingUp, PieChart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
 import { AIGroupAnalysis } from "@/components/analisis/AIGroupAnalysis";
+import { RendimientoCharts } from "@/components/analisis/RendimientoCharts";
+import { RiesgoList } from "@/components/analisis/RiesgoList";
 
 export default function Analisis() {
   const { user } = useAuth();
@@ -49,6 +51,8 @@ export default function Analisis() {
     return `${materias[c.materia_id] || "?"} - ${grupos[c.grupo_id] || "?"}`;
   };
 
+  const claseActual = clases.find(c => c.id === claseSeleccionada);
+
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   if (clases.length === 0) {
@@ -77,7 +81,7 @@ export default function Analisis() {
         </Select>
       </div>
 
-      <AIGroupAnalysis claseLabel={getClaseLabel(claseSeleccionada)} />
+      <AIGroupAnalysis claseId={claseSeleccionada} claseLabel={getClaseLabel(claseSeleccionada)} grupoId={claseActual?.grupo_id} />
 
       <Tabs defaultValue="rendimiento" className="w-full">
         <TabsList className="w-full grid grid-cols-2">
@@ -86,21 +90,11 @@ export default function Analisis() {
         </TabsList>
 
         <TabsContent value="rendimiento" className="space-y-6 mt-4">
-          <Card className="border-dashed">
-            <CardContent className="p-8 text-center">
-              <BarChart3 className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
-              <p className="text-muted-foreground text-sm">Los gráficos se mostrarán cuando tengas evaluaciones y asistencia registradas.</p>
-            </CardContent>
-          </Card>
+          <RendimientoCharts claseId={claseSeleccionada} grupoId={claseActual?.grupo_id || ""} />
         </TabsContent>
 
         <TabsContent value="riesgo" className="space-y-4 mt-4">
-          <Card className="border-dashed">
-            <CardContent className="p-8 text-center">
-              <AlertTriangle className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
-              <p className="text-muted-foreground text-sm">El análisis de riesgo se mostrará cuando haya datos suficientes de asistencia y evaluaciones.</p>
-            </CardContent>
-          </Card>
+          <RiesgoList claseId={claseSeleccionada} grupoId={claseActual?.grupo_id || ""} />
         </TabsContent>
       </Tabs>
     </div>
