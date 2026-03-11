@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Check, X, Clock, LogOut, CheckCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { EstadoAsistencia, NivelParticipacion } from "../types";
+import type { EstadoAsistencia } from "../types";
 
 interface AsistenciaTabProps {
   estudiantes: any[];
