@@ -28,8 +28,8 @@ const asistButtons = [
 
 
 export function AsistenciaTab({
-  estudiantes, asistencia, participacion, stats, isReadonly,
-  onMarcarAsistencia, onMarcarTodosPresentes, onMarcarParticipacion, onStudentDetail,
+  estudiantes, asistencia, stats, isReadonly,
+  onMarcarAsistencia, onMarcarTodosPresentes, onStudentDetail,
 }: AsistenciaTabProps) {
   return (
     <>
