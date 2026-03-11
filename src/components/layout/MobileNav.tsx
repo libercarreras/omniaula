@@ -37,8 +37,9 @@ export function MobileNav() {
     return location.pathname.startsWith(url);
   };
 
-  const adminItem = { title: "Admin", url: "/administracion", icon: Shield };
-  const allMoreItems = role === "admin" ? [...moreItems, adminItem] : moreItems;
+  const adminItem = { title: "Administración", url: "/administracion", icon: Shield };
+  const configItem = { title: "Configuración", url: "/configuracion", icon: Settings };
+  const allMoreItems = role === "admin" ? [...moreItems, adminItem, configItem] : moreItems;
   const isMoreActive = allMoreItems.some((item) => isActive(item.url));
 
   return (
