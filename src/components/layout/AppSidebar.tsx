@@ -102,6 +102,18 @@ export function AppSidebar() {
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink
+                      to="/configuracion"
+                      className="hover:bg-muted/50"
+                      activeClassName="bg-primary/10 text-primary font-medium"
+                    >
+                      <Settings className="mr-2 h-4 w-4" />
+                      {!collapsed && <span>Configuración</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
