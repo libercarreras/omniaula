@@ -600,7 +600,7 @@ export default function ModoClase() {
   const saveClaseDetails = async () => {
     if (!claseId) return;
     setSavingClase(true);
-    const newHorario = buildHorarioString(editDias, editHora);
+    const newHorario = buildHorarioString(editDias, editHoraInicio, editHoraFin);
     const { error } = await supabase.from("clases").update({ horario: newHorario, aula: editAula.trim() || null }).eq("id", claseId);
     setSavingClase(false);
     if (error) { toast.error("Error al guardar"); return; }
