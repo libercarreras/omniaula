@@ -2,6 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
@@ -30,22 +31,36 @@ const DIAS_SEMANA = [
   { key: "Jue", label: "Jue" }, { key: "Vie", label: "Vie" }, { key: "Sáb", label: "Sáb" },
 ];
 
+const HORA_OPTIONS = (() => {
+  const opts: string[] = [];
+  for (let h = 7; h <= 22; h++) {
+    opts.push(`${h}:00`);
+    if (h < 22) opts.push(`${h}:30`);
+  }
+  return opts;
+})();
+
 const parseHorarioToState = (horario: string | null) => {
-  if (!horario) return { dias: [] as string[], hora: "" };
+  if (!horario) return { dias: [] as string[], horaInicio: "", horaFin: "" };
   const diasFound: string[] = [];
   const lower = horario.toLowerCase();
   const map: Record<string, string> = { lun: "Lun", mar: "Mar", "mié": "Mié", mie: "Mié", jue: "Jue", vie: "Vie", "sáb": "Sáb", sab: "Sáb" };
   for (const [k, v] of Object.entries(map)) {
     if (lower.includes(k) && !diasFound.includes(v)) diasFound.push(v);
   }
-  const horaMatch = horario.match(/(\d{1,2}[:.]\d{2}(?:\s*[-–]\s*\d{1,2}[:.]\d{2})?)/);
-  return { dias: diasFound, hora: horaMatch ? horaMatch[1] : "" };
+  const rangeMatch = horario.match(/(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})/);
+  if (rangeMatch) {
+    return { dias: diasFound, horaInicio: rangeMatch[1], horaFin: rangeMatch[2] };
+  }
+  const singleMatch = horario.match(/(\d{1,2}:\d{2})/);
+  return { dias: diasFound, horaInicio: singleMatch ? singleMatch[1] : "", horaFin: "" };
 };
 
-const buildHorarioString = (dias: string[], hora: string) => {
+const buildHorarioString = (dias: string[], horaInicio: string, horaFin: string) => {
   if (dias.length === 0) return null;
   const ordered = DIAS_SEMANA.filter(d => dias.includes(d.key)).map(d => d.key);
-  return `${ordered.join("/")}${hora ? " " + hora : ""}`;
+  const horaPart = horaInicio && horaFin ? `${horaInicio}-${horaFin}` : horaInicio || "";
+  return `${ordered.join("/")}${horaPart ? " " + horaPart : ""}`;
 };
 
 export default function ModoClase() {
@@ -98,7 +113,8 @@ export default function ModoClase() {
   const [savingEstructura, setSavingEstructura] = useState(false);
   const [editClaseOpen, setEditClaseOpen] = useState(false);
   const [editDias, setEditDias] = useState<string[]>([]);
-  const [editHora, setEditHora] = useState("");
+  const [editHoraInicio, setEditHoraInicio] = useState("");
+  const [editHoraFin, setEditHoraFin] = useState("");
   const [editAula, setEditAula] = useState("");
   const [savingClase, setSavingClase] = useState(false);
 
@@ -576,7 +592,8 @@ export default function ModoClase() {
   const openEditClase = () => {
     const parsed = parseHorarioToState(clase?.horario || null);
     setEditDias(parsed.dias);
-    setEditHora(parsed.hora);
+    setEditHoraInicio(parsed.horaInicio);
+    setEditHoraFin(parsed.horaFin);
     setEditAula(clase?.aula || "");
     setEditClaseOpen(true);
   };
@@ -584,7 +601,7 @@ export default function ModoClase() {
   const saveClaseDetails = async () => {
     if (!claseId) return;
     setSavingClase(true);
-    const newHorario = buildHorarioString(editDias, editHora);
+    const newHorario = buildHorarioString(editDias, editHoraInicio, editHoraFin);
     const { error } = await supabase.from("clases").update({ horario: newHorario, aula: editAula.trim() || null }).eq("id", claseId);
     setSavingClase(false);
     if (error) { toast.error("Error al guardar"); return; }
@@ -782,8 +799,30 @@ export default function ModoClase() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-hora">Horario (opcional)</Label>
-              <Input id="edit-hora" placeholder="Ej: 8:00-9:30" value={editHora} onChange={e => setEditHora(e.target.value)} />
+              <Label>Horario (opcional)</Label>
+              <div className="flex items-center gap-2">
+                <Select value={editHoraInicio} onValueChange={setEditHoraInicio}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Inicio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {HORA_OPTIONS.map(h => (
+                      <SelectItem key={h} value={h}>{h}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="text-muted-foreground">—</span>
+                <Select value={editHoraFin} onValueChange={setEditHoraFin}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Fin" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {HORA_OPTIONS.map(h => (
+                      <SelectItem key={h} value={h}>{h}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-aula">Aula</Label>
