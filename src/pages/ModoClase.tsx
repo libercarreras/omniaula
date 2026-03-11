@@ -388,6 +388,33 @@ export default function ModoClase() {
     }
   }, [claseId, user, selectedDateISO]);
 
+  const saveDesempenoFn = useCallback(async () => {
+    if (!user || !claseId) return;
+    const currentDes = desempenoRef.current;
+    for (const [estudiante_id, record] of Object.entries(currentDes)) {
+      const hasValues = record.tarea || record.participacion_oral || record.rendimiento_aula || record.conducta;
+      if (hasValues) {
+        const { data: existing } = await (supabase.from("desempeno_diario" as any) as any)
+          .select("id").eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO).maybeSingle();
+        if (existing) {
+          await (supabase.from("desempeno_diario" as any) as any).update({
+            tarea: record.tarea, participacion_oral: record.participacion_oral,
+            rendimiento_aula: record.rendimiento_aula, conducta: record.conducta,
+          }).eq("id", existing.id);
+        } else {
+          await (supabase.from("desempeno_diario" as any) as any).insert({
+            clase_id: claseId, estudiante_id, fecha: selectedDateISO, user_id: user.id,
+            tarea: record.tarea, participacion_oral: record.participacion_oral,
+            rendimiento_aula: record.rendimiento_aula, conducta: record.conducta,
+          });
+        }
+      } else {
+        await (supabase.from("desempeno_diario" as any) as any).delete()
+          .eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO);
+      }
+    }
+  }, [claseId, user, selectedDateISO]);
+
   const saveProgramaFn = useCallback(async () => {
     if (!user || !claseId) return;
     if (programaId) {
@@ -412,12 +439,14 @@ export default function ModoClase() {
   const obsDebounce = useDebounceCallback(saveObservacionesFn, 2000);
   const diarioDebounce = useDebounceCallback(saveDiarioFn, 3000);
   const partDebounce = useDebounceCallback(saveParticipacionFn, 2000);
+  const desempenoDebounce = useDebounceCallback(saveDesempenoFn, 2000);
   const programaDebounce = useDebounceCallback(saveProgramaFn, 3000);
 
   const currentStatus = modoActivo === "asistencia" ? asistDebounce.status
     : modoActivo === "notas" ? notasDebounce.status
     : modoActivo === "observaciones" ? obsDebounce.status
-    : modoActivo === "diario" ? diarioDebounce.status : "idle";
+    : modoActivo === "diario" ? diarioDebounce.status
+    : modoActivo === "desempeno" ? desempenoDebounce.status : "idle";
 
   // ========== COMPUTED STATS ==========
   const asistenciaStats = useMemo(() => {
