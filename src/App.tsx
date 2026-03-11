@@ -22,6 +22,7 @@ import Materias from "./pages/Materias";
 import ModoClase from "./pages/ModoClase";
 import Perfil from "./pages/Perfil";
 import Administracion from "./pages/Administracion";
+import Configuracion from "./pages/Configuracion";
 import Instituciones from "./pages/Instituciones";
 import Login from "./pages/auth/Login";
 import RecoverPassword from "./pages/auth/RecoverPassword";
@@ -62,6 +63,7 @@ const App = () => (
               <Route path="/clase/:claseId" element={<ModoClase />} />
               <Route path="/perfil" element={<Perfil />} />
               <Route path="/administracion" element={<Administracion />} />
+              <Route path="/configuracion" element={<Configuracion />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, UserCheck, ClipboardCheck, GraduationCap,
-  Eye, BookText, Calendar, FileBarChart, BarChart3, BookOpen, Shield, Building2, ChevronDown,
+  Eye, BookText, Calendar, FileBarChart, BarChart3, BookOpen, Shield, Building2, ChevronDown, Settings,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -99,6 +99,18 @@ export function AppSidebar() {
                     >
                       <Shield className="mr-2 h-4 w-4" />
                       {!collapsed && <span>Administración</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink
+                      to="/configuracion"
+                      className="hover:bg-muted/50"
+                      activeClassName="bg-primary/10 text-primary font-medium"
+                    >
+                      <Settings className="mr-2 h-4 w-4" />
+                      {!collapsed && <span>Configuración</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
