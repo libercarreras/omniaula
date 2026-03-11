@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, UserCheck, ClipboardCheck, GraduationCap,
-  Eye, BookText, Calendar, FileBarChart, BarChart3, BookOpen, Shield, Building2, ChevronDown,
+  Eye, BookText, Calendar, FileBarChart, BarChart3, BookOpen, Shield, Building2, ChevronDown, Settings,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
