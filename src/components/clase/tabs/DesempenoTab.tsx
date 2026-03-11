@@ -56,16 +56,6 @@ export function DesempenoTab({
   return (
     <TooltipProvider delayDuration={300}>
       <div className="py-2 space-y-3">
-        <div className="flex items-center justify-between">
-          <Button
-            size="sm"
-            className="gap-1.5 bg-success hover:bg-success/90 text-success-foreground h-10 text-sm font-semibold"
-            onClick={onMarcarTodosA}
-            disabled={isReadonly}
-          >
-            <CheckCheck className="h-4 w-4" />Todos A
-          </Button>
-        </div>
 
         {/* Header row */}
         <div className="grid grid-cols-[1fr_repeat(4,3rem)] gap-1 items-center px-1">
