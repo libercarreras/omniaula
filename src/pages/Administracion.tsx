@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -16,8 +17,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import {
-  UserPlus, Trash2, KeyRound, Edit, Loader2, Shield, Users, Search,
+  UserPlus, Trash2, KeyRound, Edit, Loader2, Shield, Users, Search, Settings,
 } from "lucide-react";
+import ConfiguracionTab from "@/components/admin/ConfiguracionTab";
 
 interface Docente {
   id: string;
