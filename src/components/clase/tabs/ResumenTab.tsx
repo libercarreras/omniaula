@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { UserCheck, ClipboardCheck, MessageSquare, BookOpen, CalendarCheck, Star } from "lucide-react";
+import { UserCheck, ClipboardCheck, MessageSquare, BookOpen, CalendarCheck, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ModoActivo } from "../types";
 
