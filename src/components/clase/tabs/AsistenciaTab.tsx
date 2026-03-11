@@ -2,17 +2,15 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Check, X, Clock, LogOut, CheckCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { EstadoAsistencia, NivelParticipacion } from "../types";
+import type { EstadoAsistencia } from "../types";
 
 interface AsistenciaTabProps {
   estudiantes: any[];
   asistencia: Record<string, EstadoAsistencia>;
-  participacion: Record<string, NivelParticipacion | null>;
   stats: { total: number; presentes: number; faltas: number; tardes: number };
   isReadonly: boolean;
   onMarcarAsistencia: (estId: string, estado: EstadoAsistencia) => void;
   onMarcarTodosPresentes: () => void;
-  onMarcarParticipacion: (estId: string, nivel: NivelParticipacion) => void;
   onStudentDetail: (estId: string) => void;
 }
 
@@ -28,15 +26,10 @@ const asistButtons = [
   { v: "retiro" as const, icon: LogOut, active: "bg-muted-foreground text-background" },
 ];
 
-const partOptions = [
-  { v: "alta" as const, label: "A", color: "bg-success text-success-foreground" },
-  { v: "media" as const, label: "M", color: "bg-warning text-warning-foreground" },
-  { v: "baja" as const, label: "B", color: "bg-destructive text-destructive-foreground" },
-];
 
 export function AsistenciaTab({
-  estudiantes, asistencia, participacion, stats, isReadonly,
-  onMarcarAsistencia, onMarcarTodosPresentes, onMarcarParticipacion, onStudentDetail,
+  estudiantes, asistencia, stats, isReadonly,
+  onMarcarAsistencia, onMarcarTodosPresentes, onStudentDetail,
 }: AsistenciaTabProps) {
   return (
     <>
@@ -87,22 +80,6 @@ export function AsistenciaTab({
                       <btn.icon className="h-5 w-5" />
                     </button>
                   ))}
-                  <div className="ml-1 border-l pl-1 flex items-center gap-0.5">
-                    {partOptions.map(opt => (
-                      <button
-                        key={opt.v}
-                        disabled={isReadonly}
-                        className={cn(
-                          "h-9 w-9 rounded-lg flex items-center justify-center text-xs font-bold transition-all active:scale-95",
-                          participacion[est.id] === opt.v ? opt.color : "bg-muted/30 text-muted-foreground/50 hover:bg-muted/60",
-                          isReadonly && "opacity-50 pointer-events-none"
-                        )}
-                        onClick={() => onMarcarParticipacion(est.id, opt.v)}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
                 </div>
               </div>
             </div>

@@ -17,11 +17,13 @@ import { AsistenciaTab } from "@/components/clase/tabs/AsistenciaTab";
 import { NotasTab } from "@/components/clase/tabs/NotasTab";
 import { ObservacionesTab } from "@/components/clase/tabs/ObservacionesTab";
 import { DiarioTab } from "@/components/clase/tabs/DiarioTab";
+import { DesempenoTab } from "@/components/clase/tabs/DesempenoTab";
+import type { DesempenoCategoria, DesempenoRecord } from "@/components/clase/tabs/DesempenoTab";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebounceCallback } from "@/hooks/useDebounce";
 import { tagObservaciones } from "@/components/clase/types";
-import type { ModoActivo, EstadoAsistencia, NivelParticipacion, TabBadges } from "@/components/clase/types";
+import type { ModoActivo, EstadoAsistencia, NivelParticipacion, NivelDesempeno, TabBadges } from "@/components/clase/types";
 
 const DIAS_SEMANA = [
   { key: "Lun", label: "Lun" }, { key: "Mar", label: "Mar" }, { key: "Mié", label: "Mié" },
@@ -68,6 +70,7 @@ export default function ModoClase() {
   const [modoActivo, setModoActivo] = useState<ModoActivo>("resumen");
   const [asistencia, setAsistencia] = useState<Record<string, EstadoAsistencia>>({});
   const [participacion, setParticipacion] = useState<Record<string, NivelParticipacion | null>>({});
+  const [desempeno, setDesempeno] = useState<Record<string, DesempenoRecord>>({});
   const [notasState, setNotasState] = useState<Record<string, string>>({});
   const [obsState, setObsState] = useState<Record<string, string[]>>({});
   const [evaluacionActiva, setEvaluacionActiva] = useState<string | null>(null);
@@ -118,6 +121,8 @@ export default function ModoClase() {
   diarioIdRef.current = diarioId;
   const participacionRef = useRef(participacion);
   participacionRef.current = participacion;
+  const desempenoRef = useRef(desempeno);
+  desempenoRef.current = desempeno;
 
   // ========== DATA FETCHING ==========
   useEffect(() => {
@@ -129,7 +134,7 @@ export default function ModoClase() {
       if (!claseData) { setLoading(false); return; }
       setClase(claseData);
 
-      const [matRes, grpRes, estRes, evRes, asistRes, diarioRes, planRes, partRes] = await Promise.all([
+      const [matRes, grpRes, estRes, evRes, asistRes, diarioRes, planRes, partRes, desRes] = await Promise.all([
         supabase.from("materias").select("*").eq("id", claseData.materia_id).maybeSingle(),
         supabase.from("grupos").select("*").eq("id", claseData.grupo_id).maybeSingle(),
         supabase.from("estudiantes").select("*").eq("grupo_id", claseData.grupo_id).order("nombre_completo"),
@@ -138,6 +143,7 @@ export default function ModoClase() {
         supabase.from("diario_clase").select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO).maybeSingle(),
         supabase.from("planificacion_clases").select("tema_titulo, estado").eq("clase_id", claseId).eq("fecha", selectedDateISO),
         supabase.from("participacion_clase" as any).select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO),
+        supabase.from("desempeno_diario" as any).select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO),
       ]);
       setMateria(matRes.data);
       setGrupo(grpRes.data);
@@ -159,6 +165,18 @@ export default function ModoClase() {
       const partMap: Record<string, NivelParticipacion | null> = {};
       ((partRes.data as any[]) || []).forEach((p: any) => { partMap[p.estudiante_id] = p.nivel; });
       setParticipacion(partMap);
+
+      // Load desempeno
+      const desMap: Record<string, DesempenoRecord> = {};
+      ((desRes.data as any[]) || []).forEach((d: any) => {
+        desMap[d.estudiante_id] = {
+          tarea: d.tarea || null,
+          participacion_oral: d.participacion_oral || null,
+          rendimiento_aula: d.rendimiento_aula || null,
+          conducta: d.conducta || null,
+        };
+      });
+      setDesempeno(desMap);
 
       // ========== ASISTENCIA: Default all to "presente" if no records ==========
       const existingAsist = asistRes.data || [];
@@ -370,6 +388,33 @@ export default function ModoClase() {
     }
   }, [claseId, user, selectedDateISO]);
 
+  const saveDesempenoFn = useCallback(async () => {
+    if (!user || !claseId) return;
+    const currentDes = desempenoRef.current;
+    for (const [estudiante_id, record] of Object.entries(currentDes)) {
+      const hasValues = record.tarea || record.participacion_oral || record.rendimiento_aula || record.conducta;
+      if (hasValues) {
+        const { data: existing } = await (supabase.from("desempeno_diario" as any) as any)
+          .select("id").eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO).maybeSingle();
+        if (existing) {
+          await (supabase.from("desempeno_diario" as any) as any).update({
+            tarea: record.tarea, participacion_oral: record.participacion_oral,
+            rendimiento_aula: record.rendimiento_aula, conducta: record.conducta,
+          }).eq("id", existing.id);
+        } else {
+          await (supabase.from("desempeno_diario" as any) as any).insert({
+            clase_id: claseId, estudiante_id, fecha: selectedDateISO, user_id: user.id,
+            tarea: record.tarea, participacion_oral: record.participacion_oral,
+            rendimiento_aula: record.rendimiento_aula, conducta: record.conducta,
+          });
+        }
+      } else {
+        await (supabase.from("desempeno_diario" as any) as any).delete()
+          .eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO);
+      }
+    }
+  }, [claseId, user, selectedDateISO]);
+
   const saveProgramaFn = useCallback(async () => {
     if (!user || !claseId) return;
     if (programaId) {
@@ -394,12 +439,14 @@ export default function ModoClase() {
   const obsDebounce = useDebounceCallback(saveObservacionesFn, 2000);
   const diarioDebounce = useDebounceCallback(saveDiarioFn, 3000);
   const partDebounce = useDebounceCallback(saveParticipacionFn, 2000);
+  const desempenoDebounce = useDebounceCallback(saveDesempenoFn, 2000);
   const programaDebounce = useDebounceCallback(saveProgramaFn, 3000);
 
   const currentStatus = modoActivo === "asistencia" ? asistDebounce.status
     : modoActivo === "notas" ? notasDebounce.status
     : modoActivo === "observaciones" ? obsDebounce.status
-    : modoActivo === "diario" ? diarioDebounce.status : "idle";
+    : modoActivo === "diario" ? diarioDebounce.status
+    : modoActivo === "desempeno" ? desempenoDebounce.status : "idle";
 
   // ========== COMPUTED STATS ==========
   const asistenciaStats = useMemo(() => {
@@ -417,19 +464,23 @@ export default function ModoClase() {
     return { alta: vals.filter(v => v === "alta").length, media: vals.filter(v => v === "media").length, baja: vals.filter(v => v === "baja").length };
   }, [participacion]);
 
-  const tabBadges = useMemo<TabBadges>(() => ({
-    asistencia: {
-      complete: estudiantesClase.length > 0 && Object.values(asistencia).filter(Boolean).length === estudiantesClase.length,
-      missing: estudiantesClase.length - Object.values(asistencia).filter(Boolean).length,
-    },
-    notas: {
-      sinNota: evaluacionActiva
-        ? estudiantesClase.filter(e => !notasState[`${evaluacionActiva}-${e.id}`]?.trim()).length
-        : 0,
-    },
-    observaciones: { count: obsStats },
-    diario: { complete: !!diarioTema.trim() },
-  }), [estudiantesClase, asistencia, notasState, evaluacionActiva, obsStats, diarioTema]);
+  const tabBadges = useMemo<TabBadges>(() => {
+    const desCount = Object.values(desempeno).filter(d => d.tarea || d.participacion_oral || d.rendimiento_aula || d.conducta).length;
+    return {
+      asistencia: {
+        complete: estudiantesClase.length > 0 && Object.values(asistencia).filter(Boolean).length === estudiantesClase.length,
+        missing: estudiantesClase.length - Object.values(asistencia).filter(Boolean).length,
+      },
+      notas: {
+        sinNota: evaluacionActiva
+          ? estudiantesClase.filter(e => !notasState[`${evaluacionActiva}-${e.id}`]?.trim()).length
+          : 0,
+      },
+      observaciones: { count: obsStats },
+      diario: { complete: !!diarioTema.trim() },
+      desempeno: { count: desCount, total: estudiantesClase.length },
+    };
+  }, [estudiantesClase, asistencia, notasState, evaluacionActiva, obsStats, diarioTema, desempeno]);
 
   // ========== EVENT HANDLERS ==========
   const marcarAsistencia = (estId: string, estado: EstadoAsistencia) => {
@@ -448,6 +499,24 @@ export default function ModoClase() {
   const marcarParticipacion = (estId: string, nivel: NivelParticipacion) => {
     setParticipacion(prev => ({ ...prev, [estId]: prev[estId] === nivel ? null : nivel }));
     if (!isInitialLoad.current) partDebounce.trigger();
+  };
+
+  const cambiarDesempeno = (estId: string, categoria: DesempenoCategoria, nivel: NivelDesempeno) => {
+    setDesempeno(prev => {
+      const current = prev[estId] || { tarea: null, participacion_oral: null, rendimiento_aula: null, conducta: null };
+      return { ...prev, [estId]: { ...current, [categoria]: nivel } };
+    });
+    if (!isInitialLoad.current) desempenoDebounce.trigger();
+  };
+
+  const marcarTodosDesempenoA = () => {
+    const nuevo: Record<string, DesempenoRecord> = {};
+    estudiantesClase.forEach(e => {
+      nuevo[e.id] = { tarea: "A", participacion_oral: "A", rendimiento_aula: "A", conducta: "A" };
+    });
+    setDesempeno(nuevo);
+    if (!isInitialLoad.current) desempenoDebounce.trigger();
+    toast.success("✓ Todos marcados con A");
   };
 
   const toggleObservacion = (estId: string, obsId: string) => {
@@ -563,7 +632,8 @@ export default function ModoClase() {
           temaPlanificado={temaPlanificado}
           planEstado={planEstado}
           asistenciaStats={asistenciaStats}
-          partStats={partStats}
+          desempenoCount={tabBadges.desempeno.count}
+          desempenoTotal={tabBadges.desempeno.total}
           evaluacionesCount={evaluacionesClase.length}
           obsStats={obsStats}
           diarioTema={diarioTema}
@@ -575,12 +645,21 @@ export default function ModoClase() {
         <AsistenciaTab
           estudiantes={estudiantesClase}
           asistencia={asistencia}
-          participacion={participacion}
           stats={asistenciaStats}
           isReadonly={isReadonly}
           onMarcarAsistencia={marcarAsistencia}
           onMarcarTodosPresentes={marcarTodosPresentes}
-          onMarcarParticipacion={marcarParticipacion}
+          onStudentDetail={setStudentDetailId}
+        />
+      )}
+
+      {modoActivo === "desempeno" && (
+        <DesempenoTab
+          estudiantes={estudiantesClase}
+          desempeno={desempeno}
+          isReadonly={isReadonly}
+          onCambiarDesempeno={cambiarDesempeno}
+          onMarcarTodosA={marcarTodosDesempenoA}
           onStudentDetail={setStudentDetailId}
         />
       )}

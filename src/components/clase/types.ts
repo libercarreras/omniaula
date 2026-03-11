@@ -1,8 +1,9 @@
 import { ThumbsUp, AlertCircle, BookX, Brain } from "lucide-react";
 
-export type ModoActivo = "resumen" | "asistencia" | "notas" | "observaciones" | "diario";
+export type ModoActivo = "resumen" | "asistencia" | "notas" | "observaciones" | "diario" | "desempeno";
 export type EstadoAsistencia = "presente" | "falta" | "tarde" | "retiro" | null;
 export type NivelParticipacion = "alta" | "media" | "baja";
+export type NivelDesempeno = "B" | "M" | "A" | "A+" | null;
 
 export const tagObservaciones = [
   { id: "participacion", label: "Buen desempeño", icon: ThumbsUp, color: "bg-success/10 text-success border-success/30", tipo: "participacion" as const },
@@ -16,4 +17,5 @@ export interface TabBadges {
   notas: { sinNota: number };
   observaciones: { count: number };
   diario: { complete: boolean };
+  desempeno: { count: number; total: number };
 }

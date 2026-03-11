@@ -107,6 +107,63 @@ export type Database = {
           },
         ]
       }
+      desempeno_diario: {
+        Row: {
+          clase_id: string
+          conducta: string | null
+          created_at: string
+          estudiante_id: string
+          fecha: string
+          id: string
+          participacion_oral: string | null
+          rendimiento_aula: string | null
+          tarea: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          clase_id: string
+          conducta?: string | null
+          created_at?: string
+          estudiante_id: string
+          fecha: string
+          id?: string
+          participacion_oral?: string | null
+          rendimiento_aula?: string | null
+          tarea?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          clase_id?: string
+          conducta?: string | null
+          created_at?: string
+          estudiante_id?: string
+          fecha?: string
+          id?: string
+          participacion_oral?: string | null
+          rendimiento_aula?: string | null
+          tarea?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "desempeno_diario_clase_id_fkey"
+            columns: ["clase_id"]
+            isOneToOne: false
+            referencedRelation: "clases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "desempeno_diario_estudiante_id_fkey"
+            columns: ["estudiante_id"]
+            isOneToOne: false
+            referencedRelation: "estudiantes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       diario_clase: {
         Row: {
           actividad_realizada: string | null

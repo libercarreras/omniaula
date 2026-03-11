@@ -4,7 +4,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   ArrowLeft, Settings2, FileText, Loader2, CheckCircle2,
-  UserCheck, ClipboardCheck, MessageSquare, BookOpen, LayoutDashboard,
+  UserCheck, ClipboardCheck, MessageSquare, BookOpen, LayoutDashboard, TrendingUp,
   CalendarIcon, Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,7 @@ interface ClaseHeaderProps {
 const modos: { id: ModoActivo; label: string; icon: any }[] = [
   { id: "resumen", label: "Resumen", icon: LayoutDashboard },
   { id: "asistencia", label: "Asist.", icon: UserCheck },
+  { id: "desempeno", label: "Desemp.", icon: TrendingUp },
   { id: "notas", label: "Notas", icon: ClipboardCheck },
   { id: "observaciones", label: "Obs.", icon: MessageSquare },
   { id: "diario", label: "Diario", icon: BookOpen },
@@ -54,6 +55,11 @@ export function ClaseHeader({
     if (modo === "asistencia") {
       if (tabBadges.asistencia.complete) return <span className="h-1.5 w-1.5 rounded-full bg-success" />;
       if (tabBadges.asistencia.missing > 0) return <span className="text-[9px] font-bold text-warning">{tabBadges.asistencia.missing}</span>;
+      return null;
+    }
+    if (modo === "desempeno") {
+      if (tabBadges.desempeno.count > 0 && tabBadges.desempeno.count === tabBadges.desempeno.total) return <span className="h-1.5 w-1.5 rounded-full bg-success" />;
+      if (tabBadges.desempeno.count > 0) return <span className="text-[9px] font-bold text-primary">{tabBadges.desempeno.count}</span>;
       return null;
     }
     if (modo === "notas") {
@@ -133,7 +139,7 @@ export function ClaseHeader({
         </div>
       )}
 
-      <div className="grid grid-cols-5 gap-1">
+      <div className="grid grid-cols-7 gap-1">
         {modos.map(modo => (
           <button
             key={modo.id}
