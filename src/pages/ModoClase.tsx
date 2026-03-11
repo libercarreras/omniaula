@@ -591,7 +591,8 @@ export default function ModoClase() {
   const openEditClase = () => {
     const parsed = parseHorarioToState(clase?.horario || null);
     setEditDias(parsed.dias);
-    setEditHora(parsed.hora);
+    setEditHoraInicio(parsed.horaInicio);
+    setEditHoraFin(parsed.horaFin);
     setEditAula(clase?.aula || "");
     setEditClaseOpen(true);
   };
