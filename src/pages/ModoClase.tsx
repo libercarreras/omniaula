@@ -112,7 +112,8 @@ export default function ModoClase() {
   const [savingEstructura, setSavingEstructura] = useState(false);
   const [editClaseOpen, setEditClaseOpen] = useState(false);
   const [editDias, setEditDias] = useState<string[]>([]);
-  const [editHora, setEditHora] = useState("");
+  const [editHoraInicio, setEditHoraInicio] = useState("");
+  const [editHoraFin, setEditHoraFin] = useState("");
   const [editAula, setEditAula] = useState("");
   const [savingClase, setSavingClase] = useState(false);
 
