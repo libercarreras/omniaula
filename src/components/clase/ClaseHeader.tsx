@@ -127,11 +127,6 @@ export function ClaseHeader({
           </Popover>
 
           <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{studentCount}</Badge>
-          {hasProgramaEstructura && (
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onShowPrograma}>
-              <FileText className="h-4 w-4" />
-            </Button>
-          )}
         </div>
       </div>
 
