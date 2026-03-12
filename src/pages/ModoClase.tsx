@@ -718,73 +718,71 @@ export default function ModoClase() {
           diarioActividad={diarioActividad}
           diarioObs={diarioObs}
           temaPlanificado={temaPlanificado}
+          planEstado={planEstado}
           diarioSugerencias={diarioSugerencias}
           isReadonly={isReadonly}
+          planificacionStats={planificacionStats}
           onChange={handleDiarioChange}
+          onChangePlanEstado={async (estado) => {
+            if (!claseId) return;
+            const { data: todayPlan } = await supabase
+              .from("planificacion_clases")
+              .select("id")
+              .eq("clase_id", claseId)
+              .eq("fecha", selectedDateISO);
+            if (todayPlan && todayPlan.length > 0) {
+              await supabase.from("planificacion_clases")
+                .update({ estado: estado as any, diario_id: diarioId })
+                .eq("id", todayPlan[0].id);
+              setPlanEstado(estado);
+              // Refresh stats
+              const { data: allPlanData } = await supabase.from("planificacion_clases")
+                .select("estado").eq("clase_id", claseId);
+              const allPlan = allPlanData || [];
+              setPlanificacionStats({
+                total: allPlan.length,
+                completados: allPlan.filter((p: any) => p.estado === "completado" || p.estado === "parcial").length,
+              });
+              toast.success("Estado actualizado");
+            }
+          }}
+          onNavigatePrograma={() => setModoActivo("programa")}
+        />
+      )}
+
+      {modoActivo === "programa" && (
+        <ProgramaTab
+          claseId={claseId!}
+          userId={user!.id}
+          horario={clase?.horario || null}
+          programaContenido={programaContenido}
+          programaArchivoUrl={programaArchivoUrl}
+          programaArchivoNombre={programaArchivoNombre}
+          programaEstructura={programaEstructura}
+          uploadingFile={uploadingFile}
+          savingEstructura={savingEstructura}
+          onContenidoChange={handleProgramaChange}
+          onFileUpload={handleProgramaFileUpload}
+          onRemoveFile={handleRemoveFile}
+          onSaveEstructura={async (est) => {
+            setSavingEstructura(true);
+            try {
+              if (programaId) {
+                await supabase.from("programas_anuales").update({ contenido_estructurado: est as any }).eq("id", programaId);
+              } else {
+                const { data } = await supabase.from("programas_anuales").insert({
+                  clase_id: claseId!, user_id: user!.id, contenido: programaContenido || null, contenido_estructurado: est as any,
+                }).select("id").maybeSingle();
+                if (data) setProgramaId(data.id);
+              }
+              setProgramaEstructura(est);
+            } catch { toast.error("Error al guardar la estructura"); }
+            finally { setSavingEstructura(false); }
+          }}
         />
       )}
 
       <StudentDetailSheet studentId={studentDetailId} claseId={claseId || ""} open={!!studentDetailId} onClose={() => setStudentDetailId(null)} />
-
-      {/* Programa Dialog */}
-      <Dialog open={showProgramaDialog} onOpenChange={setShowProgramaDialog}>
-        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Programa y planificación</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold">Contenido del programa anual</Label>
-              <Textarea placeholder="Pegá aquí el contenido del programa anual..." value={programaContenido} onChange={e => handleProgramaChange(e.target.value)} rows={6} className="text-sm leading-relaxed" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold">Archivo adjunto</Label>
-              {programaArchivoNombre ? (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/40 border">
-                  <FileText className="h-5 w-5 text-primary shrink-0" />
-                  <span className="text-sm font-medium truncate flex-1">{programaArchivoNombre}</span>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={handleRemoveFile}><Trash2 className="h-4 w-4" /></Button>
-                </div>
-              ) : (
-                <label className="flex items-center gap-2 p-4 rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 cursor-pointer transition-colors">
-                  {uploadingFile ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : <Upload className="h-5 w-5 text-muted-foreground" />}
-                  <span className="text-sm text-muted-foreground">{uploadingFile ? "Subiendo..." : "Subir archivo"}</span>
-                  <input type="file" className="hidden" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt" onChange={handleProgramaFileUpload} disabled={uploadingFile} />
-                </label>
-              )}
-            </div>
-            {programaContenido && (
-              <div className="space-y-2 pt-2 border-t">
-                <Label className="text-sm font-semibold">Estructura del programa</Label>
-                <EstructuraPrograma
-                  contenido={programaContenido}
-                  estructuraGuardada={programaEstructura}
-                  saving={savingEstructura}
-                  onSave={async (est) => {
-                    setSavingEstructura(true);
-                    try {
-                      if (programaId) {
-                        await supabase.from("programas_anuales").update({ contenido_estructurado: est as any }).eq("id", programaId);
-                      } else {
-                        const { data } = await supabase.from("programas_anuales").insert({
-                          clase_id: claseId!, user_id: user!.id, contenido: programaContenido || null, contenido_estructurado: est as any,
-                        }).select("id").maybeSingle();
-                        if (data) setProgramaId(data.id);
-                      }
-                      setProgramaEstructura(est);
-                    } catch { toast.error("Error al guardar la estructura"); }
-                    finally { setSavingEstructura(false); }
-                  }}
-                />
-              </div>
-            )}
-            {programaEstructura && (
-              <div className="space-y-2 pt-2 border-t">
-                <Label className="text-sm font-semibold">Planificación anual</Label>
-                <PlanificacionTimeline claseId={claseId!} userId={user!.id} horario={clase?.horario || null} estructura={programaEstructura} />
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Edit Clase Dialog */}
       <Dialog open={editClaseOpen} onOpenChange={setEditClaseOpen}>
