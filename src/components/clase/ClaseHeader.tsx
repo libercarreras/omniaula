@@ -137,7 +137,7 @@ export function ClaseHeader({
         </div>
       )}
 
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-8 gap-1">
         {modos.map(modo => (
           <button
             key={modo.id}
