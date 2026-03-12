@@ -73,6 +73,10 @@ export function ClaseHeader({
       if (tabBadges.diario.complete) return <span className="h-1.5 w-1.5 rounded-full bg-success" />;
       return null;
     }
+    if (modo === "programa") {
+      if (tabBadges.programa.hasContent) return <span className="h-1.5 w-1.5 rounded-full bg-success" />;
+      return null;
+    }
     return null;
   };
 
