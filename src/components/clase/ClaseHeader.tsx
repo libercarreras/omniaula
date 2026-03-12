@@ -37,6 +37,7 @@ const modos: { id: ModoActivo; label: string; icon: any }[] = [
   { id: "notas", label: "Notas", icon: ClipboardCheck },
   { id: "observaciones", label: "Obs.", icon: MessageSquare },
   { id: "diario", label: "Diario", icon: BookOpen },
+  { id: "programa", label: "Prog.", icon: FileText },
 ];
 
 export function ClaseHeader({
