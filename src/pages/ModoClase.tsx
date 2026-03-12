@@ -470,7 +470,8 @@ export default function ModoClase() {
     : modoActivo === "notas" ? notasDebounce.status
     : modoActivo === "observaciones" ? obsDebounce.status
     : modoActivo === "diario" ? diarioDebounce.status
-    : modoActivo === "desempeno" ? desempenoDebounce.status : "idle";
+    : modoActivo === "desempeno" ? desempenoDebounce.status
+    : modoActivo === "programa" ? programaDebounce.status : "idle";
 
   // ========== COMPUTED STATS ==========
   const asistenciaStats = useMemo(() => {
