@@ -26,7 +26,6 @@ interface ClaseHeaderProps {
   tabBadges: TabBadges;
   onBack: () => void;
   onEditClase: () => void;
-  onShowPrograma: () => void;
   onModoChange: (modo: ModoActivo) => void;
   onDateChange: (date: Date) => void;
 }
