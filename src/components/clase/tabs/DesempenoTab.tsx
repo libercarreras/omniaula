@@ -65,12 +65,26 @@ export function DesempenoTab({
           {categorias.map(cat => (
             <Tooltip key={cat.key}>
               <TooltipTrigger asChild>
-                <span className="flex flex-col items-center gap-0.5 cursor-help">
+                <button
+                  className={cn(
+                    "flex flex-col items-center gap-0.5 cursor-pointer relative",
+                    cat.key === "tarea" && onTareaHeaderClick && "hover:text-primary transition-colors"
+                  )}
+                  onClick={() => cat.key === "tarea" && onTareaHeaderClick?.()}
+                >
                   <cat.icon className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="text-[9px] text-muted-foreground font-medium leading-none">{cat.shortLabel}</span>
-                </span>
+                  {cat.key === "tarea" && hasTareaHoy && (
+                    <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary" />
+                  )}
+                </button>
               </TooltipTrigger>
-              <TooltipContent side="top"><p className="text-xs">{cat.label}</p></TooltipContent>
+              <TooltipContent side="top">
+                <p className="text-xs">
+                  {cat.label}
+                  {cat.key === "tarea" && onTareaHeaderClick ? " — toca para describir" : ""}
+                </p>
+              </TooltipContent>
             </Tooltip>
           ))}
         </div>
