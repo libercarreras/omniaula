@@ -18,9 +18,11 @@ interface DesempenoTabProps {
   estudiantes: any[];
   desempeno: Record<string, DesempenoRecord>;
   isReadonly: boolean;
+  hasTareaHoy?: boolean;
   onCambiarDesempeno: (estId: string, categoria: DesempenoCategoria, nivel: NivelDesempeno) => void;
   onMarcarTodosA: () => void;
   onStudentDetail: (estId: string) => void;
+  onTareaHeaderClick?: () => void;
 }
 
 const categorias: { key: DesempenoCategoria; label: string; shortLabel: string; icon: any }[] = [
