@@ -799,6 +799,16 @@ export default function ModoClase() {
 
       <StudentDetailSheet studentId={studentDetailId} claseId={claseId || ""} open={!!studentDetailId} onClose={() => setStudentDetailId(null)} />
 
+      <TareaSheet
+        open={tareaSheetOpen}
+        onClose={() => setTareaSheetOpen(false)}
+        claseId={claseId!}
+        userId={user!.id}
+        fecha={selectedDateISO}
+        isReadonly={isReadonly}
+        onTareaChange={setHasTareaHoy}
+      />
+
       {/* Edit Clase Dialog */}
       <Dialog open={editClaseOpen} onOpenChange={setEditClaseOpen}>
         <DialogContent className="sm:max-w-md">
