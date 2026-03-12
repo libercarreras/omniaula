@@ -18,7 +18,6 @@ interface ClaseHeaderProps {
   horario: string | null;
   aula: string | null;
   studentCount: number;
-  hasProgramaEstructura: boolean;
   modoActivo: ModoActivo;
   selectedDate: Date;
   isReadonly: boolean;
