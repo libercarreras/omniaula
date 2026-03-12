@@ -18,6 +18,7 @@ import { ObservacionesTab } from "@/components/clase/tabs/ObservacionesTab";
 import { DiarioTab } from "@/components/clase/tabs/DiarioTab";
 import { DesempenoTab } from "@/components/clase/tabs/DesempenoTab";
 import { ProgramaTab } from "@/components/clase/tabs/ProgramaTab";
+import { TareaSheet } from "@/components/clase/tabs/TareaSheet";
 import type { DesempenoCategoria, DesempenoRecord } from "@/components/clase/tabs/DesempenoTab";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -90,6 +91,8 @@ export default function ModoClase() {
   const [evaluacionActiva, setEvaluacionActiva] = useState<string | null>(null);
   const [studentDetailId, setStudentDetailId] = useState<string | null>(null);
   const [planificacionStats, setPlanificacionStats] = useState<{ completados: number; total: number }>({ completados: 0, total: 0 });
+  const [tareaSheetOpen, setTareaSheetOpen] = useState(false);
+  const [hasTareaHoy, setHasTareaHoy] = useState(false);
 
   // Diario state
   const [diarioTema, setDiarioTema] = useState("");
@@ -293,6 +296,14 @@ export default function ModoClase() {
         total: allPlan.length,
         completados: allPlan.filter((p: any) => p.estado === "completado" || p.estado === "parcial").length,
       });
+
+      // Check if tareas exist for today
+      const startOfDay = `${selectedDateISO}T00:00:00.000Z`;
+      const endOfDay = `${selectedDateISO}T23:59:59.999Z`;
+      const { data: tareasHoy } = await supabase.from("tareas")
+        .select("id").eq("clase_id", claseId)
+        .gte("created_at", startOfDay).lte("created_at", endOfDay).limit(1);
+      setHasTareaHoy((tareasHoy || []).length > 0);
 
       setLoading(false);
       setTimeout(() => { isInitialLoad.current = false; }, 500);
@@ -684,9 +695,11 @@ export default function ModoClase() {
           estudiantes={estudiantesClase}
           desempeno={desempeno}
           isReadonly={isReadonly}
+          hasTareaHoy={hasTareaHoy}
           onCambiarDesempeno={cambiarDesempeno}
           onMarcarTodosA={marcarTodosDesempenoA}
           onStudentDetail={setStudentDetailId}
+          onTareaHeaderClick={() => setTareaSheetOpen(true)}
         />
       )}
 
@@ -785,6 +798,16 @@ export default function ModoClase() {
       )}
 
       <StudentDetailSheet studentId={studentDetailId} claseId={claseId || ""} open={!!studentDetailId} onClose={() => setStudentDetailId(null)} />
+
+      <TareaSheet
+        open={tareaSheetOpen}
+        onClose={() => setTareaSheetOpen(false)}
+        claseId={claseId!}
+        userId={user!.id}
+        fecha={selectedDateISO}
+        isReadonly={isReadonly}
+        onTareaChange={setHasTareaHoy}
+      />
 
       {/* Edit Clase Dialog */}
       <Dialog open={editClaseOpen} onOpenChange={setEditClaseOpen}>
