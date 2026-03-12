@@ -420,28 +420,16 @@ export default function ModoClase() {
   const saveDesempenoFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentDes = desempenoRef.current;
-    for (const [estudiante_id, record] of Object.entries(currentDes)) {
-      const hasValues = record.tarea || record.participacion_oral || record.rendimiento_aula || record.conducta;
-      if (hasValues) {
-        const { data: existing } = await (supabase.from("desempeno_diario" as any) as any)
-          .select("id").eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO).maybeSingle();
-        if (existing) {
-          await (supabase.from("desempeno_diario" as any) as any).update({
-            tarea: record.tarea, participacion_oral: record.participacion_oral,
-            rendimiento_aula: record.rendimiento_aula, conducta: record.conducta,
-          }).eq("id", existing.id);
-        } else {
-          await (supabase.from("desempeno_diario" as any) as any).insert({
-            clase_id: claseId, estudiante_id, fecha: selectedDateISO, user_id: user.id,
-            tarea: record.tarea, participacion_oral: record.participacion_oral,
-            rendimiento_aula: record.rendimiento_aula, conducta: record.conducta,
-          });
-        }
-      } else {
-        await (supabase.from("desempeno_diario" as any) as any).delete()
-          .eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO);
-      }
-    }
+    // Batch: DELETE all for this class/date, then INSERT non-empty
+    await (supabase.from("desempeno_diario" as any) as any).delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    const records = Object.entries(currentDes)
+      .filter(([, r]) => r.tarea || r.participacion_oral || r.rendimiento_aula || r.conducta)
+      .map(([estudiante_id, r]) => ({
+        clase_id: claseId, estudiante_id, fecha: selectedDateISO, user_id: user.id,
+        tarea: r.tarea, participacion_oral: r.participacion_oral,
+        rendimiento_aula: r.rendimiento_aula, conducta: r.conducta,
+      }));
+    if (records.length > 0) await (supabase.from("desempeno_diario" as any) as any).insert(records);
   }, [claseId, user, selectedDateISO]);
 
   const saveProgramaFn = useCallback(async () => {

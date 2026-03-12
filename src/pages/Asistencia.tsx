@@ -72,28 +72,18 @@ export default function Asistencia() {
   const asistenciaRef = useRef(asistencia);
   asistenciaRef.current = asistencia;
 
-  // Auto-save with upsert
+  // Auto-save with batch DELETE + INSERT
   const saveAsistenciaFn = useCallback(async () => {
     if (!user || !claseSeleccionada) return;
     const currentAsistencia = asistenciaRef.current;
-    const entries = Object.entries(currentAsistencia).filter(([, estado]) => estado !== null);
-    for (const [estudiante_id, estado] of entries) {
-      const { data: existing } = await supabase.from("asistencia")
-        .select("id").eq("clase_id", claseSeleccionada).eq("estudiante_id", estudiante_id).eq("fecha", hoyISO).maybeSingle();
-      if (existing) {
-        await supabase.from("asistencia").update({ estado: estado as "presente" | "falta" | "tarde" }).eq("id", existing.id);
-      } else {
-        await supabase.from("asistencia").insert({
-          clase_id: claseSeleccionada, estudiante_id, estado: estado as "presente" | "falta" | "tarde", fecha: hoyISO, user_id: user.id,
-        });
-      }
-    }
-    // Remove records for null entries
-    const nullEntries = Object.entries(currentAsistencia).filter(([, estado]) => estado === null);
-    for (const [estudiante_id] of nullEntries) {
-      await supabase.from("asistencia").delete()
-        .eq("clase_id", claseSeleccionada).eq("estudiante_id", estudiante_id).eq("fecha", hoyISO);
-    }
+    // Batch: DELETE all for this class/date, then INSERT all non-null
+    await supabase.from("asistencia").delete().eq("clase_id", claseSeleccionada).eq("fecha", hoyISO);
+    const records = Object.entries(currentAsistencia)
+      .filter(([, estado]) => estado !== null)
+      .map(([estudiante_id, estado]) => ({
+        clase_id: claseSeleccionada, estudiante_id, estado: estado as "presente" | "falta" | "tarde", fecha: hoyISO, user_id: user.id,
+      }));
+    if (records.length > 0) await supabase.from("asistencia").insert(records);
   }, [claseSeleccionada, user, hoyISO]);
 
   const { trigger, status } = useDebounceCallback(saveAsistenciaFn, 1500);
