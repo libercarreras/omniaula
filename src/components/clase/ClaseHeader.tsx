@@ -42,8 +42,8 @@ const modos: { id: ModoActivo; label: string; icon: any }[] = [
 
 export function ClaseHeader({
   materiaName, grupoName, horario, aula, studentCount,
-  hasProgramaEstructura, modoActivo, selectedDate, isReadonly, isPastDate,
-  saveStatus, tabBadges, onBack, onEditClase, onShowPrograma, onModoChange, onDateChange,
+  modoActivo, selectedDate, isReadonly, isPastDate,
+  saveStatus, tabBadges, onBack, onEditClase, onModoChange, onDateChange,
 }: ClaseHeaderProps) {
   const todayISO = new Date().toISOString().split("T")[0];
   const selectedISO = selectedDate.toISOString().split("T")[0];
