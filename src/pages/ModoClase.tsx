@@ -285,6 +285,15 @@ export default function ModoClase() {
         setProgramaEstructura((progData as any).contenido_estructurado || null);
       }
 
+      // Load planificacion stats
+      const { data: allPlanData } = await supabase.from("planificacion_clases")
+        .select("estado").eq("clase_id", claseId);
+      const allPlan = allPlanData || [];
+      setPlanificacionStats({
+        total: allPlan.length,
+        completados: allPlan.filter((p: any) => p.estado === "completado" || p.estado === "parcial").length,
+      });
+
       setLoading(false);
       setTimeout(() => { isInitialLoad.current = false; }, 500);
     };
