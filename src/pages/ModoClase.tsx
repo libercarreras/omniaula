@@ -6,10 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, FileText, Upload, Trash2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { EstructuraPrograma } from "@/components/programa/EstructuraPrograma";
-import { PlanificacionTimeline } from "@/components/programa/PlanificacionTimeline";
 import { cn } from "@/lib/utils";
 import { StudentDetailSheet } from "@/components/clase/StudentDetailSheet";
 import { ClaseHeader } from "@/components/clase/ClaseHeader";
