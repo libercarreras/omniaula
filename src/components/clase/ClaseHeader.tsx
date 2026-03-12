@@ -3,9 +3,9 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  ArrowLeft, Settings2, FileText, Loader2, CheckCircle2,
+  ArrowLeft, Settings2, Loader2, CheckCircle2,
   UserCheck, ClipboardCheck, MessageSquare, BookOpen, LayoutDashboard, TrendingUp,
-  CalendarIcon, Lock,
+  CalendarIcon, Lock, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
