@@ -18,4 +18,5 @@ export interface TabBadges {
   observaciones: { count: number };
   diario: { complete: boolean };
   desempeno: { count: number; total: number };
+  programa: { hasContent: boolean };
 }
