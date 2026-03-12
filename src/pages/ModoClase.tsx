@@ -639,7 +639,6 @@ export default function ModoClase() {
         horario={clase.horario}
         aula={clase.aula}
         studentCount={estudiantesClase.length}
-        hasProgramaEstructura={!!programaEstructura}
         modoActivo={modoActivo}
         selectedDate={selectedDate}
         isReadonly={isReadonly}
@@ -648,7 +647,6 @@ export default function ModoClase() {
         tabBadges={tabBadges}
         onBack={() => navigate(-1)}
         onEditClase={openEditClase}
-        onShowPrograma={() => setShowProgramaDialog(true)}
         onModoChange={setModoActivo}
         onDateChange={handleDateChange}
       />
