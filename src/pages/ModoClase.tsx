@@ -91,6 +91,8 @@ export default function ModoClase() {
   const [evaluacionActiva, setEvaluacionActiva] = useState<string | null>(null);
   const [studentDetailId, setStudentDetailId] = useState<string | null>(null);
   const [planificacionStats, setPlanificacionStats] = useState<{ completados: number; total: number }>({ completados: 0, total: 0 });
+  const [tareaSheetOpen, setTareaSheetOpen] = useState(false);
+  const [hasTareaHoy, setHasTareaHoy] = useState(false);
 
   // Diario state
   const [diarioTema, setDiarioTema] = useState("");
