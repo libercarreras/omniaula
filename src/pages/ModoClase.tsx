@@ -661,6 +661,7 @@ export default function ModoClase() {
           evaluacionesCount={evaluacionesClase.length}
           obsStats={obsStats}
           diarioTema={diarioTema}
+          planificacionStats={planificacionStats}
           onNavigate={setModoActivo}
         />
       )}
