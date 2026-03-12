@@ -52,8 +52,8 @@ const cycleNivel = (current: NivelDesempeno): NivelDesempeno => {
 };
 
 export function DesempenoTab({
-  estudiantes, desempeno, isReadonly,
-  onCambiarDesempeno, onMarcarTodosA, onStudentDetail,
+  estudiantes, desempeno, isReadonly, hasTareaHoy,
+  onCambiarDesempeno, onMarcarTodosA, onStudentDetail, onTareaHeaderClick,
 }: DesempenoTabProps) {
   return (
     <TooltipProvider delayDuration={300}>

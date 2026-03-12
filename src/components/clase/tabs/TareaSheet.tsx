@@ -40,15 +40,6 @@ export function TareaSheet({ open, onClose, claseId, userId, fecha, isReadonly, 
 
   const loadTareas = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("tareas")
-      .select("id, titulo, descripcion, fecha_entrega")
-      .eq("clase_id", claseId)
-      .eq("created_at::date" as any, fecha)
-      .order("created_at", { ascending: false });
-    
-    // Fallback: filter by created_at date since ::date cast may not work via client
-    // Use a range filter instead
     const startOfDay = `${fecha}T00:00:00.000Z`;
     const endOfDay = `${fecha}T23:59:59.999Z`;
     const { data: tareasData } = await supabase
