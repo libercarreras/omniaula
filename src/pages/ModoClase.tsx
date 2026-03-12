@@ -315,37 +315,36 @@ export default function ModoClase() {
   const saveAsistenciaFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentAsist = asistenciaRef.current;
-    for (const [estudiante_id, estado] of Object.entries(currentAsist)) {
-      if (estado) {
-        const { data: existing } = await supabase.from("asistencia")
-          .select("id").eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO).maybeSingle();
-        if (existing) {
-          await supabase.from("asistencia").update({ estado }).eq("id", existing.id);
-        } else {
-          await supabase.from("asistencia").insert({ clase_id: claseId, estudiante_id, estado, fecha: selectedDateISO, user_id: user.id });
-        }
-      } else {
-        await supabase.from("asistencia").delete().eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO);
-      }
-    }
+    // Batch: DELETE all for this class/date, then INSERT all non-null
+    await supabase.from("asistencia").delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    const records = Object.entries(currentAsist)
+      .filter(([, estado]) => estado !== null)
+      .map(([estudiante_id, estado]) => ({
+        clase_id: claseId, estudiante_id, estado: estado!, fecha: selectedDateISO, user_id: user.id,
+      }));
+    if (records.length > 0) await supabase.from("asistencia").insert(records);
   }, [claseId, user, selectedDateISO]);
 
   const saveNotasFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentNotas = notasRef.current;
-    const entries = Object.entries(currentNotas).filter(([, v]) => v.trim() !== "");
-    for (const [key, val] of entries) {
+    // Collect all evaluacion_ids that have entries
+    const evIds = new Set<string>();
+    const records: { evaluacion_id: string; estudiante_id: string; nota: number; user_id: string }[] = [];
+    for (const [key, val] of Object.entries(currentNotas)) {
+      if (val.trim() === "") continue;
       const evaluacion_id = key.substring(0, 36);
       const estudiante_id = key.substring(37);
       const nota = parseFloat(val);
       if (isNaN(nota)) continue;
-      const { data: existing } = await supabase.from("notas").select("id").eq("evaluacion_id", evaluacion_id).eq("estudiante_id", estudiante_id).maybeSingle();
-      if (existing) {
-        await supabase.from("notas").update({ nota }).eq("id", existing.id);
-      } else {
-        await supabase.from("notas").insert({ evaluacion_id, estudiante_id, nota, user_id: user.id });
-      }
+      evIds.add(evaluacion_id);
+      records.push({ evaluacion_id, estudiante_id, nota, user_id: user.id });
     }
+    // Batch: DELETE existing notas for these evaluaciones, then INSERT all
+    if (evIds.size > 0) {
+      await supabase.from("notas").delete().in("evaluacion_id", Array.from(evIds));
+    }
+    if (records.length > 0) await supabase.from("notas").insert(records);
   }, [user, claseId]);
 
   const saveObservacionesFn = useCallback(async () => {
@@ -408,46 +407,29 @@ export default function ModoClase() {
   const saveParticipacionFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentPart = participacionRef.current;
-    for (const [estudiante_id, nivel] of Object.entries(currentPart)) {
-      if (nivel) {
-        const { data: existing } = await (supabase.from("participacion_clase" as any) as any)
-          .select("id").eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO).maybeSingle();
-        if (existing) {
-          await (supabase.from("participacion_clase" as any) as any).update({ nivel }).eq("id", existing.id);
-        } else {
-          await (supabase.from("participacion_clase" as any) as any).insert({ clase_id: claseId, estudiante_id, nivel, fecha: selectedDateISO, user_id: user.id });
-        }
-      } else {
-        await (supabase.from("participacion_clase" as any) as any).delete().eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO);
-      }
-    }
+    // Batch: DELETE all for this class/date, then INSERT non-null
+    await (supabase.from("participacion_clase" as any) as any).delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    const records = Object.entries(currentPart)
+      .filter(([, nivel]) => nivel !== null)
+      .map(([estudiante_id, nivel]) => ({
+        clase_id: claseId, estudiante_id, nivel, fecha: selectedDateISO, user_id: user.id,
+      }));
+    if (records.length > 0) await (supabase.from("participacion_clase" as any) as any).insert(records);
   }, [claseId, user, selectedDateISO]);
 
   const saveDesempenoFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentDes = desempenoRef.current;
-    for (const [estudiante_id, record] of Object.entries(currentDes)) {
-      const hasValues = record.tarea || record.participacion_oral || record.rendimiento_aula || record.conducta;
-      if (hasValues) {
-        const { data: existing } = await (supabase.from("desempeno_diario" as any) as any)
-          .select("id").eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO).maybeSingle();
-        if (existing) {
-          await (supabase.from("desempeno_diario" as any) as any).update({
-            tarea: record.tarea, participacion_oral: record.participacion_oral,
-            rendimiento_aula: record.rendimiento_aula, conducta: record.conducta,
-          }).eq("id", existing.id);
-        } else {
-          await (supabase.from("desempeno_diario" as any) as any).insert({
-            clase_id: claseId, estudiante_id, fecha: selectedDateISO, user_id: user.id,
-            tarea: record.tarea, participacion_oral: record.participacion_oral,
-            rendimiento_aula: record.rendimiento_aula, conducta: record.conducta,
-          });
-        }
-      } else {
-        await (supabase.from("desempeno_diario" as any) as any).delete()
-          .eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO);
-      }
-    }
+    // Batch: DELETE all for this class/date, then INSERT non-empty
+    await (supabase.from("desempeno_diario" as any) as any).delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    const records = Object.entries(currentDes)
+      .filter(([, r]) => r.tarea || r.participacion_oral || r.rendimiento_aula || r.conducta)
+      .map(([estudiante_id, r]) => ({
+        clase_id: claseId, estudiante_id, fecha: selectedDateISO, user_id: user.id,
+        tarea: r.tarea, participacion_oral: r.participacion_oral,
+        rendimiento_aula: r.rendimiento_aula, conducta: r.conducta,
+      }));
+    if (records.length > 0) await (supabase.from("desempeno_diario" as any) as any).insert(records);
   }, [claseId, user, selectedDateISO]);
 
   const saveProgramaFn = useCallback(async () => {
