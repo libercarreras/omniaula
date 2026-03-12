@@ -1,6 +1,6 @@
 import { ThumbsUp, AlertCircle, BookX, Brain } from "lucide-react";
 
-export type ModoActivo = "resumen" | "asistencia" | "notas" | "observaciones" | "diario" | "desempeno";
+export type ModoActivo = "resumen" | "asistencia" | "notas" | "observaciones" | "diario" | "desempeno" | "programa";
 export type EstadoAsistencia = "presente" | "falta" | "tarde" | "retiro" | null;
 export type NivelParticipacion = "alta" | "media" | "baja";
 export type NivelDesempeno = "B" | "M" | "A" | "A+" | null;
