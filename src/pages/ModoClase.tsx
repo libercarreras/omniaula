@@ -328,19 +328,23 @@ export default function ModoClase() {
   const saveNotasFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentNotas = notasRef.current;
-    const entries = Object.entries(currentNotas).filter(([, v]) => v.trim() !== "");
-    for (const [key, val] of entries) {
+    // Collect all evaluacion_ids that have entries
+    const evIds = new Set<string>();
+    const records: { evaluacion_id: string; estudiante_id: string; nota: number; user_id: string }[] = [];
+    for (const [key, val] of Object.entries(currentNotas)) {
+      if (val.trim() === "") continue;
       const evaluacion_id = key.substring(0, 36);
       const estudiante_id = key.substring(37);
       const nota = parseFloat(val);
       if (isNaN(nota)) continue;
-      const { data: existing } = await supabase.from("notas").select("id").eq("evaluacion_id", evaluacion_id).eq("estudiante_id", estudiante_id).maybeSingle();
-      if (existing) {
-        await supabase.from("notas").update({ nota }).eq("id", existing.id);
-      } else {
-        await supabase.from("notas").insert({ evaluacion_id, estudiante_id, nota, user_id: user.id });
-      }
+      evIds.add(evaluacion_id);
+      records.push({ evaluacion_id, estudiante_id, nota, user_id: user.id });
     }
+    // Batch: DELETE existing notas for these evaluaciones, then INSERT all
+    if (evIds.size > 0) {
+      await supabase.from("notas").delete().in("evaluacion_id", Array.from(evIds));
+    }
+    if (records.length > 0) await supabase.from("notas").insert(records);
   }, [user, claseId]);
 
   const saveObservacionesFn = useCallback(async () => {
