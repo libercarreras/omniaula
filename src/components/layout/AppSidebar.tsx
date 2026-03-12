@@ -1,3 +1,4 @@
+import { APP_VERSION } from "@/version";
 import {
   LayoutDashboard, Users, UserCheck, ClipboardCheck, GraduationCap,
   Eye, BookText, Calendar, FileBarChart, BarChart3, BookOpen, Shield, Building2, ChevronDown, Settings,
