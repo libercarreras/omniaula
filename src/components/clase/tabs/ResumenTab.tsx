@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { UserCheck, ClipboardCheck, MessageSquare, BookOpen, CalendarCheck, TrendingUp } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { UserCheck, ClipboardCheck, MessageSquare, BookOpen, CalendarCheck, TrendingUp, FileText, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ModoActivo } from "../types";
 
@@ -13,6 +14,7 @@ interface ResumenTabProps {
   evaluacionesCount: number;
   obsStats: number;
   diarioTema: string;
+  planificacionStats: { completados: number; total: number };
   onNavigate: (modo: ModoActivo) => void;
 }
 
@@ -26,8 +28,12 @@ const planEstadoLabel: Record<string, { label: string; color: string }> = {
 
 export function ResumenTab({
   temaPlanificado, planEstado, asistenciaStats, desempenoCount, desempenoTotal,
-  evaluacionesCount, obsStats, diarioTema, onNavigate,
+  evaluacionesCount, obsStats, diarioTema, planificacionStats, onNavigate,
 }: ResumenTabProps) {
+  const progressPercent = planificacionStats.total > 0
+    ? Math.round((planificacionStats.completados / planificacionStats.total) * 100)
+    : 0;
+
   return (
     <div className="space-y-3 py-3">
       {temaPlanificado && (
@@ -42,6 +48,26 @@ export function ResumenTab({
                 <Badge className={cn("text-[10px] shrink-0", planEstadoLabel[planEstado].color)}>{planEstadoLabel[planEstado].label}</Badge>
               )}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Progreso del programa */}
+      {planificacionStats.total > 0 && (
+        <Card>
+          <CardContent className="p-3">
+            <button className="w-full text-left" onClick={() => onNavigate("programa")}>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1"><FileText className="h-3 w-3" /> Progreso del programa</p>
+                <span className="text-[10px] text-primary flex items-center gap-0.5">
+                  Ver <ArrowRight className="h-3 w-3" />
+                </span>
+              </div>
+              <Progress value={progressPercent} className="h-2 mb-1" />
+              <p className="text-[10px] text-muted-foreground">
+                {planificacionStats.completados} de {planificacionStats.total} temas — {progressPercent}%
+              </p>
+            </button>
           </CardContent>
         </Card>
       )}

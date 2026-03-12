@@ -3,9 +3,9 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  ArrowLeft, Settings2, FileText, Loader2, CheckCircle2,
+  ArrowLeft, Settings2, Loader2, CheckCircle2,
   UserCheck, ClipboardCheck, MessageSquare, BookOpen, LayoutDashboard, TrendingUp,
-  CalendarIcon, Lock,
+  CalendarIcon, Lock, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -18,7 +18,6 @@ interface ClaseHeaderProps {
   horario: string | null;
   aula: string | null;
   studentCount: number;
-  hasProgramaEstructura: boolean;
   modoActivo: ModoActivo;
   selectedDate: Date;
   isReadonly: boolean;
@@ -27,7 +26,6 @@ interface ClaseHeaderProps {
   tabBadges: TabBadges;
   onBack: () => void;
   onEditClase: () => void;
-  onShowPrograma: () => void;
   onModoChange: (modo: ModoActivo) => void;
   onDateChange: (date: Date) => void;
 }
@@ -39,12 +37,13 @@ const modos: { id: ModoActivo; label: string; icon: any }[] = [
   { id: "notas", label: "Notas", icon: ClipboardCheck },
   { id: "observaciones", label: "Obs.", icon: MessageSquare },
   { id: "diario", label: "Diario", icon: BookOpen },
+  { id: "programa", label: "Prog.", icon: FileText },
 ];
 
 export function ClaseHeader({
   materiaName, grupoName, horario, aula, studentCount,
-  hasProgramaEstructura, modoActivo, selectedDate, isReadonly, isPastDate,
-  saveStatus, tabBadges, onBack, onEditClase, onShowPrograma, onModoChange, onDateChange,
+  modoActivo, selectedDate, isReadonly, isPastDate,
+  saveStatus, tabBadges, onBack, onEditClase, onModoChange, onDateChange,
 }: ClaseHeaderProps) {
   const todayISO = new Date().toISOString().split("T")[0];
   const selectedISO = selectedDate.toISOString().split("T")[0];
@@ -72,6 +71,10 @@ export function ClaseHeader({
     }
     if (modo === "diario") {
       if (tabBadges.diario.complete) return <span className="h-1.5 w-1.5 rounded-full bg-success" />;
+      return null;
+    }
+    if (modo === "programa") {
+      if (tabBadges.programa.hasContent) return <span className="h-1.5 w-1.5 rounded-full bg-success" />;
       return null;
     }
     return null;
@@ -124,11 +127,6 @@ export function ClaseHeader({
           </Popover>
 
           <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{studentCount}</Badge>
-          {hasProgramaEstructura && (
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onShowPrograma}>
-              <FileText className="h-4 w-4" />
-            </Button>
-          )}
         </div>
       </div>
 
@@ -139,7 +137,7 @@ export function ClaseHeader({
         </div>
       )}
 
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-8 gap-1">
         {modos.map(modo => (
           <button
             key={modo.id}
