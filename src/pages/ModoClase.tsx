@@ -503,8 +503,9 @@ export default function ModoClase() {
       observaciones: { count: obsStats },
       diario: { complete: !!diarioTema.trim() },
       desempeno: { count: desCount, total: estudiantesClase.length },
+      programa: { hasContent: !!programaEstructura },
     };
-  }, [estudiantesClase, asistencia, notasState, evaluacionActiva, obsStats, diarioTema, desempeno]);
+  }, [estudiantesClase, asistencia, notasState, evaluacionActiva, obsStats, diarioTema, desempeno, programaEstructura]);
 
   // ========== EVENT HANDLERS ==========
   const marcarAsistencia = (estId: string, estado: EstadoAsistencia) => {
