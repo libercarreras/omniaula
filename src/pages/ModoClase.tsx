@@ -407,19 +407,14 @@ export default function ModoClase() {
   const saveParticipacionFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentPart = participacionRef.current;
-    for (const [estudiante_id, nivel] of Object.entries(currentPart)) {
-      if (nivel) {
-        const { data: existing } = await (supabase.from("participacion_clase" as any) as any)
-          .select("id").eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO).maybeSingle();
-        if (existing) {
-          await (supabase.from("participacion_clase" as any) as any).update({ nivel }).eq("id", existing.id);
-        } else {
-          await (supabase.from("participacion_clase" as any) as any).insert({ clase_id: claseId, estudiante_id, nivel, fecha: selectedDateISO, user_id: user.id });
-        }
-      } else {
-        await (supabase.from("participacion_clase" as any) as any).delete().eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO);
-      }
-    }
+    // Batch: DELETE all for this class/date, then INSERT non-null
+    await (supabase.from("participacion_clase" as any) as any).delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    const records = Object.entries(currentPart)
+      .filter(([, nivel]) => nivel !== null)
+      .map(([estudiante_id, nivel]) => ({
+        clase_id: claseId, estudiante_id, nivel, fecha: selectedDateISO, user_id: user.id,
+      }));
+    if (records.length > 0) await (supabase.from("participacion_clase" as any) as any).insert(records);
   }, [claseId, user, selectedDateISO]);
 
   const saveDesempenoFn = useCallback(async () => {
