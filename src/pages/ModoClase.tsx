@@ -315,19 +315,14 @@ export default function ModoClase() {
   const saveAsistenciaFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentAsist = asistenciaRef.current;
-    for (const [estudiante_id, estado] of Object.entries(currentAsist)) {
-      if (estado) {
-        const { data: existing } = await supabase.from("asistencia")
-          .select("id").eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO).maybeSingle();
-        if (existing) {
-          await supabase.from("asistencia").update({ estado }).eq("id", existing.id);
-        } else {
-          await supabase.from("asistencia").insert({ clase_id: claseId, estudiante_id, estado, fecha: selectedDateISO, user_id: user.id });
-        }
-      } else {
-        await supabase.from("asistencia").delete().eq("clase_id", claseId).eq("estudiante_id", estudiante_id).eq("fecha", selectedDateISO);
-      }
-    }
+    // Batch: DELETE all for this class/date, then INSERT all non-null
+    await supabase.from("asistencia").delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    const records = Object.entries(currentAsist)
+      .filter(([, estado]) => estado !== null)
+      .map(([estudiante_id, estado]) => ({
+        clase_id: claseId, estudiante_id, estado: estado!, fecha: selectedDateISO, user_id: user.id,
+      }));
+    if (records.length > 0) await supabase.from("asistencia").insert(records);
   }, [claseId, user, selectedDateISO]);
 
   const saveNotasFn = useCallback(async () => {
