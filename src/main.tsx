@@ -3,8 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import App from "./App.tsx";
 import "./index.css";
 
-// Update manifest with custom PWA icons if admin uploaded them
-(async () => {
+// Delay dynamic manifest injection so Chrome can capture beforeinstallprompt first
+setTimeout(async () => {
   try {
     const { data } = await (supabase as any)
       .from("app_settings")
@@ -43,6 +43,6 @@ import "./index.css";
   } catch (e) {
     // Silently fail - fallback to static manifest
   }
-})();
+}, 3000);
 
 createRoot(document.getElementById("root")!).render(<App />);
