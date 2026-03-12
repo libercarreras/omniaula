@@ -187,7 +187,7 @@ export function TareaSheet({ open, onClose, claseId, userId, fecha, isReadonly, 
                     )}
                   </div>
                 </div>
-              )))}
+              ))}
             </div>
           )}
         </div>
