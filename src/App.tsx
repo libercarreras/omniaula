@@ -8,6 +8,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { InstitucionProvider } from "@/hooks/useInstitucion";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { UpdatePrompt } from "@/components/UpdatePrompt";
 import Dashboard from "./pages/Dashboard";
 import Grupos from "./pages/Grupos";
 import Estudiantes from "./pages/Estudiantes";
@@ -37,6 +38,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <UpdatePrompt />
         <BrowserRouter>
         <AuthProvider>
         <InstitucionProvider>

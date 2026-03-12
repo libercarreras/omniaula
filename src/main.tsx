@@ -1,15 +1,7 @@
 import { createRoot } from "react-dom/client";
-import { registerSW } from "virtual:pwa-register";
 import { supabase } from "@/integrations/supabase/client";
 import App from "./App.tsx";
 import "./index.css";
-
-registerSW({
-  immediate: true,
-  onRegisterError(error) {
-    console.error("SW registration error", error);
-  },
-});
 
 // Update manifest with custom PWA icons if admin uploaded them
 (async () => {

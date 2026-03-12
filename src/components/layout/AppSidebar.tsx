@@ -1,3 +1,4 @@
+import { APP_VERSION } from "@/version";
 import {
   LayoutDashboard, Users, UserCheck, ClipboardCheck, GraduationCap,
   Eye, BookText, Calendar, FileBarChart, BarChart3, BookOpen, Shield, Building2, ChevronDown, Settings,
@@ -119,6 +120,9 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
       </SidebarContent>
+      <div className="px-3 py-2 border-t">
+        <span className="text-[10px] text-muted-foreground">v{APP_VERSION}</span>
+      </div>
     </Sidebar>
   );
 }
