@@ -9,6 +9,7 @@ import { InstitucionProvider } from "@/hooks/useInstitucion";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { UpdatePrompt } from "@/components/UpdatePrompt";
+import { InstallBanner } from "@/components/InstallBanner";
 import Dashboard from "./pages/Dashboard";
 import Grupos from "./pages/Grupos";
 import Estudiantes from "./pages/Estudiantes";
