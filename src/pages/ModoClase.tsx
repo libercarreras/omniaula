@@ -18,6 +18,7 @@ import { ObservacionesTab } from "@/components/clase/tabs/ObservacionesTab";
 import { DiarioTab } from "@/components/clase/tabs/DiarioTab";
 import { DesempenoTab } from "@/components/clase/tabs/DesempenoTab";
 import { ProgramaTab } from "@/components/clase/tabs/ProgramaTab";
+import { TareaSheet } from "@/components/clase/tabs/TareaSheet";
 import type { DesempenoCategoria, DesempenoRecord } from "@/components/clase/tabs/DesempenoTab";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
