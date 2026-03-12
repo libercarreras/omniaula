@@ -297,6 +297,14 @@ export default function ModoClase() {
         completados: allPlan.filter((p: any) => p.estado === "completado" || p.estado === "parcial").length,
       });
 
+      // Check if tareas exist for today
+      const startOfDay = `${selectedDateISO}T00:00:00.000Z`;
+      const endOfDay = `${selectedDateISO}T23:59:59.999Z`;
+      const { data: tareasHoy } = await supabase.from("tareas")
+        .select("id").eq("clase_id", claseId)
+        .gte("created_at", startOfDay).lte("created_at", endOfDay).limit(1);
+      setHasTareaHoy((tareasHoy || []).length > 0);
+
       setLoading(false);
       setTimeout(() => { isInitialLoad.current = false; }, 500);
     };
