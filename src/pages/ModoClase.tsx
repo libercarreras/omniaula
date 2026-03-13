@@ -543,7 +543,7 @@ export default function ModoClase() {
     if (!isInitialLoad.current) desempenoDebounce.trigger();
   }, [desempenoDebounce]);
 
-  const marcarTodosDesempenoA = () => {
+  const marcarTodosDesempenoA = useCallback(() => {
     const nuevo: Record<string, DesempenoRecord> = {};
     estudiantesClase.forEach(e => {
       nuevo[e.id] = { tarea: "A", participacion_oral: "A", rendimiento_aula: "A", conducta: "A" };
@@ -551,7 +551,7 @@ export default function ModoClase() {
     setDesempeno(nuevo);
     if (!isInitialLoad.current) desempenoDebounce.trigger();
     toast.success("✓ Todos marcados con A");
-  };
+  }, [estudiantesClase, desempenoDebounce]);
 
   const toggleObservacion = (estId: string, obsId: string) => {
     setObsState(prev => {
