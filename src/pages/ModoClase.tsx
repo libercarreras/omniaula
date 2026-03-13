@@ -694,6 +694,7 @@ export default function ModoClase() {
         <AsistenciaTab
           estudiantes={estudiantesClase}
           asistencia={asistencia}
+          motivos={motivos}
           stats={asistenciaStats}
           isReadonly={isReadonly}
           onMarcarAsistencia={marcarAsistencia}
