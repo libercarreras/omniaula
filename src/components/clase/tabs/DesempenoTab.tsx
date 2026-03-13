@@ -1,7 +1,6 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
-import { CheckCheck, ClipboardList, MessageCircle, BarChart3, Handshake } from "lucide-react";
+import { ClipboardList, MessageCircle, BarChart3, Handshake } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { NivelDesempeno } from "../types";
 
@@ -61,7 +60,7 @@ export const DesempenoTab = memo(function DesempenoTab({
     <TooltipProvider delayDuration={300}>
       <div className="py-2 space-y-3">
 
-        {/* Header row */}
+        {/* Header row — tooltips only here (4 instances, safe) */}
         <div className="grid grid-cols-[1fr_repeat(4,3rem)] gap-1 items-center px-1">
           <span className="text-[10px] text-muted-foreground font-medium">Alumno</span>
           {categorias.map(cat => (
@@ -91,7 +90,7 @@ export const DesempenoTab = memo(function DesempenoTab({
           ))}
         </div>
 
-        {/* Student rows */}
+        {/* Student rows — NO tooltips on cells to avoid Android crash */}
         <div className="space-y-1">
           {estudiantes.map((est) => {
             const record = desempeno[est.id] || { tarea: null, participacion_oral: null, rendimiento_aula: null, conducta: null };
@@ -112,24 +111,19 @@ export const DesempenoTab = memo(function DesempenoTab({
                   const val = record[cat.key];
                   const config = val ? nivelConfig[val] : null;
                   return (
-                    <Tooltip key={cat.key}>
-                      <TooltipTrigger asChild>
-                        <button
-                          disabled={isReadonly}
-                          className={cn(
-                            "h-10 w-12 rounded-lg flex items-center justify-center text-xs font-bold transition-all active:scale-95",
-                            config ? `${config.bg} ${config.color}` : "bg-muted/40 text-muted-foreground/40",
-                            isReadonly && "opacity-50 pointer-events-none"
-                          )}
-                          onClick={() => onCambiarDesempeno(est.id, cat.key, cycleNivel(val))}
-                        >
-                          {val || "—"}
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">
-                        <p className="text-xs">{cat.label}: {val || "Sin evaluar"}</p>
-                      </TooltipContent>
-                    </Tooltip>
+                    <button
+                      key={cat.key}
+                      disabled={isReadonly}
+                      aria-label={`${cat.label}: ${val || "Sin evaluar"}`}
+                      className={cn(
+                        "h-10 w-12 rounded-lg flex items-center justify-center text-xs font-bold transition-colors",
+                        config ? `${config.bg} ${config.color}` : "bg-muted/40 text-muted-foreground/40",
+                        isReadonly && "opacity-50 pointer-events-none"
+                      )}
+                      onClick={() => onCambiarDesempeno(est.id, cat.key, cycleNivel(val))}
+                    >
+                      {val || "—"}
+                    </button>
                   );
                 })}
               </div>

@@ -3,6 +3,25 @@ import { supabase } from "@/integrations/supabase/client";
 import App from "./App.tsx";
 import "./index.css";
 
+// Global error handlers — capture unhandled crashes (especially on Android)
+window.onerror = (message, source, lineno, colno, error) => {
+  console.error(
+    "[OmniAula][GlobalError]", message,
+    "| Source:", source, ":", lineno, ":", colno,
+    "| Error:", error?.stack,
+    "| UA:", navigator.userAgent,
+    "| Timestamp:", new Date().toISOString()
+  );
+};
+
+window.onunhandledrejection = (event) => {
+  console.error(
+    "[OmniAula][UnhandledRejection]", event.reason,
+    "| UA:", navigator.userAgent,
+    "| Timestamp:", new Date().toISOString()
+  );
+};
+
 // Delay dynamic manifest injection so Chrome can capture beforeinstallprompt first
 setTimeout(async () => {
   try {

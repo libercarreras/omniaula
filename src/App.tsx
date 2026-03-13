@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { InstitucionProvider } from "@/hooks/useInstitucion";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { UpdatePrompt } from "@/components/UpdatePrompt";
 import { InstallBanner } from "@/components/InstallBanner";
