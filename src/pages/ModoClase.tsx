@@ -84,6 +84,7 @@ export default function ModoClase() {
 
   const [modoActivo, setModoActivo] = useState<ModoActivo>("resumen");
   const [asistencia, setAsistencia] = useState<Record<string, EstadoAsistencia>>({});
+  const [motivos, setMotivos] = useState<Record<string, string>>({});
   const [participacion, setParticipacion] = useState<Record<string, NivelParticipacion | null>>({});
   const [desempeno, setDesempeno] = useState<Record<string, DesempenoRecord>>({});
   const [notasState, setNotasState] = useState<Record<string, string>>({});
