@@ -126,6 +126,8 @@ export default function ModoClase() {
   // Refs for stale closure fix
   const asistenciaRef = useRef(asistencia);
   asistenciaRef.current = asistencia;
+  const motivosRef = useRef(motivos);
+  motivosRef.current = motivos;
   const notasRef = useRef(notasState);
   notasRef.current = notasState;
   const obsRef = useRef(obsState);
