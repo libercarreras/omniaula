@@ -43,6 +43,7 @@ export type Database = {
           estudiante_id: string
           fecha: string
           id: string
+          motivo: string | null
           user_id: string
         }
         Insert: {
@@ -52,6 +53,7 @@ export type Database = {
           estudiante_id: string
           fecha: string
           id?: string
+          motivo?: string | null
           user_id: string
         }
         Update: {
@@ -61,6 +63,7 @@ export type Database = {
           estudiante_id?: string
           fecha?: string
           id?: string
+          motivo?: string | null
           user_id?: string
         }
         Relationships: [
