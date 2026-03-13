@@ -115,6 +115,9 @@ export const DesempenoTab = memo(function DesempenoTab({
                       key={cat.key}
                       disabled={isReadonly}
                       aria-label={`${cat.label}: ${val || "Sin evaluar"}`}
+                      spellCheck={false}
+                      data-form-type="other"
+                      {...{ autoComplete: "off", autoCorrect: "off" } as any}
                       className={cn(
                         "h-10 w-12 rounded-lg flex items-center justify-center text-xs font-bold transition-colors",
                         config ? `${config.bg} ${config.color}` : "bg-muted/40 text-muted-foreground/40",
@@ -122,7 +125,7 @@ export const DesempenoTab = memo(function DesempenoTab({
                       )}
                       onClick={() => onCambiarDesempeno(est.id, cat.key, cycleNivel(val))}
                     >
-                      {val || "—"}
+                      <span translate="no">{val || "—"}</span>
                     </button>
                   );
                 })}
