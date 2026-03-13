@@ -139,4 +139,4 @@ export const DesempenoTab = memo(function DesempenoTab({
       </div>
     </TooltipProvider>
   );
-}
+});

@@ -432,8 +432,8 @@ export default function ModoClase() {
   const saveDesempenoFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentDes = desempenoRef.current;
-    // Batch: DELETE all for this class/date, then INSERT non-empty
-    await (supabase.from("desempeno_diario" as any) as any).delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    const { error: delErr } = await (supabase.from("desempeno_diario" as any) as any).delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    if (delErr) { toast.error("Error al guardar desempeño"); return; }
     const records = Object.entries(currentDes)
       .filter(([, r]) => r.tarea || r.participacion_oral || r.rendimiento_aula || r.conducta)
       .map(([estudiante_id, r]) => ({
@@ -441,7 +441,10 @@ export default function ModoClase() {
         tarea: r.tarea, participacion_oral: r.participacion_oral,
         rendimiento_aula: r.rendimiento_aula, conducta: r.conducta,
       }));
-    if (records.length > 0) await (supabase.from("desempeno_diario" as any) as any).insert(records);
+    if (records.length > 0) {
+      const { error: insErr } = await (supabase.from("desempeno_diario" as any) as any).insert(records);
+      if (insErr) toast.error("Error al guardar desempeño");
+    }
   }, [claseId, user, selectedDateISO]);
 
   const saveProgramaFn = useCallback(async () => {
