@@ -49,9 +49,13 @@ export function AsistenciaTab({
 
   const confirmRetiro = () => {
     if (!retiroDialog) return;
-    onMarcarAsistencia(retiroDialog.estId, "retiro", retiroMotivo.trim());
+    const { estId } = retiroDialog;
+    const motivo = retiroMotivo.trim();
     setRetiroDialog(null);
     setRetiroMotivo("");
+    requestAnimationFrame(() => {
+      onMarcarAsistencia(estId, "retiro", motivo);
+    });
   };
 
   return (
