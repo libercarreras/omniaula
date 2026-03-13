@@ -115,12 +115,9 @@ export const DesempenoTab = memo(function DesempenoTab({
                       key={cat.key}
                       disabled={isReadonly}
                       aria-label={`${cat.label}: ${val || "Sin evaluar"}`}
-                      // @ts-ignore - needed for Android autocorrect prevention
-                      autoComplete="off"
-                      // @ts-ignore
-                      autoCorrect="off"
                       spellCheck={false}
                       data-form-type="other"
+                      {...{ autoComplete: "off", autoCorrect: "off" } as any}
                       className={cn(
                         "h-10 w-12 rounded-lg flex items-center justify-center text-xs font-bold transition-colors",
                         config ? `${config.bg} ${config.color}` : "bg-muted/40 text-muted-foreground/40",
