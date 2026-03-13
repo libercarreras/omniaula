@@ -84,6 +84,7 @@ export default function ModoClase() {
 
   const [modoActivo, setModoActivo] = useState<ModoActivo>("resumen");
   const [asistencia, setAsistencia] = useState<Record<string, EstadoAsistencia>>({});
+  const [motivos, setMotivos] = useState<Record<string, string>>({});
   const [participacion, setParticipacion] = useState<Record<string, NivelParticipacion | null>>({});
   const [desempeno, setDesempeno] = useState<Record<string, DesempenoRecord>>({});
   const [notasState, setNotasState] = useState<Record<string, string>>({});
@@ -125,6 +126,8 @@ export default function ModoClase() {
   // Refs for stale closure fix
   const asistenciaRef = useRef(asistencia);
   asistenciaRef.current = asistencia;
+  const motivosRef = useRef(motivos);
+  motivosRef.current = motivos;
   const notasRef = useRef(notasState);
   notasRef.current = notasState;
   const obsRef = useRef(obsState);
@@ -199,12 +202,11 @@ export default function ModoClase() {
       // ========== ASISTENCIA: Default all to "presente" if no records ==========
       const existingAsist = asistRes.data || [];
       if (existingAsist.length === 0 && !isReadonly) {
-        // Auto-default all to presente
         const defaultAsist: Record<string, EstadoAsistencia> = {};
         estudiantes.forEach(e => { defaultAsist[e.id] = "presente"; });
         setAsistencia(defaultAsist);
+        setMotivos({});
 
-        // Persist defaults to DB
         if (estudiantes.length > 0) {
           const records = estudiantes.map(e => ({
             clase_id: claseId,
@@ -215,12 +217,16 @@ export default function ModoClase() {
           }));
           await supabase.from("asistencia").insert(records);
         }
-        // Switch to attendance tab for review
         setModoActivo("asistencia");
       } else {
         const asistMap: Record<string, EstadoAsistencia> = {};
-        existingAsist.forEach(a => { asistMap[a.estudiante_id] = a.estado as EstadoAsistencia; });
+        const motivoMap: Record<string, string> = {};
+        existingAsist.forEach(a => {
+          asistMap[a.estudiante_id] = a.estado as EstadoAsistencia;
+          if ((a as any).motivo) motivoMap[a.estudiante_id] = (a as any).motivo;
+        });
         setAsistencia(asistMap);
+        setMotivos(motivoMap);
       }
 
       // ========== DIARIO: Auto-create if not exists ==========
@@ -315,15 +321,17 @@ export default function ModoClase() {
   const saveAsistenciaFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentAsist = asistenciaRef.current;
+    const currentMotivos = motivosRef.current;
     const { error: delErr } = await supabase.from("asistencia").delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
     if (delErr) { toast.error("Error al guardar asistencia"); return; }
     const records = Object.entries(currentAsist)
       .filter(([, estado]) => estado !== null)
       .map(([estudiante_id, estado]) => ({
         clase_id: claseId, estudiante_id, estado: estado!, fecha: selectedDateISO, user_id: user.id,
+        motivo: estado === "retiro" ? (currentMotivos[estudiante_id] || null) : null,
       }));
     if (records.length > 0) {
-      const { error: insErr } = await supabase.from("asistencia").insert(records);
+      const { error: insErr } = await supabase.from("asistencia").insert(records as any);
       if (insErr) toast.error("Error al guardar asistencia");
     }
   }, [claseId, user, selectedDateISO]);
@@ -517,8 +525,13 @@ export default function ModoClase() {
   }, [estudiantesClase, asistencia, notasState, evaluacionActiva, obsStats, diarioTema, desempeno, programaEstructura]);
 
   // ========== EVENT HANDLERS ==========
-  const marcarAsistencia = (estId: string, estado: EstadoAsistencia) => {
+  const marcarAsistencia = (estId: string, estado: EstadoAsistencia, motivo?: string) => {
     setAsistencia(prev => ({ ...prev, [estId]: prev[estId] === estado ? null : estado }));
+    if (motivo !== undefined) {
+      setMotivos(prev => ({ ...prev, [estId]: motivo }));
+    } else if (estado !== "retiro") {
+      setMotivos(prev => { const n = { ...prev }; delete n[estId]; return n; });
+    }
     if (!isInitialLoad.current) asistDebounce.trigger();
   };
 
@@ -681,6 +694,7 @@ export default function ModoClase() {
         <AsistenciaTab
           estudiantes={estudiantesClase}
           asistencia={asistencia}
+          motivos={motivos}
           stats={asistenciaStats}
           isReadonly={isReadonly}
           onMarcarAsistencia={marcarAsistencia}

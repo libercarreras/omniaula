@@ -1,0 +1,1 @@
+ALTER TABLE public.asistencia ADD COLUMN motivo text DEFAULT NULL;

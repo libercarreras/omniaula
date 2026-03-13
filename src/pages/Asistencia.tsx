@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Check, X, Clock, Loader2, UserCheck, CheckCheck, CheckCircle2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Check, X, Clock, LogOut, Loader2, UserCheck, CheckCheck, CheckCircle2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,7 +12,7 @@ import { useInstitucion } from "@/hooks/useInstitucion";
 import { useDebounceCallback } from "@/hooks/useDebounce";
 import { toast } from "sonner";
 
-type EstadoAsistencia = "presente" | "falta" | "tarde" | null;
+type EstadoAsistencia = "presente" | "falta" | "tarde" | "retiro" | null;
 
 export default function Asistencia() {
   const { user } = useAuth();
@@ -22,6 +24,9 @@ export default function Asistencia() {
   const [claseSeleccionada, setClaseSeleccionada] = useState("");
   const [estudiantes, setEstudiantes] = useState<any[]>([]);
   const [asistencia, setAsistencia] = useState<Record<string, EstadoAsistencia>>({});
+  const [motivos, setMotivos] = useState<Record<string, string>>({});
+  const [retiroDialog, setRetiroDialog] = useState<{ estId: string; nombre: string } | null>(null);
+  const [retiroMotivo, setRetiroMotivo] = useState("");
 
   const hoyISO = new Date().toISOString().split("T")[0];
 
@@ -51,7 +56,6 @@ export default function Asistencia() {
     fetchData();
   }, [user, institucionActiva]);
 
-  // Load students and existing attendance when class changes
   useEffect(() => {
     if (!claseSeleccionada || !user) return;
     const clase = clases.find(c => c.id === claseSeleccionada);
@@ -63,27 +67,34 @@ export default function Asistencia() {
       ]);
       setEstudiantes(estRes.data || []);
       const asistMap: Record<string, EstadoAsistencia> = {};
-      (asistRes.data || []).forEach(a => { asistMap[a.estudiante_id] = a.estado as EstadoAsistencia; });
+      const motivoMap: Record<string, string> = {};
+      (asistRes.data || []).forEach(a => {
+        asistMap[a.estudiante_id] = a.estado as EstadoAsistencia;
+        if ((a as any).motivo) motivoMap[a.estudiante_id] = (a as any).motivo;
+      });
       setAsistencia(asistMap);
+      setMotivos(motivoMap);
     };
     loadData();
   }, [claseSeleccionada, clases, user, hoyISO]);
 
   const asistenciaRef = useRef(asistencia);
   asistenciaRef.current = asistencia;
+  const motivosRef = useRef(motivos);
+  motivosRef.current = motivos;
 
-  // Auto-save with batch DELETE + INSERT
   const saveAsistenciaFn = useCallback(async () => {
     if (!user || !claseSeleccionada) return;
     const currentAsistencia = asistenciaRef.current;
-    // Batch: DELETE all for this class/date, then INSERT all non-null
+    const currentMotivos = motivosRef.current;
     await supabase.from("asistencia").delete().eq("clase_id", claseSeleccionada).eq("fecha", hoyISO);
     const records = Object.entries(currentAsistencia)
       .filter(([, estado]) => estado !== null)
       .map(([estudiante_id, estado]) => ({
-        clase_id: claseSeleccionada, estudiante_id, estado: estado as "presente" | "falta" | "tarde", fecha: hoyISO, user_id: user.id,
+        clase_id: claseSeleccionada, estudiante_id, estado: estado as "presente" | "falta" | "tarde" | "retiro", fecha: hoyISO, user_id: user.id,
+        motivo: estado === "retiro" ? (currentMotivos[estudiante_id] || null) : null,
       }));
-    if (records.length > 0) await supabase.from("asistencia").insert(records);
+    if (records.length > 0) await supabase.from("asistencia").insert(records as any);
   }, [claseSeleccionada, user, hoyISO]);
 
   const { trigger, status } = useDebounceCallback(saveAsistenciaFn, 1500);
@@ -94,15 +105,38 @@ export default function Asistencia() {
     return `${materias[c.materia_id] || "?"} - ${grupos[c.grupo_id] || "?"}`;
   };
 
-  const marcar = (estId: string, estado: EstadoAsistencia) => {
+  const marcar = (estId: string, estado: EstadoAsistencia, motivo?: string) => {
     setAsistencia(prev => ({ ...prev, [estId]: prev[estId] === estado ? null : estado }));
+    if (motivo !== undefined) {
+      setMotivos(prev => ({ ...prev, [estId]: motivo }));
+    } else if (estado !== "retiro") {
+      setMotivos(prev => { const n = { ...prev }; delete n[estId]; return n; });
+    }
     trigger();
+  };
+
+  const handleRetiroClick = (estId: string, nombre: string) => {
+    if (asistencia[estId] === "retiro") {
+      // Toggle off
+      marcar(estId, "retiro");
+    } else {
+      setRetiroMotivo(motivos[estId] || "");
+      setRetiroDialog({ estId, nombre });
+    }
+  };
+
+  const confirmRetiro = () => {
+    if (!retiroDialog) return;
+    marcar(retiroDialog.estId, "retiro", retiroMotivo.trim());
+    setRetiroDialog(null);
+    setRetiroMotivo("");
   };
 
   const marcarTodosPresentes = () => {
     const nueva: Record<string, EstadoAsistencia> = {};
     estudiantes.forEach(e => { nueva[e.id] = "presente"; });
     setAsistencia(nueva);
+    setMotivos({});
     trigger();
     toast.success("✓ Todos marcados como presentes");
   };
@@ -173,34 +207,68 @@ export default function Asistencia() {
           ) : (
             estudiantes.map(est => {
               const estado = asistencia[est.id];
+              const motivo = motivos[est.id];
               return (
-                <div key={est.id} className={cn(
-                  "flex items-center justify-between p-3 rounded-lg border-l-4 transition-all",
-                  estado === "presente" ? "bg-success/5 border-l-success" :
-                  estado === "falta" ? "bg-destructive/5 border-l-destructive" :
-                  estado === "tarde" ? "bg-warning/5 border-l-warning" :
-                  "bg-muted/30 border-l-transparent"
-                )}>
-                  <button className="font-medium text-left flex-1" onClick={() => marcar(est.id, "presente")}>
-                    {est.nombre_completo}
-                  </button>
-                  <div className="flex gap-1">
-                    <button className={cn("h-11 w-11 rounded-xl flex items-center justify-center transition-all active:scale-95",
-                      estado === "presente" ? "bg-success text-success-foreground" : "bg-muted/50 text-muted-foreground hover:bg-muted"
-                    )} onClick={() => marcar(est.id, "presente")}><Check className="h-5 w-5" /></button>
-                    <button className={cn("h-11 w-11 rounded-xl flex items-center justify-center transition-all active:scale-95",
-                      estado === "falta" ? "bg-destructive text-destructive-foreground" : "bg-muted/50 text-muted-foreground hover:bg-muted"
-                    )} onClick={() => marcar(est.id, "falta")}><X className="h-5 w-5" /></button>
-                    <button className={cn("h-11 w-11 rounded-xl flex items-center justify-center transition-all active:scale-95",
-                      estado === "tarde" ? "bg-warning text-warning-foreground" : "bg-muted/50 text-muted-foreground hover:bg-muted"
-                    )} onClick={() => marcar(est.id, "tarde")}><Clock className="h-5 w-5" /></button>
+                <div key={est.id}>
+                  <div className={cn(
+                    "flex items-center justify-between p-3 rounded-lg border-l-4 transition-colors",
+                    estado === "presente" ? "bg-success/5 border-l-success" :
+                    estado === "falta" ? "bg-destructive/5 border-l-destructive" :
+                    estado === "tarde" ? "bg-warning/5 border-l-warning" :
+                    estado === "retiro" ? "bg-muted/30 border-l-muted-foreground" :
+                    "bg-muted/30 border-l-transparent"
+                  )}>
+                    <button className="font-medium text-left flex-1" onClick={() => marcar(est.id, "presente")}>
+                      {est.nombre_completo}
+                    </button>
+                    <div className="flex gap-1">
+                      <button className={cn("h-11 w-11 rounded-xl flex items-center justify-center transition-colors",
+                        estado === "presente" ? "bg-success text-success-foreground" : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                      )} onClick={() => marcar(est.id, "presente")}><Check className="h-5 w-5" /></button>
+                      <button className={cn("h-11 w-11 rounded-xl flex items-center justify-center transition-colors",
+                        estado === "falta" ? "bg-destructive text-destructive-foreground" : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                      )} onClick={() => marcar(est.id, "falta")}><X className="h-5 w-5" /></button>
+                      <button className={cn("h-11 w-11 rounded-xl flex items-center justify-center transition-colors",
+                        estado === "tarde" ? "bg-warning text-warning-foreground" : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                      )} onClick={() => marcar(est.id, "tarde")}><Clock className="h-5 w-5" /></button>
+                      <button className={cn("h-11 w-11 rounded-xl flex items-center justify-center transition-colors",
+                        estado === "retiro" ? "bg-muted-foreground text-background" : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                      )} onClick={() => handleRetiroClick(est.id, est.nombre_completo)}><LogOut className="h-5 w-5" /></button>
+                    </div>
                   </div>
+                  {estado === "retiro" && motivo && (
+                    <p className="text-xs text-muted-foreground ml-5 mt-1 italic">Motivo: {motivo}</p>
+                  )}
                 </div>
               );
             })
           )}
         </CardContent>
       </Card>
+
+      {/* Retiro reason dialog */}
+      <Dialog open={!!retiroDialog} onOpenChange={(open) => { if (!open) setRetiroDialog(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Motivo de retiro anticipado</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {retiroDialog?.nombre} — indicá el motivo del retiro:
+          </p>
+          <Textarea
+            value={retiroMotivo}
+            onChange={(e) => setRetiroMotivo(e.target.value)}
+            placeholder="Ej: Se sintió mal, lo pasaron a buscar..."
+            className="min-h-[80px]"
+            maxLength={500}
+            autoFocus
+          />
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setRetiroDialog(null)}>Cancelar</Button>
+            <Button onClick={confirmRetiro}>Confirmar retiro</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
