@@ -321,15 +321,17 @@ export default function ModoClase() {
   const saveAsistenciaFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentAsist = asistenciaRef.current;
+    const currentMotivos = motivosRef.current;
     const { error: delErr } = await supabase.from("asistencia").delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
     if (delErr) { toast.error("Error al guardar asistencia"); return; }
     const records = Object.entries(currentAsist)
       .filter(([, estado]) => estado !== null)
       .map(([estudiante_id, estado]) => ({
         clase_id: claseId, estudiante_id, estado: estado!, fecha: selectedDateISO, user_id: user.id,
+        motivo: estado === "retiro" ? (currentMotivos[estudiante_id] || null) : null,
       }));
     if (records.length > 0) {
-      const { error: insErr } = await supabase.from("asistencia").insert(records);
+      const { error: insErr } = await supabase.from("asistencia").insert(records as any);
       if (insErr) toast.error("Error al guardar asistencia");
     }
   }, [claseId, user, selectedDateISO]);
