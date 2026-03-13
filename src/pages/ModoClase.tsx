@@ -200,12 +200,11 @@ export default function ModoClase() {
       // ========== ASISTENCIA: Default all to "presente" if no records ==========
       const existingAsist = asistRes.data || [];
       if (existingAsist.length === 0 && !isReadonly) {
-        // Auto-default all to presente
         const defaultAsist: Record<string, EstadoAsistencia> = {};
         estudiantes.forEach(e => { defaultAsist[e.id] = "presente"; });
         setAsistencia(defaultAsist);
+        setMotivos({});
 
-        // Persist defaults to DB
         if (estudiantes.length > 0) {
           const records = estudiantes.map(e => ({
             clase_id: claseId,
@@ -216,12 +215,16 @@ export default function ModoClase() {
           }));
           await supabase.from("asistencia").insert(records);
         }
-        // Switch to attendance tab for review
         setModoActivo("asistencia");
       } else {
         const asistMap: Record<string, EstadoAsistencia> = {};
-        existingAsist.forEach(a => { asistMap[a.estudiante_id] = a.estado as EstadoAsistencia; });
+        const motivoMap: Record<string, string> = {};
+        existingAsist.forEach(a => {
+          asistMap[a.estudiante_id] = a.estado as EstadoAsistencia;
+          if ((a as any).motivo) motivoMap[a.estudiante_id] = (a as any).motivo;
+        });
         setAsistencia(asistMap);
+        setMotivos(motivoMap);
       }
 
       // ========== DIARIO: Auto-create if not exists ==========
