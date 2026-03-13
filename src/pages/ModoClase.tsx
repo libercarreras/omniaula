@@ -525,8 +525,13 @@ export default function ModoClase() {
   }, [estudiantesClase, asistencia, notasState, evaluacionActiva, obsStats, diarioTema, desempeno, programaEstructura]);
 
   // ========== EVENT HANDLERS ==========
-  const marcarAsistencia = (estId: string, estado: EstadoAsistencia) => {
+  const marcarAsistencia = (estId: string, estado: EstadoAsistencia, motivo?: string) => {
     setAsistencia(prev => ({ ...prev, [estId]: prev[estId] === estado ? null : estado }));
+    if (motivo !== undefined) {
+      setMotivos(prev => ({ ...prev, [estId]: motivo }));
+    } else if (estado !== "retiro") {
+      setMotivos(prev => { const n = { ...prev }; delete n[estId]; return n; });
+    }
     if (!isInitialLoad.current) asistDebounce.trigger();
   };
 
