@@ -127,9 +127,13 @@ export default function Asistencia() {
 
   const confirmRetiro = () => {
     if (!retiroDialog) return;
-    marcar(retiroDialog.estId, "retiro", retiroMotivo.trim());
+    const { estId } = retiroDialog;
+    const motivo = retiroMotivo.trim();
     setRetiroDialog(null);
     setRetiroMotivo("");
+    requestAnimationFrame(() => {
+      marcar(estId, "retiro", motivo);
+    });
   };
 
   const marcarTodosPresentes = () => {
