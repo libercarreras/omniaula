@@ -51,7 +51,9 @@ const cycleNivel = (current: NivelDesempeno): NivelDesempeno => {
   return niveles[(idx + 1) % niveles.length];
 };
 
-export function DesempenoTab({
+import { memo } from "react";
+
+export const DesempenoTab = memo(function DesempenoTab({
   estudiantes, desempeno, isReadonly, hasTareaHoy,
   onCambiarDesempeno, onMarcarTodosA, onStudentDetail, onTareaHeaderClick,
 }: DesempenoTabProps) {
