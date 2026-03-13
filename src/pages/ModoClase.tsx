@@ -416,14 +416,17 @@ export default function ModoClase() {
   const saveParticipacionFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentPart = participacionRef.current;
-    // Batch: DELETE all for this class/date, then INSERT non-null
-    await (supabase.from("participacion_clase" as any) as any).delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    const { error: delErr } = await (supabase.from("participacion_clase" as any) as any).delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    if (delErr) { toast.error("Error al guardar participación"); return; }
     const records = Object.entries(currentPart)
       .filter(([, nivel]) => nivel !== null)
       .map(([estudiante_id, nivel]) => ({
         clase_id: claseId, estudiante_id, nivel, fecha: selectedDateISO, user_id: user.id,
       }));
-    if (records.length > 0) await (supabase.from("participacion_clase" as any) as any).insert(records);
+    if (records.length > 0) {
+      const { error: insErr } = await (supabase.from("participacion_clase" as any) as any).insert(records);
+      if (insErr) toast.error("Error al guardar participación");
+    }
   }, [claseId, user, selectedDateISO]);
 
   const saveDesempenoFn = useCallback(async () => {
