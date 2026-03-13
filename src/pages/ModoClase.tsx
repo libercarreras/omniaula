@@ -315,20 +315,22 @@ export default function ModoClase() {
   const saveAsistenciaFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentAsist = asistenciaRef.current;
-    // Batch: DELETE all for this class/date, then INSERT all non-null
-    await supabase.from("asistencia").delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    const { error: delErr } = await supabase.from("asistencia").delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    if (delErr) { toast.error("Error al guardar asistencia"); return; }
     const records = Object.entries(currentAsist)
       .filter(([, estado]) => estado !== null)
       .map(([estudiante_id, estado]) => ({
         clase_id: claseId, estudiante_id, estado: estado!, fecha: selectedDateISO, user_id: user.id,
       }));
-    if (records.length > 0) await supabase.from("asistencia").insert(records);
+    if (records.length > 0) {
+      const { error: insErr } = await supabase.from("asistencia").insert(records);
+      if (insErr) toast.error("Error al guardar asistencia");
+    }
   }, [claseId, user, selectedDateISO]);
 
   const saveNotasFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentNotas = notasRef.current;
-    // Collect all evaluacion_ids that have entries
     const evIds = new Set<string>();
     const records: { evaluacion_id: string; estudiante_id: string; nota: number; user_id: string }[] = [];
     for (const [key, val] of Object.entries(currentNotas)) {
@@ -340,17 +342,21 @@ export default function ModoClase() {
       evIds.add(evaluacion_id);
       records.push({ evaluacion_id, estudiante_id, nota, user_id: user.id });
     }
-    // Batch: DELETE existing notas for these evaluaciones, then INSERT all
     if (evIds.size > 0) {
-      await supabase.from("notas").delete().in("evaluacion_id", Array.from(evIds));
+      const { error: delErr } = await supabase.from("notas").delete().in("evaluacion_id", Array.from(evIds));
+      if (delErr) { toast.error("Error al guardar notas"); return; }
     }
-    if (records.length > 0) await supabase.from("notas").insert(records);
+    if (records.length > 0) {
+      const { error: insErr } = await supabase.from("notas").insert(records);
+      if (insErr) toast.error("Error al guardar notas");
+    }
   }, [user, claseId]);
 
   const saveObservacionesFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentObs = obsRef.current;
-    await supabase.from("observaciones").delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    const { error: delErr } = await supabase.from("observaciones").delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    if (delErr) { toast.error("Error al guardar observaciones"); return; }
     const records: any[] = [];
     Object.entries(currentObs).forEach(([estudiante_id, tipos]) => {
       tipos.forEach(tipo => {
@@ -361,7 +367,10 @@ export default function ModoClase() {
         });
       });
     });
-    if (records.length > 0) await supabase.from("observaciones").insert(records);
+    if (records.length > 0) {
+      const { error: insErr } = await supabase.from("observaciones").insert(records);
+      if (insErr) toast.error("Error al guardar observaciones");
+    }
   }, [claseId, user, selectedDateISO]);
 
   const saveDiarioFn = useCallback(async () => {
@@ -407,21 +416,24 @@ export default function ModoClase() {
   const saveParticipacionFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentPart = participacionRef.current;
-    // Batch: DELETE all for this class/date, then INSERT non-null
-    await (supabase.from("participacion_clase" as any) as any).delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    const { error: delErr } = await (supabase.from("participacion_clase" as any) as any).delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    if (delErr) { toast.error("Error al guardar participación"); return; }
     const records = Object.entries(currentPart)
       .filter(([, nivel]) => nivel !== null)
       .map(([estudiante_id, nivel]) => ({
         clase_id: claseId, estudiante_id, nivel, fecha: selectedDateISO, user_id: user.id,
       }));
-    if (records.length > 0) await (supabase.from("participacion_clase" as any) as any).insert(records);
+    if (records.length > 0) {
+      const { error: insErr } = await (supabase.from("participacion_clase" as any) as any).insert(records);
+      if (insErr) toast.error("Error al guardar participación");
+    }
   }, [claseId, user, selectedDateISO]);
 
   const saveDesempenoFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentDes = desempenoRef.current;
-    // Batch: DELETE all for this class/date, then INSERT non-empty
-    await (supabase.from("desempeno_diario" as any) as any).delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    const { error: delErr } = await (supabase.from("desempeno_diario" as any) as any).delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    if (delErr) { toast.error("Error al guardar desempeño"); return; }
     const records = Object.entries(currentDes)
       .filter(([, r]) => r.tarea || r.participacion_oral || r.rendimiento_aula || r.conducta)
       .map(([estudiante_id, r]) => ({
@@ -429,7 +441,10 @@ export default function ModoClase() {
         tarea: r.tarea, participacion_oral: r.participacion_oral,
         rendimiento_aula: r.rendimiento_aula, conducta: r.conducta,
       }));
-    if (records.length > 0) await (supabase.from("desempeno_diario" as any) as any).insert(records);
+    if (records.length > 0) {
+      const { error: insErr } = await (supabase.from("desempeno_diario" as any) as any).insert(records);
+      if (insErr) toast.error("Error al guardar desempeño");
+    }
   }, [claseId, user, selectedDateISO]);
 
   const saveProgramaFn = useCallback(async () => {
@@ -520,15 +535,15 @@ export default function ModoClase() {
     if (!isInitialLoad.current) partDebounce.trigger();
   };
 
-  const cambiarDesempeno = (estId: string, categoria: DesempenoCategoria, nivel: NivelDesempeno) => {
+  const cambiarDesempeno = useCallback((estId: string, categoria: DesempenoCategoria, nivel: NivelDesempeno) => {
     setDesempeno(prev => {
       const current = prev[estId] || { tarea: null, participacion_oral: null, rendimiento_aula: null, conducta: null };
       return { ...prev, [estId]: { ...current, [categoria]: nivel } };
     });
     if (!isInitialLoad.current) desempenoDebounce.trigger();
-  };
+  }, [desempenoDebounce]);
 
-  const marcarTodosDesempenoA = () => {
+  const marcarTodosDesempenoA = useCallback(() => {
     const nuevo: Record<string, DesempenoRecord> = {};
     estudiantesClase.forEach(e => {
       nuevo[e.id] = { tarea: "A", participacion_oral: "A", rendimiento_aula: "A", conducta: "A" };
@@ -536,7 +551,9 @@ export default function ModoClase() {
     setDesempeno(nuevo);
     if (!isInitialLoad.current) desempenoDebounce.trigger();
     toast.success("✓ Todos marcados con A");
-  };
+  }, [estudiantesClase, desempenoDebounce]);
+
+  const handleTareaHeaderClick = useCallback(() => setTareaSheetOpen(true), []);
 
   const toggleObservacion = (estId: string, obsId: string) => {
     setObsState(prev => {
@@ -681,7 +698,7 @@ export default function ModoClase() {
           onCambiarDesempeno={cambiarDesempeno}
           onMarcarTodosA={marcarTodosDesempenoA}
           onStudentDetail={setStudentDetailId}
-          onTareaHeaderClick={() => setTareaSheetOpen(true)}
+          onTareaHeaderClick={handleTareaHeaderClick}
         />
       )}
 
