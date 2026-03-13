@@ -355,7 +355,8 @@ export default function ModoClase() {
   const saveObservacionesFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentObs = obsRef.current;
-    await supabase.from("observaciones").delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    const { error: delErr } = await supabase.from("observaciones").delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    if (delErr) { toast.error("Error al guardar observaciones"); return; }
     const records: any[] = [];
     Object.entries(currentObs).forEach(([estudiante_id, tipos]) => {
       tipos.forEach(tipo => {
@@ -366,7 +367,10 @@ export default function ModoClase() {
         });
       });
     });
-    if (records.length > 0) await supabase.from("observaciones").insert(records);
+    if (records.length > 0) {
+      const { error: insErr } = await supabase.from("observaciones").insert(records);
+      if (insErr) toast.error("Error al guardar observaciones");
+    }
   }, [claseId, user, selectedDateISO]);
 
   const saveDiarioFn = useCallback(async () => {
