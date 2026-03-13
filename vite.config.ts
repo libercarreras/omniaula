@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
-      registerType: "autoUpdate",
+      registerType: "prompt",
       includeAssets: ["favicon.ico", "pwa-icon-192.png", "pwa-icon-512.png"],
       manifest: {
         id: "/",
@@ -41,8 +41,9 @@ export default defineConfig(({ mode }) => ({
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
             handler: "NetworkFirst",
+            method: "GET",
             options: {
-              cacheName: "supabase-api",
+              cacheName: "supabase-api-get",
               expiration: {
                 maxEntries: 50,
                 maxAgeSeconds: 60 * 5,

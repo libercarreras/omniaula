@@ -7,9 +7,14 @@ export function UpdatePrompt() {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
   } = useRegisterSW({
-    immediate: true,
+    onRegisteredSW(swUrl, registration) {
+      console.log("[OmniAula][SW] Registrado:", swUrl, "| Scope:", registration?.scope, "| Timestamp:", new Date().toISOString());
+      if (registration?.waiting) {
+        console.warn("[OmniAula][SW] Nueva versión esperando activación");
+      }
+    },
     onRegisterError(error) {
-      console.error("SW registration error", error);
+      console.error("[OmniAula][SW] Error de registro:", error, "| Timestamp:", new Date().toISOString());
     },
   });
 

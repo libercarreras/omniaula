@@ -15,7 +15,8 @@ export function useDebounceCallback(callback: () => Promise<void> | void, delay 
         await callbackRef.current();
         setStatus("saved");
         setTimeout(() => setStatus("idle"), 2000);
-      } catch {
+      } catch (err) {
+        console.error("[OmniAula][AutoSave] Error en guardado automático:", err, "| Timestamp:", new Date().toISOString());
         setStatus("idle");
       }
     }, delay);
