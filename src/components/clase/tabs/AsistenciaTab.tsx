@@ -133,7 +133,7 @@ export function AsistenciaTab({
             placeholder="Ej: Se sintió mal, lo pasaron a buscar..."
             className="min-h-[80px]"
             maxLength={500}
-            
+            translate="no"
           />
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setRetiroDialog(null)}>Cancelar</Button>

@@ -16,13 +16,17 @@ export class ErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
+    const isTranslationCrash = error.message?.includes("removeChild") || error.message?.includes("insertBefore") || error.message?.includes("NotFoundError");
     console.error(
       "[OmniAula][ErrorBoundary] Crash capturado:",
       error.message,
       "| Stack:", error.stack,
       "| ComponentStack:", info.componentStack,
       "| Timestamp:", new Date().toISOString(),
-      "| UA:", navigator.userAgent
+      "| UA:", navigator.userAgent,
+      "| Lang:", document.documentElement.lang,
+      "| NavLang:", navigator.language,
+      "| TranslateCrash:", isTranslationCrash
     );
   }
 

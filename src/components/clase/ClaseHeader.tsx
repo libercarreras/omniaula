@@ -150,7 +150,7 @@ export function ClaseHeader({
             onClick={() => onModoChange(modo.id)}
           >
             <modo.icon className="h-3.5 w-3.5" />
-            {modo.label}
+            <span translate="no" className="notranslate">{modo.label}</span>
             {modoActivo !== modo.id && (
               <span className="absolute -top-0.5 -right-0.5">{getBadge(modo.id)}</span>
             )}

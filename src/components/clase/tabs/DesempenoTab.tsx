@@ -74,7 +74,7 @@ export const DesempenoTab = memo(function DesempenoTab({
                   onClick={() => cat.key === "tarea" && onTareaHeaderClick?.()}
                 >
                   <cat.icon className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-[9px] text-muted-foreground font-medium leading-none">{cat.shortLabel}</span>
+                  <span translate="no" className="text-[9px] text-muted-foreground font-medium leading-none notranslate">{cat.shortLabel}</span>
                   {cat.key === "tarea" && hasTareaHoy && (
                     <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary" />
                   )}
