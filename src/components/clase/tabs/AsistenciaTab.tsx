@@ -1,15 +1,19 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Textarea } from "@/components/ui/textarea";
 import { Check, X, Clock, LogOut, CheckCheck } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { EstadoAsistencia } from "../types";
 
 interface AsistenciaTabProps {
   estudiantes: any[];
   asistencia: Record<string, EstadoAsistencia>;
+  motivos: Record<string, string>;
   stats: { total: number; presentes: number; faltas: number; tardes: number };
   isReadonly: boolean;
-  onMarcarAsistencia: (estId: string, estado: EstadoAsistencia) => void;
+  onMarcarAsistencia: (estId: string, estado: EstadoAsistencia, motivo?: string) => void;
   onMarcarTodosPresentes: () => void;
   onStudentDetail: (estId: string) => void;
 }
@@ -26,11 +30,30 @@ const asistButtons = [
   { v: "retiro" as const, icon: LogOut, active: "bg-muted-foreground text-background" },
 ];
 
-
 export function AsistenciaTab({
-  estudiantes, asistencia, stats, isReadonly,
+  estudiantes, asistencia, motivos, stats, isReadonly,
   onMarcarAsistencia, onMarcarTodosPresentes, onStudentDetail,
 }: AsistenciaTabProps) {
+  const [retiroDialog, setRetiroDialog] = useState<{ estId: string; nombre: string } | null>(null);
+  const [retiroMotivo, setRetiroMotivo] = useState("");
+
+  const handleButtonClick = (estId: string, estado: EstadoAsistencia, nombre: string) => {
+    if (estado === "retiro" && asistencia[estId] !== "retiro") {
+      // Opening retiro: show dialog
+      setRetiroMotivo(motivos[estId] || "");
+      setRetiroDialog({ estId, nombre });
+    } else {
+      onMarcarAsistencia(estId, estado);
+    }
+  };
+
+  const confirmRetiro = () => {
+    if (!retiroDialog) return;
+    onMarcarAsistencia(retiroDialog.estId, "retiro", retiroMotivo.trim());
+    setRetiroDialog(null);
+    setRetiroMotivo("");
+  };
+
   return (
     <>
       <div className="flex items-center justify-between py-2 gap-2">
@@ -52,9 +75,10 @@ export function AsistenciaTab({
         {estudiantes.map((est, idx) => {
           const estado = asistencia[est.id];
           const estadoBg = estado === "presente" ? "border-l-success" : estado === "falta" ? "border-l-destructive" : estado === "tarde" ? "border-l-warning" : estado === "retiro" ? "border-l-muted-foreground" : "border-l-transparent";
+          const motivo = motivos[est.id];
 
           return (
-            <div key={est.id} className={cn("bg-card rounded-lg border border-l-4 p-3 transition-all", estadoBg)}>
+            <div key={est.id} className={cn("bg-card rounded-lg border border-l-4 p-3 transition-colors", estadoBg)}>
               <div className="flex items-center gap-2.5">
                 <button className="flex items-center gap-2.5 min-w-0 flex-1 text-left" onClick={() => onStudentDetail(est.id)}>
                   <Avatar className="h-9 w-9 shrink-0">
@@ -71,21 +95,48 @@ export function AsistenciaTab({
                       key={btn.v}
                       disabled={isReadonly}
                       className={cn(
-                        "h-11 w-11 rounded-xl flex items-center justify-center transition-all active:scale-95",
-                        estado === btn.v ? `${btn.active} animate-in zoom-in-95 duration-150` : "bg-muted/50 text-muted-foreground hover:bg-muted",
+                        "h-11 w-11 rounded-xl flex items-center justify-center transition-colors",
+                        estado === btn.v ? `${btn.active}` : "bg-muted/50 text-muted-foreground hover:bg-muted",
                         isReadonly && "opacity-50 pointer-events-none"
                       )}
-                      onClick={() => onMarcarAsistencia(est.id, btn.v)}
+                      onClick={() => handleButtonClick(est.id, btn.v, est.nombre_completo)}
                     >
                       <btn.icon className="h-5 w-5" />
                     </button>
                   ))}
                 </div>
               </div>
+              {estado === "retiro" && motivo && (
+                <p className="text-xs text-muted-foreground mt-1.5 ml-12 italic">Motivo: {motivo}</p>
+              )}
             </div>
           );
         })}
       </div>
+
+      {/* Retiro reason dialog */}
+      <Dialog open={!!retiroDialog} onOpenChange={(open) => { if (!open) setRetiroDialog(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Motivo de retiro anticipado</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {retiroDialog?.nombre} — indicá el motivo del retiro:
+          </p>
+          <Textarea
+            value={retiroMotivo}
+            onChange={(e) => setRetiroMotivo(e.target.value)}
+            placeholder="Ej: Se sintió mal, lo pasaron a buscar..."
+            className="min-h-[80px]"
+            maxLength={500}
+            autoFocus
+          />
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setRetiroDialog(null)}>Cancelar</Button>
+            <Button onClick={confirmRetiro}>Confirmar retiro</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
