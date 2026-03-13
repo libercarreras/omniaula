@@ -331,7 +331,6 @@ export default function ModoClase() {
   const saveNotasFn = useCallback(async () => {
     if (!user || !claseId) return;
     const currentNotas = notasRef.current;
-    // Collect all evaluacion_ids that have entries
     const evIds = new Set<string>();
     const records: { evaluacion_id: string; estudiante_id: string; nota: number; user_id: string }[] = [];
     for (const [key, val] of Object.entries(currentNotas)) {
@@ -343,11 +342,14 @@ export default function ModoClase() {
       evIds.add(evaluacion_id);
       records.push({ evaluacion_id, estudiante_id, nota, user_id: user.id });
     }
-    // Batch: DELETE existing notas for these evaluaciones, then INSERT all
     if (evIds.size > 0) {
-      await supabase.from("notas").delete().in("evaluacion_id", Array.from(evIds));
+      const { error: delErr } = await supabase.from("notas").delete().in("evaluacion_id", Array.from(evIds));
+      if (delErr) { toast.error("Error al guardar notas"); return; }
     }
-    if (records.length > 0) await supabase.from("notas").insert(records);
+    if (records.length > 0) {
+      const { error: insErr } = await supabase.from("notas").insert(records);
+      if (insErr) toast.error("Error al guardar notas");
+    }
   }, [user, claseId]);
 
   const saveObservacionesFn = useCallback(async () => {
