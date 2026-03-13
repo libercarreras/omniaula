@@ -696,7 +696,7 @@ export default function ModoClase() {
           onCambiarDesempeno={cambiarDesempeno}
           onMarcarTodosA={marcarTodosDesempenoA}
           onStudentDetail={setStudentDetailId}
-          onTareaHeaderClick={() => setTareaSheetOpen(true)}
+          onTareaHeaderClick={handleTareaHeaderClick}
         />
       )}
 
