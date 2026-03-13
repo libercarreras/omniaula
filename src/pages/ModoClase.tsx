@@ -535,13 +535,13 @@ export default function ModoClase() {
     if (!isInitialLoad.current) partDebounce.trigger();
   };
 
-  const cambiarDesempeno = (estId: string, categoria: DesempenoCategoria, nivel: NivelDesempeno) => {
+  const cambiarDesempeno = useCallback((estId: string, categoria: DesempenoCategoria, nivel: NivelDesempeno) => {
     setDesempeno(prev => {
       const current = prev[estId] || { tarea: null, participacion_oral: null, rendimiento_aula: null, conducta: null };
       return { ...prev, [estId]: { ...current, [categoria]: nivel } };
     });
     if (!isInitialLoad.current) desempenoDebounce.trigger();
-  };
+  }, [desempenoDebounce]);
 
   const marcarTodosDesempenoA = () => {
     const nuevo: Record<string, DesempenoRecord> = {};
