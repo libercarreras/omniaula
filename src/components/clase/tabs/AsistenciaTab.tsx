@@ -49,9 +49,13 @@ export function AsistenciaTab({
 
   const confirmRetiro = () => {
     if (!retiroDialog) return;
-    onMarcarAsistencia(retiroDialog.estId, "retiro", retiroMotivo.trim());
+    const { estId } = retiroDialog;
+    const motivo = retiroMotivo.trim();
     setRetiroDialog(null);
     setRetiroMotivo("");
+    requestAnimationFrame(() => {
+      onMarcarAsistencia(estId, "retiro", motivo);
+    });
   };
 
   return (
@@ -129,7 +133,7 @@ export function AsistenciaTab({
             placeholder="Ej: Se sintió mal, lo pasaron a buscar..."
             className="min-h-[80px]"
             maxLength={500}
-            autoFocus
+            
           />
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setRetiroDialog(null)}>Cancelar</Button>

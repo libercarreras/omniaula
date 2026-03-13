@@ -127,9 +127,13 @@ export default function Asistencia() {
 
   const confirmRetiro = () => {
     if (!retiroDialog) return;
-    marcar(retiroDialog.estId, "retiro", retiroMotivo.trim());
+    const { estId } = retiroDialog;
+    const motivo = retiroMotivo.trim();
     setRetiroDialog(null);
     setRetiroMotivo("");
+    requestAnimationFrame(() => {
+      marcar(estId, "retiro", motivo);
+    });
   };
 
   const marcarTodosPresentes = () => {
@@ -261,7 +265,7 @@ export default function Asistencia() {
             placeholder="Ej: Se sintió mal, lo pasaron a buscar..."
             className="min-h-[80px]"
             maxLength={500}
-            autoFocus
+            
           />
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setRetiroDialog(null)}>Cancelar</Button>
