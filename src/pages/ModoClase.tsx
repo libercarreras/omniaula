@@ -553,6 +553,8 @@ export default function ModoClase() {
     toast.success("✓ Todos marcados con A");
   }, [estudiantesClase, desempenoDebounce]);
 
+  const handleTareaHeaderClick = useCallback(() => setTareaSheetOpen(true), []);
+
   const toggleObservacion = (estId: string, obsId: string) => {
     setObsState(prev => {
       const current = prev[estId] || [];
