@@ -248,11 +248,12 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
 
   /* ── Recalculate stale dates ── */
   const recalcStaleDates = useCallback(async (updatedRows: SubtemaRow[], reloadAfter = true): Promise<boolean> => {
-    const pendingRows = updatedRows.filter(
-      r => r.estado === "pendiente" || r.estado === "parcial"
-    );
-    const staleCount = pendingRows.filter(r => r.fecha <= hoyISO).length;
-    if (staleCount === 0) return false;
+    // Get ALL pending/partial rows sorted by curriculum order
+    const pendingRows = updatedRows
+      .filter(r => r.estado === "pendiente" || r.estado === "parcial")
+      .sort((a, b) => a.unidad_index - b.unidad_index || a.tema_index - b.tema_index);
+
+    if (pendingRows.length === 0) return false;
 
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
