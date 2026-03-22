@@ -247,19 +247,19 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
   };
 
   /* ── Recalculate stale dates ── */
-  const recalcStaleDates = useCallback(async (updatedRows: SubtemaRow[]) => {
+  const recalcStaleDates = useCallback(async (updatedRows: SubtemaRow[], reloadAfter = true): Promise<boolean> => {
     const pendingRows = updatedRows.filter(
       r => r.estado === "pendiente" || r.estado === "parcial"
     );
     const staleCount = pendingRows.filter(r => r.fecha <= hoyISO).length;
-    if (staleCount === 0) return;
+    if (staleCount === 0) return false;
 
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const futureDates = getFutureClassDates(horario, tomorrow, pendingRows.length);
     if (futureDates.length === 0) {
       toast.warning("No se pudieron recalcular fechas: verificá el horario de la clase.");
-      return;
+      return false;
     }
 
     const updates: Array<{ id: string; fecha: string }> = [];
@@ -270,12 +270,13 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
       }
     });
 
-    if (updates.length === 0) return;
+    if (updates.length === 0) return false;
     await Promise.all(
       updates.map(u => supabase.from("planificacion_clases").update({ fecha: u.fecha }).eq("id", u.id))
     );
     toast.info(`${updates.length} subtema(s) reprogramado(s) a las próximas clases disponibles.`);
-    await loadPlan();
+    if (reloadAfter) await loadPlan();
+    return true;
   }, [horario, hoyISO]);
 
   /* ── Toggle subtema ── */
