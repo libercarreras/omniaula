@@ -17,6 +17,7 @@ interface PlanItem {
   tema_index: number;
   unidad_titulo: string;
   tema_titulo: string;
+  subtemas?: string[];
   estado: "pendiente" | "completado" | "parcial" | "suspendido" | "reprogramado";
   diario_id?: string | null;
   notas?: string | null;
