@@ -59,11 +59,12 @@ export function ProgramaTab({
         )}
       </div>
 
-      {programaContenido && (
+      {(programaContenido || programaArchivoUrl) && (
         <div className="space-y-2 pt-2 border-t">
           <Label className="text-sm font-semibold">Estructura del programa</Label>
           <EstructuraPrograma
             contenido={programaContenido}
+            archivoUrl={programaArchivoUrl}
             estructuraGuardada={programaEstructura}
             saving={savingEstructura}
             onSave={onSaveEstructura}
