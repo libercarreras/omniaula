@@ -17,7 +17,6 @@ function parseHorarioDias(horario: string | null): number[] {
   if (!horario) return [];
   const lower = horario.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const found: number[] = [];
-  // Sort keys longest first to avoid partial matches
   const sortedKeys = Object.entries(DIAS_MAP).sort((a, b) => b[0].length - a[0].length);
   for (const [key, val] of sortedKeys) {
     const normKey = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -31,17 +30,13 @@ function parseHorarioDias(horario: string | null): number[] {
 function getClassDates(diaNum: number, startDate: Date, endDate: Date): string[] {
   const dates: string[] = [];
   const current = new Date(startDate);
-
-  // Move to first occurrence of this day
   while (current.getDay() !== diaNum) {
     current.setDate(current.getDate() + 1);
   }
-
   while (current <= endDate) {
     dates.push(current.toISOString().split("T")[0]);
     current.setDate(current.getDate() + 7);
   }
-
   return dates;
 }
 
@@ -85,7 +80,6 @@ serve(async (req) => {
     const start = new Date(fechaInicio || new Date().toISOString().split("T")[0]);
     const end = new Date(fechaFin || `${start.getFullYear()}-12-15`);
 
-    // Collect dates for all class days, then sort
     let availableDates: string[] = [];
     for (const diaNum of diasNums) {
       availableDates = availableDates.concat(getClassDates(diaNum, start, end));
@@ -99,46 +93,63 @@ serve(async (req) => {
       );
     }
 
-    // Flatten all topics from the structure
-    const allTopics: { unidad_index: number; tema_index: number; unidad_titulo: string; tema_titulo: string; subtemas: string[] }[] = [];
+    // Flatten to SUBTEMA level: each subtema gets its own slot
+    // If a tema has no subtemas, the tema itself is one item
+    const allItems: {
+      unidad_index: number;
+      tema_index: number;
+      unidad_titulo: string;
+      tema_titulo: string;
+      subtema_titulo: string | null;
+    }[] = [];
+
     (estructura as Estructura).unidades.forEach((unidad, ui) => {
       unidad.temas.forEach((tema, ti) => {
-        allTopics.push({
-          unidad_index: ui,
-          tema_index: ti,
-          unidad_titulo: unidad.titulo,
-          tema_titulo: tema.titulo,
-          subtemas: tema.subtemas || [],
-        });
+        const subs = tema.subtemas || [];
+        if (subs.length > 0) {
+          subs.forEach((subtema) => {
+            allItems.push({
+              unidad_index: ui,
+              tema_index: ti,
+              unidad_titulo: unidad.titulo,
+              tema_titulo: tema.titulo,
+              subtema_titulo: subtema,
+            });
+          });
+        } else {
+          // Tema without subtemas: treat the tema itself as one item
+          allItems.push({
+            unidad_index: ui,
+            tema_index: ti,
+            unidad_titulo: unidad.titulo,
+            tema_titulo: tema.titulo,
+            subtema_titulo: null,
+          });
+        }
       });
     });
 
-    // Distribute topics across available dates
-    // If more topics than dates, group multiple topics per class
-    // If more dates than topics, space them out evenly
+    // Distribute items across available dates
     const plan: Array<{
       fecha: string;
       unidad_index: number;
       tema_index: number;
       unidad_titulo: string;
       tema_titulo: string;
-      subtemas: string[];
+      subtema_titulo: string | null;
     }> = [];
 
-    if (allTopics.length <= availableDates.length) {
-      // More dates than topics: distribute evenly
-      const step = availableDates.length / allTopics.length;
-      allTopics.forEach((topic, idx) => {
+    if (allItems.length <= availableDates.length) {
+      const step = availableDates.length / allItems.length;
+      allItems.forEach((item, idx) => {
         const dateIdx = Math.min(Math.floor(idx * step), availableDates.length - 1);
-        plan.push({ ...topic, fecha: availableDates[dateIdx] });
+        plan.push({ ...item, fecha: availableDates[dateIdx] });
       });
     } else {
-      // More topics than dates: assign topics sequentially
-      // Some dates will have multiple topics, but we create one entry per topic
-      const step = allTopics.length / availableDates.length;
-      allTopics.forEach((topic, idx) => {
+      const step = allItems.length / availableDates.length;
+      allItems.forEach((item, idx) => {
         const dateIdx = Math.min(Math.floor(idx / step), availableDates.length - 1);
-        plan.push({ ...topic, fecha: availableDates[dateIdx] });
+        plan.push({ ...item, fecha: availableDates[dateIdx] });
       });
     }
 
@@ -146,7 +157,7 @@ serve(async (req) => {
       JSON.stringify({
         plan,
         totalClasesDisponibles: availableDates.length,
-        totalTemas: allTopics.length,
+        totalItems: allItems.length,
         fechaInicio: availableDates[0],
         fechaFin: availableDates[availableDates.length - 1],
       }),
