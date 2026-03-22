@@ -6,6 +6,7 @@ import {
   ChevronDown, ChevronRight, CalendarCheck, BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getFutureClassDates } from "@/lib/calendarUtils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
@@ -62,11 +63,9 @@ function parseSubtemas(notas: string | null): SubtemaItem[] {
     const parsed = JSON.parse(notas);
     if (!Array.isArray(parsed)) return [];
     if (parsed.length === 0) return [];
-    // New format: [{titulo, completado}]
     if (typeof parsed[0] === "object" && parsed[0] !== null && "titulo" in parsed[0]) {
       return parsed.map((s: any) => ({ titulo: String(s.titulo), completado: !!s.completado }));
     }
-    // Old format: string[]
     return parsed.map((s: string) => ({ titulo: String(s), completado: false }));
   } catch {
     return [];
@@ -75,7 +74,6 @@ function parseSubtemas(notas: string | null): SubtemaItem[] {
 
 /** Derive estado from subtemas completion */
 function deriveEstado(subtemas: SubtemaItem[], currentEstado: string): PlanItem["estado"] {
-  // Manual overrides stay
   if (currentEstado === "suspendido" || currentEstado === "reprogramado") return currentEstado as PlanItem["estado"];
   if (subtemas.length === 0) return currentEstado as PlanItem["estado"];
   const done = subtemas.filter(s => s.completado).length;
@@ -156,6 +154,52 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
     }
   };
 
+  /* ── Auto-recalculate stale dates ── */
+  const recalcStaleDates = useCallback(async (updatedPlan: PlanItem[]) => {
+    // Find pending/partial items with stale dates (fecha <= today)
+    const staleItems = updatedPlan.filter(
+      p => (p.estado === "pendiente" || p.estado === "parcial") && p.fecha <= hoyISO
+    );
+    if (staleItems.length === 0) return;
+
+    // Get ALL pending/partial items (including future ones) to redistribute
+    const pendingItems = updatedPlan.filter(
+      p => p.estado === "pendiente" || p.estado === "parcial"
+    );
+    if (pendingItems.length === 0) return;
+
+    // Compute next class dates starting from tomorrow
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const futureDates = getFutureClassDates(horario, tomorrow, pendingItems.length);
+
+    if (futureDates.length === 0) {
+      toast.warning("No se pudieron recalcular fechas: verificá el horario de la clase.");
+      return;
+    }
+
+    // Assign new dates sequentially
+    const updates: Array<{ id: string; fecha: string }> = [];
+    pendingItems.forEach((item, idx) => {
+      const newFecha = futureDates[Math.min(idx, futureDates.length - 1)];
+      if (item.id && newFecha !== item.fecha) {
+        updates.push({ id: item.id, fecha: newFecha });
+      }
+    });
+
+    if (updates.length === 0) return;
+
+    // Batch update
+    await Promise.all(
+      updates.map(u =>
+        supabase.from("planificacion_clases").update({ fecha: u.fecha }).eq("id", u.id)
+      )
+    );
+
+    toast.info(`${updates.length} tema(s) reprogramado(s) a las próximas clases disponibles.`);
+    await loadPlan();
+  }, [horario, hoyISO, claseId]);
+
   /* ── Subtema toggle ── */
   const toggleSubtema = useCallback(async (item: PlanItem, subIndex: number) => {
     if (!item.id) return;
@@ -166,54 +210,43 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
     const notasJson = JSON.stringify(newSubtemas);
 
     // Optimistic update
-    setPlan(prev => prev.map(p =>
+    const updatedPlan = plan.map(p =>
       p.id === item.id ? { ...p, subtemas: newSubtemas, estado: newEstado } : p
-    ));
+    );
+    setPlan(updatedPlan);
 
     await supabase.from("planificacion_clases")
       .update({ notas: notasJson, estado: newEstado })
       .eq("id", item.id);
-  }, []);
+
+    // If a tema just became "completado", check for stale dates
+    if (newEstado === "completado" && item.estado !== "completado") {
+      await recalcStaleDates(updatedPlan);
+    }
+  }, [plan, recalcStaleDates]);
 
   /* ── Manual estado override (suspendido) ── */
   const setManualEstado = useCallback(async (item: PlanItem, newEstado: PlanItem["estado"]) => {
     if (!item.id) return;
 
-    // Toggle: if already that estado, revert to derived
     let finalEstado = newEstado;
     if (item.estado === newEstado) {
       finalEstado = deriveEstado(item.subtemas, "pendiente");
     }
 
-    setPlan(prev => prev.map(p =>
+    const updatedPlan = plan.map(p =>
       p.id === item.id ? { ...p, estado: finalEstado } : p
-    ));
+    );
+    setPlan(updatedPlan);
 
     await supabase.from("planificacion_clases")
       .update({ estado: finalEstado })
       .eq("id", item.id);
 
     if (newEstado === "suspendido" && finalEstado === "suspendido") {
-      await redistributePending(item);
+      await recalcStaleDates(updatedPlan);
     }
-  }, [plan, claseId, userId]);
-
-  const redistributePending = async (suspendedItem: PlanItem) => {
-    const pendingAfter = plan.filter(p => p.fecha > suspendedItem.fecha && p.estado === "pendiente");
-    if (pendingAfter.length === 0) return;
-    const nextPending = pendingAfter[0];
-    if (nextPending?.id) {
-      await supabase.from("planificacion_clases").insert({
-        clase_id: claseId, user_id: userId, fecha: nextPending.fecha,
-        unidad_index: suspendedItem.unidad_index, tema_index: suspendedItem.tema_index,
-        unidad_titulo: suspendedItem.unidad_titulo, tema_titulo: suspendedItem.tema_titulo,
-        notas: JSON.stringify(suspendedItem.subtemas),
-        estado: "reprogramado" as any,
-      });
-    }
-    toast.info("Tema reprogramado a la siguiente clase disponible");
-    await loadPlan();
-  };
+  }, [plan, recalcStaleDates]);
 
   /* ── Stats (based on subtemas) ── */
   const stats = useMemo(() => {
@@ -232,7 +265,6 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
         if (done === p.subtemas.length) temasCompletados++;
         else if (done > 0) temasParciales++;
       } else {
-        // Tema without subtemas: count as 1
         totalSubtemas += 1;
         if (p.estado === "completado") { subtemasCompletados += 1; temasCompletados++; }
         else if (p.estado === "parcial") { subtemasCompletados += 0.5; temasParciales++; }
@@ -297,7 +329,6 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
             {Object.entries(groupedByUnit).map(([uIdx, group]) => {
               const ui = parseInt(uIdx);
               const isExpanded = expandedUnits[ui] ?? false;
-              // Unit completion: all temas completados
               const unitCompleted = group.items.filter(i => i.estado === "completado").length;
               const unitTotal = group.items.length;
               const unitDone = unitCompleted === unitTotal && unitTotal > 0;
@@ -355,7 +386,6 @@ function TodayHighlight({ item, onToggleSubtema, onSetEstado }: {
       <p className="text-sm font-semibold">{item.tema_titulo}</p>
       <p className="text-[10px] text-muted-foreground">Unidad {item.unidad_index + 1}: {item.unidad_titulo}</p>
 
-      {/* Subtema checkboxes */}
       {item.subtemas.length > 0 && (
         <div className="mt-2 space-y-1.5">
           {item.subtemas.map((sub, si) => (
@@ -372,7 +402,6 @@ function TodayHighlight({ item, onToggleSubtema, onSetEstado }: {
         </div>
       )}
 
-      {/* Suspender button */}
       <div className="flex items-center gap-1 mt-2">
         <button
           onClick={() => onSetEstado(item, "suspendido")}

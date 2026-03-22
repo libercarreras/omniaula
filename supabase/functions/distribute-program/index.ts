@@ -6,18 +6,21 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// ── Shared calendar logic (mirrored from src/lib/calendarUtils.ts) ──
+// Edge functions can't import from src/, so we inline the same pure logic.
+// If you change the algorithm, update both files.
+
 const DIAS_MAP: Record<string, number> = {
-  "domingo": 0, "lunes": 1, "martes": 2, "miercoles": 3, "miércoles": 3,
-  "jueves": 4, "viernes": 5, "sabado": 6, "sábado": 6,
-  "dom": 0, "lun": 1, "mar": 2, "mie": 3, "mié": 3,
-  "jue": 4, "vie": 5, "sab": 6, "sáb": 6,
+  domingo: 0, lunes: 1, martes: 2, miercoles: 3, "miércoles": 3,
+  jueves: 4, viernes: 5, sabado: 6, "sábado": 6,
+  dom: 0, lun: 1, mar: 2, mie: 3, "mié": 3,
+  jue: 4, vie: 5, sab: 6, "sáb": 6,
 };
 
 function parseHorarioDias(horario: string | null): number[] {
   if (!horario) return [];
   const lower = horario.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const found: number[] = [];
-  // Sort keys longest first to avoid partial matches
   const sortedKeys = Object.entries(DIAS_MAP).sort((a, b) => b[0].length - a[0].length);
   for (const [key, val] of sortedKeys) {
     const normKey = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -31,19 +34,17 @@ function parseHorarioDias(horario: string | null): number[] {
 function getClassDates(diaNum: number, startDate: Date, endDate: Date): string[] {
   const dates: string[] = [];
   const current = new Date(startDate);
-
-  // Move to first occurrence of this day
   while (current.getDay() !== diaNum) {
     current.setDate(current.getDate() + 1);
   }
-
   while (current <= endDate) {
     dates.push(current.toISOString().split("T")[0]);
     current.setDate(current.getDate() + 7);
   }
-
   return dates;
 }
+
+// ── End shared calendar logic ──
 
 interface Tema {
   titulo: string;
@@ -85,7 +86,6 @@ serve(async (req) => {
     const start = new Date(fechaInicio || new Date().toISOString().split("T")[0]);
     const end = new Date(fechaFin || `${start.getFullYear()}-12-15`);
 
-    // Collect dates for all class days, then sort
     let availableDates: string[] = [];
     for (const diaNum of diasNums) {
       availableDates = availableDates.concat(getClassDates(diaNum, start, end));
@@ -99,7 +99,6 @@ serve(async (req) => {
       );
     }
 
-    // Flatten all topics from the structure
     const allTopics: { unidad_index: number; tema_index: number; unidad_titulo: string; tema_titulo: string; subtemas: string[] }[] = [];
     (estructura as Estructura).unidades.forEach((unidad, ui) => {
       unidad.temas.forEach((tema, ti) => {
@@ -113,9 +112,6 @@ serve(async (req) => {
       });
     });
 
-    // Distribute topics across available dates
-    // If more topics than dates, group multiple topics per class
-    // If more dates than topics, space them out evenly
     const plan: Array<{
       fecha: string;
       unidad_index: number;
@@ -126,15 +122,12 @@ serve(async (req) => {
     }> = [];
 
     if (allTopics.length <= availableDates.length) {
-      // More dates than topics: distribute evenly
       const step = availableDates.length / allTopics.length;
       allTopics.forEach((topic, idx) => {
         const dateIdx = Math.min(Math.floor(idx * step), availableDates.length - 1);
         plan.push({ ...topic, fecha: availableDates[dateIdx] });
       });
     } else {
-      // More topics than dates: assign topics sequentially
-      // Some dates will have multiple topics, but we create one entry per topic
       const step = allTopics.length / availableDates.length;
       allTopics.forEach((topic, idx) => {
         const dateIdx = Math.min(Math.floor(idx / step), availableDates.length - 1);
