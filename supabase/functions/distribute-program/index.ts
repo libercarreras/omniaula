@@ -100,7 +100,7 @@ serve(async (req) => {
     }
 
     // Flatten all topics from the structure
-    const allTopics: { unidad_index: number; tema_index: number; unidad_titulo: string; tema_titulo: string }[] = [];
+    const allTopics: { unidad_index: number; tema_index: number; unidad_titulo: string; tema_titulo: string; subtemas: string[] }[] = [];
     (estructura as Estructura).unidades.forEach((unidad, ui) => {
       unidad.temas.forEach((tema, ti) => {
         allTopics.push({
@@ -108,6 +108,7 @@ serve(async (req) => {
           tema_index: ti,
           unidad_titulo: unidad.titulo,
           tema_titulo: tema.titulo,
+          subtemas: tema.subtemas || [],
         });
       });
     });
