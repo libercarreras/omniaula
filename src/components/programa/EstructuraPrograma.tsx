@@ -187,7 +187,7 @@ export function EstructuraPrograma({ contenido, archivoUrl, estructuraGuardada, 
       {/* Analyze button */}
       <Button
         onClick={handleAnalyze}
-        disabled={isAnalyzing || !contenido}
+        disabled={isAnalyzing || !hasContent}
         className="w-full gap-2 h-11 font-semibold"
         variant={estructura ? "outline" : "default"}
       >
