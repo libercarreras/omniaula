@@ -64,7 +64,14 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
       .select("*")
       .eq("clase_id", claseId)
       .order("fecha", { ascending: true });
-    setPlan((data || []) as unknown as PlanItem[]);
+    const items = (data || []).map((item: any) => {
+      let subtemas: string[] = [];
+      if (item.notas) {
+        try { subtemas = JSON.parse(item.notas); } catch { /* not JSON subtemas */ }
+      }
+      return { ...item, subtemas } as PlanItem;
+    });
+    setPlan(items);
     setLoading(false);
   };
 
