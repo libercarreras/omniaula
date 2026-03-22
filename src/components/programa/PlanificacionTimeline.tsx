@@ -137,6 +137,7 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
     if (parsed.length > 0) {
       await recalcStaleDates(parsed);
     }
+  };
 
   const migrateOldFormat = async (oldRows: any[]) => {
     const newRecords: any[] = [];
