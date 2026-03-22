@@ -343,25 +343,38 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
                                 {item.tema_titulo}
                               </span>
 
-                            {/* Status buttons */}
-                            <div className="flex items-center gap-0.5 shrink-0">
-                              {(["completado", "parcial", "suspendido"] as const).map(est => {
-                                const c = ESTADO_CONFIG[est];
-                                return (
-                                  <button
-                                    key={est}
-                                    onClick={() => updateEstado(item, item.estado === est ? "pendiente" : est)}
-                                    className={cn(
-                                      "h-7 w-7 rounded-md flex items-center justify-center transition-all active:scale-95",
-                                      item.estado === est ? c.color : "text-muted-foreground/40 hover:text-muted-foreground"
-                                    )}
-                                    title={c.label}
-                                  >
-                                    <c.icon className="h-3.5 w-3.5" />
-                                  </button>
-                                );
-                              })}
+                              {/* Status buttons */}
+                              <div className="flex items-center gap-0.5 shrink-0">
+                                {(["completado", "parcial", "suspendido"] as const).map(est => {
+                                  const c = ESTADO_CONFIG[est];
+                                  return (
+                                    <button
+                                      key={est}
+                                      onClick={() => updateEstado(item, item.estado === est ? "pendiente" : est)}
+                                      className={cn(
+                                        "h-7 w-7 rounded-md flex items-center justify-center transition-all active:scale-95",
+                                        item.estado === est ? c.color : "text-muted-foreground/40 hover:text-muted-foreground"
+                                      )}
+                                      title={c.label}
+                                    >
+                                      <c.icon className="h-3.5 w-3.5" />
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </div>
+
+                            {/* Subtemas */}
+                            {item.subtemas && item.subtemas.length > 0 && (
+                              <div className="pl-[calc(0.625rem+0.5rem+4rem+0.5rem)] pb-1 pt-0.5 space-y-0.5">
+                                {item.subtemas.map((sub, si) => (
+                                  <div key={si} className="flex items-center gap-1.5">
+                                    <span className="h-1 w-1 rounded-full bg-muted-foreground/40 shrink-0" />
+                                    <span className="text-[11px] text-muted-foreground">{sub}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
