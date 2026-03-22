@@ -126,7 +126,7 @@ export default function Planificacion() {
         {clases.map((clase) => {
           const stats = statsMap[clase.id];
           const hasPlanning = stats && stats.total > 0;
-          const pct = hasPlanning ? Math.round(((stats.completado + stats.parcial * 0.5) / stats.total) * 100) : 0;
+          const pct = hasPlanning ? Math.round((stats.completado / stats.total) * 100) : 0;
 
           return (
             <Card key={clase.id}>
