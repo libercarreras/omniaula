@@ -317,30 +317,31 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
                           <div
                             key={item.id || idx}
                             className={cn(
-                              "flex items-center gap-2 px-3 py-2",
+                              "px-3 py-2",
                               isToday && "bg-primary/5",
                               isPast && item.estado === "pendiente" && "bg-destructive/5"
                             )}
                           >
-                            {/* Timeline dot */}
-                            <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", cfg.dot)} />
+                            <div className="flex items-center gap-2">
+                              {/* Timeline dot */}
+                              <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", cfg.dot)} />
 
-                            {/* Date */}
-                            <span className={cn(
-                              "text-[11px] font-mono shrink-0 w-16",
-                              isToday ? "text-primary font-bold" : "text-muted-foreground"
-                            )}>
-                              {formatDate(item.fecha)}
-                            </span>
+                              {/* Date */}
+                              <span className={cn(
+                                "text-[11px] font-mono shrink-0 w-16",
+                                isToday ? "text-primary font-bold" : "text-muted-foreground"
+                              )}>
+                                {formatDate(item.fecha)}
+                              </span>
 
-                            {/* Topic */}
-                            <span className={cn(
-                              "text-sm flex-1 truncate",
-                              item.estado === "completado" && "line-through text-muted-foreground",
-                              item.estado === "suspendido" && "line-through text-destructive/60"
-                            )}>
-                              {item.tema_titulo}
-                            </span>
+                              {/* Topic */}
+                              <span className={cn(
+                                "text-sm flex-1 truncate",
+                                item.estado === "completado" && "line-through text-muted-foreground",
+                                item.estado === "suspendido" && "line-through text-destructive/60"
+                              )}>
+                                {item.tema_titulo}
+                              </span>
 
                             {/* Status buttons */}
                             <div className="flex items-center gap-0.5 shrink-0">
