@@ -53,15 +53,18 @@ function formatDate(fecha: string) {
 }
 
 /**
- * Detect old format (1 row per tema with subtemas array in notas) and return
- * true if migration is needed.
+ * Detect old format (1 row per tema with subtemas array in notas, or null notas
+ * when the estructura has subtemas) and return true if migration is needed.
  */
 function isOldFormat(rows: any[]): boolean {
   return rows.some(r => {
-    if (!r.notas) return false;
+    // Null notas = old format row that was never migrated
+    if (!r.notas) return true;
     try {
       const parsed = JSON.parse(r.notas);
-      return Array.isArray(parsed) && parsed.length > 1;
+      // Array = old format (multiple subtemas packed in one row)
+      if (Array.isArray(parsed)) return true;
+      return false;
     } catch { return false; }
   });
 }
