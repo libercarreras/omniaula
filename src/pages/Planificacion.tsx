@@ -59,16 +59,33 @@ export default function Planificacion() {
 
       if (planRes.data) {
         const map: Record<string, PlanStats> = {};
-        for (const row of planRes.data) {
+        for (const row of planRes.data as any[]) {
           if (!map[row.clase_id]) {
             map[row.clase_id] = { total: 0, completado: 0, parcial: 0, pendiente: 0, suspendido: 0, reprogramado: 0 };
           }
           const s = map[row.clase_id];
-          s.total++;
-          if (row.estado === "completado") s.completado++;
+          // Count subtemas for granular progress
+          let subTotal = 0;
+          let subDone = 0;
+          if (row.notas) {
+            try {
+              const parsed = JSON.parse(row.notas);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                if (typeof parsed[0] === "object" && "titulo" in parsed[0]) {
+                  subTotal = parsed.length;
+                  subDone = parsed.filter((st: any) => st.completado).length;
+                } else {
+                  subTotal = parsed.length;
+                }
+              }
+            } catch {}
+          }
+          if (subTotal === 0) subTotal = 1; // tema without subtemas counts as 1
+          s.total += subTotal;
+          s.completado += subDone;
+          if (row.estado === "suspendido") s.suspendido++;
           else if (row.estado === "parcial") s.parcial++;
           else if (row.estado === "pendiente") s.pendiente++;
-          else if (row.estado === "suspendido") s.suspendido++;
           else if (row.estado === "reprogramado") s.reprogramado++;
         }
         setStatsMap(map);
