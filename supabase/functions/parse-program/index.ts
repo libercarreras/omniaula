@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,11 +13,11 @@ serve(async (req) => {
   }
 
   try {
-    const { contenido } = await req.json();
+    const { contenido, archivo_url } = await req.json();
 
-    if (!contenido || contenido.trim().length < 10) {
+    if ((!contenido || contenido.trim().length < 10) && !archivo_url) {
       return new Response(
-        JSON.stringify({ error: "El contenido del programa es demasiado corto para analizar." }),
+        JSON.stringify({ error: "Proporcioná el contenido del programa o subí un archivo para analizar." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -54,6 +55,87 @@ Reglas:
 - No inventes contenido que no esté en el texto original
 - Responde SOLO con el JSON, sin explicaciones`;
 
+    // Build the messages array depending on input type
+    const messages: any[] = [
+      { role: "system", content: systemPrompt },
+    ];
+
+    if (archivo_url) {
+      // Fetch the PDF from Supabase storage
+      console.log("Fetching PDF from:", archivo_url);
+      
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      // Extract bucket and path from the URL
+      // URL format: https://<project>.supabase.co/storage/v1/object/sign/programas/<path>?token=...
+      // Or it could be a signed URL. Let's download directly using the storage API.
+      // The archivo_url stored in DB is the path within the bucket, let's fetch it.
+
+      // First, try to download using the storage path
+      // archivo_url might be a full signed URL or just a storage path
+      let pdfBytes: Uint8Array;
+
+      if (archivo_url.startsWith("http")) {
+        // It's a full URL (signed URL), fetch directly
+        const pdfResp = await fetch(archivo_url);
+        if (!pdfResp.ok) {
+          console.error("Failed to fetch PDF from URL:", pdfResp.status);
+          return new Response(
+            JSON.stringify({ error: "No se pudo descargar el archivo PDF." }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        pdfBytes = new Uint8Array(await pdfResp.arrayBuffer());
+      } else {
+        // It's a storage path, download via Supabase storage
+        const { data, error } = await supabase.storage
+          .from("programas")
+          .download(archivo_url);
+        if (error || !data) {
+          console.error("Failed to download from storage:", error);
+          return new Response(
+            JSON.stringify({ error: "No se pudo descargar el archivo del almacenamiento." }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        pdfBytes = new Uint8Array(await data.arrayBuffer());
+      }
+
+      const base64Pdf = btoa(String.fromCharCode(...pdfBytes));
+      console.log("PDF fetched, size:", pdfBytes.length, "bytes");
+
+      messages.push({
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: "Analiza el siguiente documento de programa anual y extrae su estructura jerárquica de unidades, temas y subtemas. Devuelve SOLO el JSON.",
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:application/pdf;base64,${base64Pdf}`,
+            },
+          },
+        ],
+      });
+
+      // If there's also pasted text, add it as additional context
+      if (contenido && contenido.trim().length >= 10) {
+        messages.push({
+          role: "user",
+          content: `También tengo este texto adicional del programa que puede complementar el documento:\n\n${contenido}`,
+        });
+      }
+    } else {
+      messages.push({
+        role: "user",
+        content: `Analiza el siguiente programa anual y extrae su estructura:\n\n${contenido}`,
+      });
+    }
+
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
@@ -63,11 +145,8 @@ Reglas:
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: `Analiza el siguiente programa anual y extrae su estructura:\n\n${contenido}` },
-          ],
+          model: "google/gemini-2.5-flash",
+          messages,
           stream: false,
         }),
       }

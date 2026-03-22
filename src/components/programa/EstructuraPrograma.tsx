@@ -29,26 +29,33 @@ interface Estructura {
 
 interface EstructuraProgramaProps {
   contenido: string;
+  archivoUrl?: string | null;
   estructuraGuardada: Estructura | null;
   onSave: (estructura: Estructura) => void;
   saving?: boolean;
 }
 
-export function EstructuraPrograma({ contenido, estructuraGuardada, onSave, saving }: EstructuraProgramaProps) {
+export function EstructuraPrograma({ contenido, archivoUrl, estructuraGuardada, onSave, saving }: EstructuraProgramaProps) {
   const [estructura, setEstructura] = useState<Estructura | null>(estructuraGuardada);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
+  const hasContent = (contenido && contenido.trim().length >= 10) || !!archivoUrl;
+
   const handleAnalyze = async () => {
-    if (!contenido || contenido.trim().length < 10) {
-      toast.error("Cargá el contenido del programa primero (al menos 10 caracteres).");
+    if (!hasContent) {
+      toast.error("Cargá el contenido del programa o subí un archivo primero.");
       return;
     }
     setIsAnalyzing(true);
     try {
+      const body: Record<string, string> = {};
+      if (contenido && contenido.trim().length >= 10) body.contenido = contenido;
+      if (archivoUrl) body.archivo_url = archivoUrl;
+
       const response = await supabase.functions.invoke("parse-program", {
-        body: { contenido },
+        body,
       });
       if (response.error) throw new Error(response.error.message);
       const data = response.data;
@@ -180,7 +187,7 @@ export function EstructuraPrograma({ contenido, estructuraGuardada, onSave, savi
       {/* Analyze button */}
       <Button
         onClick={handleAnalyze}
-        disabled={isAnalyzing || !contenido}
+        disabled={isAnalyzing || !hasContent}
         className="w-full gap-2 h-11 font-semibold"
         variant={estructura ? "outline" : "default"}
       >
