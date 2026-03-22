@@ -17,6 +17,7 @@ interface PlanItem {
   tema_index: number;
   unidad_titulo: string;
   tema_titulo: string;
+  subtemas?: string[];
   estado: "pendiente" | "completado" | "parcial" | "suspendido" | "reprogramado";
   diario_id?: string | null;
   notas?: string | null;
@@ -63,7 +64,14 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
       .select("*")
       .eq("clase_id", claseId)
       .order("fecha", { ascending: true });
-    setPlan((data || []) as unknown as PlanItem[]);
+    const items = (data || []).map((item: any) => {
+      let subtemas: string[] = [];
+      if (item.notas) {
+        try { subtemas = JSON.parse(item.notas); } catch { /* not JSON subtemas */ }
+      }
+      return { ...item, subtemas } as PlanItem;
+    });
+    setPlan(items);
     setLoading(false);
   };
 
@@ -104,6 +112,7 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
         tema_index: item.tema_index,
         unidad_titulo: item.unidad_titulo,
         tema_titulo: item.tema_titulo,
+        notas: item.subtemas?.length > 0 ? JSON.stringify(item.subtemas) : null,
         estado: "pendiente" as const,
       }));
 
@@ -308,50 +317,64 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
                           <div
                             key={item.id || idx}
                             className={cn(
-                              "flex items-center gap-2 px-3 py-2",
+                              "px-3 py-2",
                               isToday && "bg-primary/5",
                               isPast && item.estado === "pendiente" && "bg-destructive/5"
                             )}
                           >
-                            {/* Timeline dot */}
-                            <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", cfg.dot)} />
+                            <div className="flex items-center gap-2">
+                              {/* Timeline dot */}
+                              <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", cfg.dot)} />
 
-                            {/* Date */}
-                            <span className={cn(
-                              "text-[11px] font-mono shrink-0 w-16",
-                              isToday ? "text-primary font-bold" : "text-muted-foreground"
-                            )}>
-                              {formatDate(item.fecha)}
-                            </span>
+                              {/* Date */}
+                              <span className={cn(
+                                "text-[11px] font-mono shrink-0 w-16",
+                                isToday ? "text-primary font-bold" : "text-muted-foreground"
+                              )}>
+                                {formatDate(item.fecha)}
+                              </span>
 
-                            {/* Topic */}
-                            <span className={cn(
-                              "text-sm flex-1 truncate",
-                              item.estado === "completado" && "line-through text-muted-foreground",
-                              item.estado === "suspendido" && "line-through text-destructive/60"
-                            )}>
-                              {item.tema_titulo}
-                            </span>
+                              {/* Topic */}
+                              <span className={cn(
+                                "text-sm flex-1 truncate",
+                                item.estado === "completado" && "line-through text-muted-foreground",
+                                item.estado === "suspendido" && "line-through text-destructive/60"
+                              )}>
+                                {item.tema_titulo}
+                              </span>
 
-                            {/* Status buttons */}
-                            <div className="flex items-center gap-0.5 shrink-0">
-                              {(["completado", "parcial", "suspendido"] as const).map(est => {
-                                const c = ESTADO_CONFIG[est];
-                                return (
-                                  <button
-                                    key={est}
-                                    onClick={() => updateEstado(item, item.estado === est ? "pendiente" : est)}
-                                    className={cn(
-                                      "h-7 w-7 rounded-md flex items-center justify-center transition-all active:scale-95",
-                                      item.estado === est ? c.color : "text-muted-foreground/40 hover:text-muted-foreground"
-                                    )}
-                                    title={c.label}
-                                  >
-                                    <c.icon className="h-3.5 w-3.5" />
-                                  </button>
-                                );
-                              })}
+                              {/* Status buttons */}
+                              <div className="flex items-center gap-0.5 shrink-0">
+                                {(["completado", "parcial", "suspendido"] as const).map(est => {
+                                  const c = ESTADO_CONFIG[est];
+                                  return (
+                                    <button
+                                      key={est}
+                                      onClick={() => updateEstado(item, item.estado === est ? "pendiente" : est)}
+                                      className={cn(
+                                        "h-7 w-7 rounded-md flex items-center justify-center transition-all active:scale-95",
+                                        item.estado === est ? c.color : "text-muted-foreground/40 hover:text-muted-foreground"
+                                      )}
+                                      title={c.label}
+                                    >
+                                      <c.icon className="h-3.5 w-3.5" />
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </div>
+
+                            {/* Subtemas */}
+                            {item.subtemas && item.subtemas.length > 0 && (
+                              <div className="pl-[calc(0.625rem+0.5rem+4rem+0.5rem)] pb-1 pt-0.5 space-y-0.5">
+                                {item.subtemas.map((sub, si) => (
+                                  <div key={si} className="flex items-center gap-1.5">
+                                    <span className="h-1 w-1 rounded-full bg-muted-foreground/40 shrink-0" />
+                                    <span className="text-[11px] text-muted-foreground">{sub}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
