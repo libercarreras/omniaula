@@ -105,6 +105,7 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
         tema_index: item.tema_index,
         unidad_titulo: item.unidad_titulo,
         tema_titulo: item.tema_titulo,
+        notas: item.subtemas?.length > 0 ? JSON.stringify(item.subtemas) : null,
         estado: "pendiente" as const,
       }));
 

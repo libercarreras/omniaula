@@ -122,6 +122,7 @@ serve(async (req) => {
       tema_index: number;
       unidad_titulo: string;
       tema_titulo: string;
+      subtemas: string[];
     }> = [];
 
     if (allTopics.length <= availableDates.length) {
