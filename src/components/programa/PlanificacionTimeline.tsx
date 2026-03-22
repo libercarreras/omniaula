@@ -17,10 +17,9 @@ interface PlanItem {
   tema_index: number;
   unidad_titulo: string;
   tema_titulo: string;
-  subtemas?: string[];
+  subtema_titulo: string | null;
   estado: "pendiente" | "completado" | "parcial" | "suspendido" | "reprogramado";
   diario_id?: string | null;
-  notas?: string | null;
 }
 
 interface PlanificacionTimelineProps {
@@ -65,11 +64,18 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
       .eq("clase_id", claseId)
       .order("fecha", { ascending: true });
     const items = (data || []).map((item: any) => {
-      let subtemas: string[] = [];
-      if (item.notas) {
-        try { subtemas = JSON.parse(item.notas); } catch { /* not JSON subtemas */ }
-      }
-      return { ...item, subtemas } as PlanItem;
+      // notas stores the subtema title (plain string) or null
+      return {
+        id: item.id,
+        fecha: item.fecha,
+        unidad_index: item.unidad_index,
+        tema_index: item.tema_index,
+        unidad_titulo: item.unidad_titulo,
+        tema_titulo: item.tema_titulo,
+        subtema_titulo: item.notas || null,
+        estado: item.estado,
+        diario_id: item.diario_id,
+      } as PlanItem;
     });
     setPlan(items);
     setLoading(false);
@@ -103,7 +109,7 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
       // Delete existing plan
       await supabase.from("planificacion_clases").delete().eq("clase_id", claseId);
 
-      // Insert new plan
+      // Insert new plan — one row per subtema
       const records = data.plan.map((item: any) => ({
         clase_id: claseId,
         user_id: userId,
@@ -112,7 +118,7 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
         tema_index: item.tema_index,
         unidad_titulo: item.unidad_titulo,
         tema_titulo: item.tema_titulo,
-        notas: item.subtemas?.length > 0 ? JSON.stringify(item.subtemas) : null,
+        notas: item.subtema_titulo || null,
         estado: "pendiente" as const,
       }));
 
@@ -120,10 +126,9 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
         await supabase.from("planificacion_clases").insert(records);
       }
 
-      toast.success(`Planificación generada: ${data.totalTemas} temas en ${data.totalClasesDisponibles} clases`);
+      toast.success(`Planificación generada: ${data.totalItems} ítems en ${data.totalClasesDisponibles} clases`);
       await loadPlan();
 
-      // Expand all units
       const exp: Record<number, boolean> = {};
       estructura.unidades.forEach((_, i) => { exp[i] = true; });
       setExpandedUnits(exp);
@@ -139,47 +144,33 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
     await supabase.from("planificacion_clases").update({ estado: newEstado }).eq("id", item.id);
     setPlan(prev => prev.map(p => p.id === item.id ? { ...p, estado: newEstado } : p));
 
-    // If marked as suspended, auto-adjust: shift subsequent pending items forward
     if (newEstado === "suspendido") {
       await redistributePending(item);
     }
   };
 
   const redistributePending = async (suspendedItem: PlanItem) => {
-    // Get all items after this one that are still pending
     const pendingAfter = plan.filter(
       p => p.fecha > suspendedItem.fecha && p.estado === "pendiente"
     );
-
     if (pendingAfter.length === 0) return;
 
-    // Get the suspended item's topic
-    const suspendedTopic = {
-      unidad_index: suspendedItem.unidad_index,
-      tema_index: suspendedItem.tema_index,
-      unidad_titulo: suspendedItem.unidad_titulo,
-      tema_titulo: suspendedItem.tema_titulo,
-    };
-
-    // Shift all pending items: suspended topic takes the next pending slot
-    // and subsequent items shift one slot forward
-    // For simplicity, we just mark the suspended one as reprogrammed on the next pending date
     const nextPending = pendingAfter[0];
     if (nextPending?.id) {
-      // Insert the suspended topic into the next available date
       await supabase.from("planificacion_clases").insert({
         clase_id: claseId,
         user_id: userId,
         fecha: nextPending.fecha,
-        unidad_index: suspendedTopic.unidad_index,
-        tema_index: suspendedTopic.tema_index,
-        unidad_titulo: suspendedTopic.unidad_titulo,
-        tema_titulo: suspendedTopic.tema_titulo,
+        unidad_index: suspendedItem.unidad_index,
+        tema_index: suspendedItem.tema_index,
+        unidad_titulo: suspendedItem.unidad_titulo,
+        tema_titulo: suspendedItem.tema_titulo,
+        notas: suspendedItem.subtema_titulo,
         estado: "reprogramado" as any,
       });
     }
 
-    toast.info("Tema reprogramado a la siguiente clase disponible");
+    toast.info("Subtema reprogramado a la siguiente clase disponible");
     await loadPlan();
   };
 
@@ -193,21 +184,28 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
     return { total, completados, parciales, suspendidos, progress };
   }, [plan]);
 
-  // Group by unit
+  // Group by unit > tema
   const groupedByUnit = useMemo(() => {
-    const groups: Record<number, { titulo: string; items: PlanItem[] }> = {};
+    const groups: Record<number, {
+      titulo: string;
+      temas: Record<number, { titulo: string; items: PlanItem[] }>;
+    }> = {};
+
     plan.forEach(item => {
       if (!groups[item.unidad_index]) {
-        groups[item.unidad_index] = { titulo: item.unidad_titulo, items: [] };
+        groups[item.unidad_index] = { titulo: item.unidad_titulo, temas: {} };
       }
-      groups[item.unidad_index].items.push(item);
+      if (!groups[item.unidad_index].temas[item.tema_index]) {
+        groups[item.unidad_index].temas[item.tema_index] = { titulo: item.tema_titulo, items: [] };
+      }
+      groups[item.unidad_index].temas[item.tema_index].items.push(item);
     });
     return groups;
   }, [plan]);
 
-  // Find today's topic
-  const todayTopic = useMemo(() => {
-    return plan.find(p => p.fecha === hoyISO);
+  // Find today's items
+  const todayItems = useMemo(() => {
+    return plan.filter(p => p.fecha === hoyISO);
   }, [plan, hoyISO]);
 
   if (loading) {
@@ -256,43 +254,55 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
             </div>
           </div>
 
-          {/* Today's topic highlight */}
-          {todayTopic && (
+          {/* Today's items highlight */}
+          {todayItems.length > 0 && (
             <div className="rounded-lg border-2 border-primary bg-primary/5 p-3">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-2">
                 <CalendarCheck className="h-4 w-4 text-primary" />
-                <span className="text-xs font-bold text-primary uppercase tracking-wide">Tema de hoy</span>
+                <span className="text-xs font-bold text-primary uppercase tracking-wide">Hoy</span>
               </div>
-              <p className="text-sm font-semibold">{todayTopic.tema_titulo}</p>
-              <p className="text-[10px] text-muted-foreground">Unidad {todayTopic.unidad_index + 1}: {todayTopic.unidad_titulo}</p>
-              <div className="flex items-center gap-1 mt-2">
-                {(["completado", "parcial", "suspendido"] as const).map(est => {
-                  const cfg = ESTADO_CONFIG[est];
+              <div className="space-y-2">
+                {todayItems.map((item, idx) => {
+                  const displayTitle = item.subtema_titulo || item.tema_titulo;
                   return (
-                    <button
-                      key={est}
-                      onClick={() => updateEstado(todayTopic, est)}
-                      className={cn(
-                        "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all active:scale-95",
-                        todayTopic.estado === est ? cfg.color : "bg-muted/30 text-muted-foreground border-transparent hover:bg-muted/60"
+                    <div key={item.id || idx}>
+                      <p className="text-sm font-semibold">{displayTitle}</p>
+                      {item.subtema_titulo && (
+                        <p className="text-[10px] text-muted-foreground">Tema: {item.tema_titulo} · U{item.unidad_index + 1}</p>
                       )}
-                    >
-                      <cfg.icon className="h-3 w-3" />
-                      {cfg.label}
-                    </button>
+                      <div className="flex items-center gap-1 mt-1">
+                        {(["completado", "parcial", "suspendido"] as const).map(est => {
+                          const cfg = ESTADO_CONFIG[est];
+                          return (
+                            <button
+                              key={est}
+                              onClick={() => updateEstado(item, item.estado === est ? "pendiente" : est)}
+                              className={cn(
+                                "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all active:scale-95",
+                                item.estado === est ? cfg.color : "bg-muted/30 text-muted-foreground border-transparent hover:bg-muted/60"
+                              )}
+                            >
+                              <cfg.icon className="h-3 w-3" />
+                              {cfg.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
             </div>
           )}
 
-          {/* Timeline by unit */}
+          {/* Timeline by unit > tema > subtema */}
           <div className="space-y-1.5">
             {Object.entries(groupedByUnit).map(([uIdx, group]) => {
               const ui = parseInt(uIdx);
               const isExpanded = expandedUnits[ui] ?? false;
-              const unitCompleted = group.items.filter(i => i.estado === "completado").length;
-              const unitTotal = group.items.length;
+              const allUnitItems = Object.values(group.temas).flatMap(t => t.items);
+              const unitCompleted = allUnitItems.filter(i => i.estado === "completado").length;
+              const unitTotal = allUnitItems.length;
 
               return (
                 <div key={ui} className="rounded-lg border bg-card overflow-hidden">
@@ -307,74 +317,76 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
                   </button>
 
                   {isExpanded && (
-                    <div className="border-t divide-y">
-                      {group.items.map((item, idx) => {
-                        const cfg = ESTADO_CONFIG[item.estado];
-                        const isPast = item.fecha < hoyISO;
-                        const isToday = item.fecha === hoyISO;
+                    <div className="border-t">
+                      {Object.entries(group.temas).map(([tIdx, tema]) => {
+                        const temaCompleted = tema.items.filter(i => i.estado === "completado").length;
+                        const hasSubtemas = tema.items.some(i => i.subtema_titulo);
 
                         return (
-                          <div
-                            key={item.id || idx}
-                            className={cn(
-                              "px-3 py-2",
-                              isToday && "bg-primary/5",
-                              isPast && item.estado === "pendiente" && "bg-destructive/5"
-                            )}
-                          >
-                            <div className="flex items-center gap-2">
-                              {/* Timeline dot */}
-                              <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", cfg.dot)} />
-
-                              {/* Date */}
-                              <span className={cn(
-                                "text-[11px] font-mono shrink-0 w-16",
-                                isToday ? "text-primary font-bold" : "text-muted-foreground"
-                              )}>
-                                {formatDate(item.fecha)}
-                              </span>
-
-                              {/* Topic */}
-                              <span className={cn(
-                                "text-sm flex-1 truncate",
-                                item.estado === "completado" && "line-through text-muted-foreground",
-                                item.estado === "suspendido" && "line-through text-destructive/60"
-                              )}>
-                                {item.tema_titulo}
-                              </span>
-
-                              {/* Status buttons */}
-                              <div className="flex items-center gap-0.5 shrink-0">
-                                {(["completado", "parcial", "suspendido"] as const).map(est => {
-                                  const c = ESTADO_CONFIG[est];
-                                  return (
-                                    <button
-                                      key={est}
-                                      onClick={() => updateEstado(item, item.estado === est ? "pendiente" : est)}
-                                      className={cn(
-                                        "h-7 w-7 rounded-md flex items-center justify-center transition-all active:scale-95",
-                                        item.estado === est ? c.color : "text-muted-foreground/40 hover:text-muted-foreground"
-                                      )}
-                                      title={c.label}
-                                    >
-                                      <c.icon className="h-3.5 w-3.5" />
-                                    </button>
-                                  );
-                                })}
+                          <div key={tIdx} className="border-b last:border-b-0">
+                            {/* Tema header */}
+                            {hasSubtemas && (
+                              <div className="px-3 py-1.5 bg-muted/30 flex items-center justify-between">
+                                <span className="text-xs font-semibold text-foreground/80 truncate">{tema.titulo}</span>
+                                <span className="text-[10px] text-muted-foreground shrink-0">{temaCompleted}/{tema.items.length}</span>
                               </div>
-                            </div>
+                            )}
 
-                            {/* Subtemas */}
-                            {item.subtemas && item.subtemas.length > 0 && (
-                              <div className="pl-[calc(0.625rem+0.5rem+4rem+0.5rem)] pb-1 pt-0.5 space-y-0.5">
-                                {item.subtemas.map((sub, si) => (
-                                  <div key={si} className="flex items-center gap-1.5">
-                                    <span className="h-1 w-1 rounded-full bg-muted-foreground/40 shrink-0" />
-                                    <span className="text-[11px] text-muted-foreground">{sub}</span>
+                            {/* Items (subtemas or tema itself) */}
+                            <div className="divide-y">
+                              {tema.items.map((item, idx) => {
+                                const cfg = ESTADO_CONFIG[item.estado];
+                                const isPast = item.fecha < hoyISO;
+                                const isToday = item.fecha === hoyISO;
+                                const displayTitle = item.subtema_titulo || item.tema_titulo;
+
+                                return (
+                                  <div
+                                    key={item.id || idx}
+                                    className={cn(
+                                      "px-3 py-2",
+                                      isToday && "bg-primary/5",
+                                      isPast && item.estado === "pendiente" && "bg-destructive/5"
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", cfg.dot)} />
+                                      <span className={cn(
+                                        "text-[11px] font-mono shrink-0 w-16",
+                                        isToday ? "text-primary font-bold" : "text-muted-foreground"
+                                      )}>
+                                        {formatDate(item.fecha)}
+                                      </span>
+                                      <span className={cn(
+                                        "text-sm flex-1 truncate",
+                                        item.estado === "completado" && "line-through text-muted-foreground",
+                                        item.estado === "suspendido" && "line-through text-destructive/60"
+                                      )}>
+                                        {hasSubtemas && "• "}{displayTitle}
+                                      </span>
+                                      <div className="flex items-center gap-0.5 shrink-0">
+                                        {(["completado", "parcial", "suspendido"] as const).map(est => {
+                                          const c = ESTADO_CONFIG[est];
+                                          return (
+                                            <button
+                                              key={est}
+                                              onClick={() => updateEstado(item, item.estado === est ? "pendiente" : est)}
+                                              className={cn(
+                                                "h-7 w-7 rounded-md flex items-center justify-center transition-all active:scale-95",
+                                                item.estado === est ? c.color : "text-muted-foreground/40 hover:text-muted-foreground"
+                                              )}
+                                              title={c.label}
+                                            >
+                                              <c.icon className="h-3.5 w-3.5" />
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
                                   </div>
-                                ))}
-                              </div>
-                            )}
+                                );
+                              })}
+                            </div>
                           </div>
                         );
                       })}
