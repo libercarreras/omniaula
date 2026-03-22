@@ -53,15 +53,18 @@ function formatDate(fecha: string) {
 }
 
 /**
- * Detect old format (1 row per tema with subtemas array in notas) and return
- * true if migration is needed.
+ * Detect old format (1 row per tema with subtemas array in notas, or null notas
+ * when the estructura has subtemas) and return true if migration is needed.
  */
 function isOldFormat(rows: any[]): boolean {
   return rows.some(r => {
-    if (!r.notas) return false;
+    // Null notas = old format row that was never migrated
+    if (!r.notas) return true;
     try {
       const parsed = JSON.parse(r.notas);
-      return Array.isArray(parsed) && parsed.length > 1;
+      // Array = old format (multiple subtemas packed in one row)
+      if (Array.isArray(parsed)) return true;
+      return false;
     } catch { return false; }
   });
 }
@@ -126,8 +129,15 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
       return; // migrateOldFormat calls loadPlan again
     }
 
-    setRows(rawRows.map(parseRowSubtema));
+    const parsed = rawRows.map(parseRowSubtema);
+    setRows(parsed);
     setLoading(false);
+
+    // After loading, recalculate stale dates if needed (reload after if changes made)
+    if (parsed.length > 0) {
+      const didRecalc = await recalcStaleDates(parsed, false);
+      if (didRecalc) await loadPlan();
+    }
   };
 
   const migrateOldFormat = async (oldRows: any[]) => {
@@ -152,10 +162,12 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
       if (subtemas.length <= 1) {
         // Single subtema or no subtemas — keep as-is but convert notas format
         const sub = subtemas[0];
-        if (sub && row.id) {
+        const subTitulo = sub?.titulo || row.tema_titulo;
+        const subCompletado = sub?.completado || row.estado === "completado";
+        if (row.id) {
           await supabase.from("planificacion_clases").update({
-            notas: JSON.stringify({ subtema: sub.titulo, completado: sub.completado }),
-            estado: sub.completado ? "completado" : row.estado,
+            notas: JSON.stringify({ subtema: subTitulo, completado: subCompletado }),
+            estado: subCompletado ? "completado" : row.estado,
           }).eq("id", row.id);
         }
         continue;
@@ -235,19 +247,19 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
   };
 
   /* ── Recalculate stale dates ── */
-  const recalcStaleDates = useCallback(async (updatedRows: SubtemaRow[]) => {
+  const recalcStaleDates = useCallback(async (updatedRows: SubtemaRow[], reloadAfter = true): Promise<boolean> => {
     const pendingRows = updatedRows.filter(
       r => r.estado === "pendiente" || r.estado === "parcial"
     );
     const staleCount = pendingRows.filter(r => r.fecha <= hoyISO).length;
-    if (staleCount === 0) return;
+    if (staleCount === 0) return false;
 
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const futureDates = getFutureClassDates(horario, tomorrow, pendingRows.length);
     if (futureDates.length === 0) {
       toast.warning("No se pudieron recalcular fechas: verificá el horario de la clase.");
-      return;
+      return false;
     }
 
     const updates: Array<{ id: string; fecha: string }> = [];
@@ -258,12 +270,13 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
       }
     });
 
-    if (updates.length === 0) return;
+    if (updates.length === 0) return false;
     await Promise.all(
       updates.map(u => supabase.from("planificacion_clases").update({ fecha: u.fecha }).eq("id", u.id))
     );
     toast.info(`${updates.length} subtema(s) reprogramado(s) a las próximas clases disponibles.`);
-    await loadPlan();
+    if (reloadAfter) await loadPlan();
+    return true;
   }, [horario, hoyISO]);
 
   /* ── Toggle subtema ── */
