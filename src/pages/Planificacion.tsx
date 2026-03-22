@@ -59,16 +59,33 @@ export default function Planificacion() {
 
       if (planRes.data) {
         const map: Record<string, PlanStats> = {};
-        for (const row of planRes.data) {
+        for (const row of planRes.data as any[]) {
           if (!map[row.clase_id]) {
             map[row.clase_id] = { total: 0, completado: 0, parcial: 0, pendiente: 0, suspendido: 0, reprogramado: 0 };
           }
           const s = map[row.clase_id];
-          s.total++;
-          if (row.estado === "completado") s.completado++;
+          // Count subtemas for granular progress
+          let subTotal = 0;
+          let subDone = 0;
+          if (row.notas) {
+            try {
+              const parsed = JSON.parse(row.notas);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                if (typeof parsed[0] === "object" && "titulo" in parsed[0]) {
+                  subTotal = parsed.length;
+                  subDone = parsed.filter((st: any) => st.completado).length;
+                } else {
+                  subTotal = parsed.length;
+                }
+              }
+            } catch {}
+          }
+          if (subTotal === 0) subTotal = 1; // tema without subtemas counts as 1
+          s.total += subTotal;
+          s.completado += subDone;
+          if (row.estado === "suspendido") s.suspendido++;
           else if (row.estado === "parcial") s.parcial++;
           else if (row.estado === "pendiente") s.pendiente++;
-          else if (row.estado === "suspendido") s.suspendido++;
           else if (row.estado === "reprogramado") s.reprogramado++;
         }
         setStatsMap(map);
@@ -109,7 +126,7 @@ export default function Planificacion() {
         {clases.map((clase) => {
           const stats = statsMap[clase.id];
           const hasPlanning = stats && stats.total > 0;
-          const pct = hasPlanning ? Math.round(((stats.completado + stats.parcial * 0.5) / stats.total) * 100) : 0;
+          const pct = hasPlanning ? Math.round((stats.completado / stats.total) * 100) : 0;
 
           return (
             <Card key={clase.id}>
@@ -137,10 +154,7 @@ export default function Planificacion() {
                     </div>
                     <div className="flex flex-wrap gap-2 text-xs">
                       <Badge variant="outline" className="gap-1 border-success/30 text-success">
-                        <CheckCircle2 className="h-3 w-3" /> {stats.completado} completados
-                      </Badge>
-                      <Badge variant="outline" className="gap-1 border-muted-foreground/30 text-muted-foreground">
-                        <Clock className="h-3 w-3" /> {stats.pendiente} pendientes
+                        <CheckCircle2 className="h-3 w-3" /> {stats.completado}/{stats.total} subtemas
                       </Badge>
                       {stats.suspendido > 0 && (
                         <Badge variant="outline" className="gap-1 border-destructive/30 text-destructive">
