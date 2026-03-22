@@ -29,12 +29,13 @@ interface Estructura {
 
 interface EstructuraProgramaProps {
   contenido: string;
+  archivoUrl?: string | null;
   estructuraGuardada: Estructura | null;
   onSave: (estructura: Estructura) => void;
   saving?: boolean;
 }
 
-export function EstructuraPrograma({ contenido, estructuraGuardada, onSave, saving }: EstructuraProgramaProps) {
+export function EstructuraPrograma({ contenido, archivoUrl, estructuraGuardada, onSave, saving }: EstructuraProgramaProps) {
   const [estructura, setEstructura] = useState<Estructura | null>(estructuraGuardada);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [editMode, setEditMode] = useState(false);
