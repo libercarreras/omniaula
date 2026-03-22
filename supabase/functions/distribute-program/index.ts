@@ -7,8 +7,6 @@ const corsHeaders = {
 };
 
 // ── Shared calendar logic (mirrored from src/lib/calendarUtils.ts) ──
-// Edge functions can't import from src/, so we inline the same pure logic.
-// If you change the algorithm, update both files.
 
 const DIAS_MAP: Record<string, number> = {
   domingo: 0, lunes: 1, martes: 2, miercoles: 3, "miércoles": 3,
@@ -46,19 +44,9 @@ function getClassDates(diaNum: number, startDate: Date, endDate: Date): string[]
 
 // ── End shared calendar logic ──
 
-interface Tema {
-  titulo: string;
-  subtemas: string[];
-}
-
-interface Unidad {
-  titulo: string;
-  temas: Tema[];
-}
-
-interface Estructura {
-  unidades: Unidad[];
-}
+interface Tema { titulo: string; subtemas: string[]; }
+interface Unidad { titulo: string; temas: Tema[]; }
+interface Estructura { unidades: Unidad[]; }
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -99,47 +87,42 @@ serve(async (req) => {
       );
     }
 
-    const allTopics: { unidad_index: number; tema_index: number; unidad_titulo: string; tema_titulo: string; subtemas: string[] }[] = [];
+    // Flatten to 1 entry per subtema (the minimal scheduling unit)
+    const allItems: Array<{
+      unidad_index: number; tema_index: number; subtema_index: number;
+      unidad_titulo: string; tema_titulo: string; subtema_titulo: string;
+    }> = [];
+
     (estructura as Estructura).unidades.forEach((unidad, ui) => {
       unidad.temas.forEach((tema, ti) => {
-        allTopics.push({
-          unidad_index: ui,
-          tema_index: ti,
-          unidad_titulo: unidad.titulo,
-          tema_titulo: tema.titulo,
-          subtemas: tema.subtemas || [],
-        });
+        if (tema.subtemas && tema.subtemas.length > 0) {
+          tema.subtemas.forEach((sub, si) => {
+            allItems.push({
+              unidad_index: ui, tema_index: ti, subtema_index: si,
+              unidad_titulo: unidad.titulo, tema_titulo: tema.titulo, subtema_titulo: sub,
+            });
+          });
+        } else {
+          // Tema without subtemas: treat the tema itself as the minimal unit
+          allItems.push({
+            unidad_index: ui, tema_index: ti, subtema_index: 0,
+            unidad_titulo: unidad.titulo, tema_titulo: tema.titulo, subtema_titulo: tema.titulo,
+          });
+        }
       });
     });
 
-    const plan: Array<{
-      fecha: string;
-      unidad_index: number;
-      tema_index: number;
-      unidad_titulo: string;
-      tema_titulo: string;
-      subtemas: string[];
-    }> = [];
-
-    if (allTopics.length <= availableDates.length) {
-      const step = availableDates.length / allTopics.length;
-      allTopics.forEach((topic, idx) => {
-        const dateIdx = Math.min(Math.floor(idx * step), availableDates.length - 1);
-        plan.push({ ...topic, fecha: availableDates[dateIdx] });
-      });
-    } else {
-      const step = allTopics.length / availableDates.length;
-      allTopics.forEach((topic, idx) => {
-        const dateIdx = Math.min(Math.floor(idx / step), availableDates.length - 1);
-        plan.push({ ...topic, fecha: availableDates[dateIdx] });
-      });
-    }
+    // Distribute: 1 item per date, sequentially
+    const plan = allItems.map((item, idx) => {
+      const dateIdx = Math.min(idx, availableDates.length - 1);
+      return { ...item, fecha: availableDates[dateIdx] };
+    });
 
     return new Response(
       JSON.stringify({
         plan,
         totalClasesDisponibles: availableDates.length,
-        totalTemas: allTopics.length,
+        totalSubtemas: allItems.length,
         fechaInicio: availableDates[0],
         fechaFin: availableDates[availableDates.length - 1],
       }),
