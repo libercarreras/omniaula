@@ -161,10 +161,12 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
       if (subtemas.length <= 1) {
         // Single subtema or no subtemas — keep as-is but convert notas format
         const sub = subtemas[0];
-        if (sub && row.id) {
+        const subTitulo = sub?.titulo || row.tema_titulo;
+        const subCompletado = sub?.completado || row.estado === "completado";
+        if (row.id) {
           await supabase.from("planificacion_clases").update({
-            notas: JSON.stringify({ subtema: sub.titulo, completado: sub.completado }),
-            estado: sub.completado ? "completado" : row.estado,
+            notas: JSON.stringify({ subtema: subTitulo, completado: subCompletado }),
+            estado: subCompletado ? "completado" : row.estado,
           }).eq("id", row.id);
         }
         continue;
