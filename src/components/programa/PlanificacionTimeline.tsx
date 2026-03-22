@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -9,6 +9,14 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
+import { Checkbox } from "@/components/ui/checkbox";
+
+/* ── Types ── */
+
+interface SubtemaItem {
+  titulo: string;
+  completado: boolean;
+}
 
 interface PlanItem {
   id?: string;
@@ -17,7 +25,7 @@ interface PlanItem {
   tema_index: number;
   unidad_titulo: string;
   tema_titulo: string;
-  subtemas?: string[];
+  subtemas: SubtemaItem[];
   estado: "pendiente" | "completado" | "parcial" | "suspendido" | "reprogramado";
   diario_id?: string | null;
   notas?: string | null;
@@ -29,6 +37,8 @@ interface PlanificacionTimelineProps {
   horario: string | null;
   estructura: { unidades: Array<{ titulo: string; temas: Array<{ titulo: string; subtemas: string[] }> }> } | null;
 }
+
+/* ── Helpers ── */
 
 const ESTADO_CONFIG = {
   pendiente: { label: "Pendiente", icon: Clock, color: "bg-muted text-muted-foreground", dot: "bg-muted-foreground/40" },
@@ -45,6 +55,37 @@ function formatDate(fecha: string) {
   return `${DIAS_NOMBRE[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`;
 }
 
+/** Migrate old format (string[]) to new format (SubtemaItem[]) */
+function parseSubtemas(notas: string | null): SubtemaItem[] {
+  if (!notas) return [];
+  try {
+    const parsed = JSON.parse(notas);
+    if (!Array.isArray(parsed)) return [];
+    if (parsed.length === 0) return [];
+    // New format: [{titulo, completado}]
+    if (typeof parsed[0] === "object" && parsed[0] !== null && "titulo" in parsed[0]) {
+      return parsed.map((s: any) => ({ titulo: String(s.titulo), completado: !!s.completado }));
+    }
+    // Old format: string[]
+    return parsed.map((s: string) => ({ titulo: String(s), completado: false }));
+  } catch {
+    return [];
+  }
+}
+
+/** Derive estado from subtemas completion */
+function deriveEstado(subtemas: SubtemaItem[], currentEstado: string): PlanItem["estado"] {
+  // Manual overrides stay
+  if (currentEstado === "suspendido" || currentEstado === "reprogramado") return currentEstado as PlanItem["estado"];
+  if (subtemas.length === 0) return currentEstado as PlanItem["estado"];
+  const done = subtemas.filter(s => s.completado).length;
+  if (done === subtemas.length) return "completado";
+  if (done > 0) return "parcial";
+  return "pendiente";
+}
+
+/* ── Component ── */
+
 export function PlanificacionTimeline({ claseId, userId, horario, estructura }: PlanificacionTimelineProps) {
   const [plan, setPlan] = useState<PlanItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,9 +94,7 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
 
   const hoyISO = new Date().toISOString().split("T")[0];
 
-  useEffect(() => {
-    loadPlan();
-  }, [claseId]);
+  useEffect(() => { loadPlan(); }, [claseId]);
 
   const loadPlan = async () => {
     setLoading(true);
@@ -65,45 +104,29 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
       .eq("clase_id", claseId)
       .order("fecha", { ascending: true });
     const items = (data || []).map((item: any) => {
-      let subtemas: string[] = [];
-      if (item.notas) {
-        try { subtemas = JSON.parse(item.notas); } catch { /* not JSON subtemas */ }
-      }
-      return { ...item, subtemas } as PlanItem;
+      const subtemas = parseSubtemas(item.notas);
+      const estado = deriveEstado(subtemas, item.estado);
+      return { ...item, subtemas, estado } as PlanItem;
     });
     setPlan(items);
     setLoading(false);
   };
 
   const generatePlan = async () => {
-    if (!estructura) {
-      toast.error("Primero generá la estructura del programa con IA.");
-      return;
-    }
-    if (!horario) {
-      toast.error("Configurá el horario de la clase para poder distribuir el programa.");
-      return;
-    }
+    if (!estructura) { toast.error("Primero generá la estructura del programa con IA."); return; }
+    if (!horario) { toast.error("Configurá el horario de la clase para poder distribuir el programa."); return; }
 
     setGenerating(true);
     try {
       const response = await supabase.functions.invoke("distribute-program", {
-        body: {
-          estructura,
-          horario,
-          fechaInicio: hoyISO,
-          fechaFin: null,
-        },
+        body: { estructura, horario, fechaInicio: hoyISO, fechaFin: null },
       });
-
       if (response.error) throw new Error(response.error.message);
       const data = response.data;
       if (data?.error) { toast.error(data.error); return; }
 
-      // Delete existing plan
       await supabase.from("planificacion_clases").delete().eq("clase_id", claseId);
 
-      // Insert new plan
       const records = data.plan.map((item: any) => ({
         clase_id: claseId,
         user_id: userId,
@@ -112,18 +135,17 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
         tema_index: item.tema_index,
         unidad_titulo: item.unidad_titulo,
         tema_titulo: item.tema_titulo,
-        notas: item.subtemas?.length > 0 ? JSON.stringify(item.subtemas) : null,
+        notas: item.subtemas?.length > 0
+          ? JSON.stringify(item.subtemas.map((s: string) => ({ titulo: s, completado: false })))
+          : null,
         estado: "pendiente" as const,
       }));
 
-      if (records.length > 0) {
-        await supabase.from("planificacion_clases").insert(records);
-      }
+      if (records.length > 0) await supabase.from("planificacion_clases").insert(records);
 
       toast.success(`Planificación generada: ${data.totalTemas} temas en ${data.totalClasesDisponibles} clases`);
       await loadPlan();
 
-      // Expand all units
       const exp: Record<number, boolean> = {};
       estructura.unidades.forEach((_, i) => { exp[i] = true; });
       setExpandedUnits(exp);
@@ -134,107 +156,117 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
     }
   };
 
-  const updateEstado = async (item: PlanItem, newEstado: PlanItem["estado"]) => {
+  /* ── Subtema toggle ── */
+  const toggleSubtema = useCallback(async (item: PlanItem, subIndex: number) => {
     if (!item.id) return;
-    await supabase.from("planificacion_clases").update({ estado: newEstado }).eq("id", item.id);
-    setPlan(prev => prev.map(p => p.id === item.id ? { ...p, estado: newEstado } : p));
+    const newSubtemas = item.subtemas.map((s, i) =>
+      i === subIndex ? { ...s, completado: !s.completado } : s
+    );
+    const newEstado = deriveEstado(newSubtemas, item.estado);
+    const notasJson = JSON.stringify(newSubtemas);
 
-    // If marked as suspended, auto-adjust: shift subsequent pending items forward
-    if (newEstado === "suspendido") {
+    // Optimistic update
+    setPlan(prev => prev.map(p =>
+      p.id === item.id ? { ...p, subtemas: newSubtemas, estado: newEstado } : p
+    ));
+
+    await supabase.from("planificacion_clases")
+      .update({ notas: notasJson, estado: newEstado })
+      .eq("id", item.id);
+  }, []);
+
+  /* ── Manual estado override (suspendido) ── */
+  const setManualEstado = useCallback(async (item: PlanItem, newEstado: PlanItem["estado"]) => {
+    if (!item.id) return;
+
+    // Toggle: if already that estado, revert to derived
+    let finalEstado = newEstado;
+    if (item.estado === newEstado) {
+      finalEstado = deriveEstado(item.subtemas, "pendiente");
+    }
+
+    setPlan(prev => prev.map(p =>
+      p.id === item.id ? { ...p, estado: finalEstado } : p
+    ));
+
+    await supabase.from("planificacion_clases")
+      .update({ estado: finalEstado })
+      .eq("id", item.id);
+
+    if (newEstado === "suspendido" && finalEstado === "suspendido") {
       await redistributePending(item);
     }
-  };
+  }, [plan, claseId, userId]);
 
   const redistributePending = async (suspendedItem: PlanItem) => {
-    // Get all items after this one that are still pending
-    const pendingAfter = plan.filter(
-      p => p.fecha > suspendedItem.fecha && p.estado === "pendiente"
-    );
-
+    const pendingAfter = plan.filter(p => p.fecha > suspendedItem.fecha && p.estado === "pendiente");
     if (pendingAfter.length === 0) return;
-
-    // Get the suspended item's topic
-    const suspendedTopic = {
-      unidad_index: suspendedItem.unidad_index,
-      tema_index: suspendedItem.tema_index,
-      unidad_titulo: suspendedItem.unidad_titulo,
-      tema_titulo: suspendedItem.tema_titulo,
-    };
-
-    // Shift all pending items: suspended topic takes the next pending slot
-    // and subsequent items shift one slot forward
-    // For simplicity, we just mark the suspended one as reprogrammed on the next pending date
     const nextPending = pendingAfter[0];
     if (nextPending?.id) {
-      // Insert the suspended topic into the next available date
       await supabase.from("planificacion_clases").insert({
-        clase_id: claseId,
-        user_id: userId,
-        fecha: nextPending.fecha,
-        unidad_index: suspendedTopic.unidad_index,
-        tema_index: suspendedTopic.tema_index,
-        unidad_titulo: suspendedTopic.unidad_titulo,
-        tema_titulo: suspendedTopic.tema_titulo,
+        clase_id: claseId, user_id: userId, fecha: nextPending.fecha,
+        unidad_index: suspendedItem.unidad_index, tema_index: suspendedItem.tema_index,
+        unidad_titulo: suspendedItem.unidad_titulo, tema_titulo: suspendedItem.tema_titulo,
+        notas: JSON.stringify(suspendedItem.subtemas),
         estado: "reprogramado" as any,
       });
     }
-
     toast.info("Tema reprogramado a la siguiente clase disponible");
     await loadPlan();
   };
 
-  // Stats
+  /* ── Stats (based on subtemas) ── */
   const stats = useMemo(() => {
-    const total = plan.length;
-    const completados = plan.filter(p => p.estado === "completado").length;
-    const parciales = plan.filter(p => p.estado === "parcial").length;
-    const suspendidos = plan.filter(p => p.estado === "suspendido").length;
-    const progress = total > 0 ? Math.round(((completados + parciales * 0.5) / total) * 100) : 0;
-    return { total, completados, parciales, suspendidos, progress };
+    let totalSubtemas = 0;
+    let subtemasCompletados = 0;
+    let temasSuspendidos = 0;
+    let temasCompletados = 0;
+    let temasParciales = 0;
+
+    plan.forEach(p => {
+      if (p.estado === "suspendido") { temasSuspendidos++; return; }
+      if (p.subtemas.length > 0) {
+        totalSubtemas += p.subtemas.length;
+        const done = p.subtemas.filter(s => s.completado).length;
+        subtemasCompletados += done;
+        if (done === p.subtemas.length) temasCompletados++;
+        else if (done > 0) temasParciales++;
+      } else {
+        // Tema without subtemas: count as 1
+        totalSubtemas += 1;
+        if (p.estado === "completado") { subtemasCompletados += 1; temasCompletados++; }
+        else if (p.estado === "parcial") { subtemasCompletados += 0.5; temasParciales++; }
+      }
+    });
+
+    const progress = totalSubtemas > 0 ? Math.round((subtemasCompletados / totalSubtemas) * 100) : 0;
+    return { totalSubtemas, subtemasCompletados, temasSuspendidos, temasCompletados, temasParciales, progress };
   }, [plan]);
 
-  // Group by unit
+  /* ── Group by unit ── */
   const groupedByUnit = useMemo(() => {
     const groups: Record<number, { titulo: string; items: PlanItem[] }> = {};
     plan.forEach(item => {
-      if (!groups[item.unidad_index]) {
-        groups[item.unidad_index] = { titulo: item.unidad_titulo, items: [] };
-      }
+      if (!groups[item.unidad_index]) groups[item.unidad_index] = { titulo: item.unidad_titulo, items: [] };
       groups[item.unidad_index].items.push(item);
     });
     return groups;
   }, [plan]);
 
-  // Find today's topic
-  const todayTopic = useMemo(() => {
-    return plan.find(p => p.fecha === hoyISO);
-  }, [plan, hoyISO]);
+  const todayTopic = useMemo(() => plan.find(p => p.fecha === hoyISO), [plan, hoyISO]);
 
-  if (loading) {
-    return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
-  }
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
 
   return (
     <div className="space-y-3">
-      {/* Generate/Regenerate button */}
-      <Button
-        onClick={generatePlan}
-        disabled={generating || !estructura}
-        className="w-full gap-2 h-11 font-semibold"
-        variant={plan.length > 0 ? "outline" : "default"}
-      >
-        {generating ? (
-          <><Loader2 className="h-4 w-4 animate-spin" /> Generando planificación...</>
-        ) : plan.length > 0 ? (
-          <><RefreshCw className="h-4 w-4" /> Regenerar planificación</>
-        ) : (
-          <><CalendarDays className="h-4 w-4" /> Distribuir programa en clases</>
-        )}
+      {/* Generate button */}
+      <Button onClick={generatePlan} disabled={generating || !estructura} className="w-full gap-2 h-11 font-semibold" variant={plan.length > 0 ? "outline" : "default"}>
+        {generating ? <><Loader2 className="h-4 w-4 animate-spin" /> Generando planificación...</>
+          : plan.length > 0 ? <><RefreshCw className="h-4 w-4" /> Regenerar planificación</>
+          : <><CalendarDays className="h-4 w-4" /> Distribuir programa en clases</>}
       </Button>
 
-      {!estructura && (
-        <p className="text-xs text-muted-foreground text-center">Primero analizá el programa con IA para generar la estructura.</p>
-      )}
+      {!estructura && <p className="text-xs text-muted-foreground text-center">Primero analizá el programa con IA para generar la estructura.</p>}
 
       {plan.length > 0 && (
         <>
@@ -249,41 +281,15 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
             </div>
             <Progress value={stats.progress} className="h-2" />
             <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-success" /> {stats.completados} completados</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-warning" /> {stats.parciales} parciales</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-destructive" /> {stats.suspendidos} suspendidos</span>
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-muted-foreground/40" /> {stats.total - stats.completados - stats.parciales - stats.suspendidos} pendientes</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-success" /> {stats.subtemasCompletados}/{stats.totalSubtemas} subtemas</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-warning" /> {stats.temasParciales} parciales</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-destructive" /> {stats.temasSuspendidos} suspendidos</span>
             </div>
           </div>
 
-          {/* Today's topic highlight */}
+          {/* Today's topic */}
           {todayTopic && (
-            <div className="rounded-lg border-2 border-primary bg-primary/5 p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <CalendarCheck className="h-4 w-4 text-primary" />
-                <span className="text-xs font-bold text-primary uppercase tracking-wide">Tema de hoy</span>
-              </div>
-              <p className="text-sm font-semibold">{todayTopic.tema_titulo}</p>
-              <p className="text-[10px] text-muted-foreground">Unidad {todayTopic.unidad_index + 1}: {todayTopic.unidad_titulo}</p>
-              <div className="flex items-center gap-1 mt-2">
-                {(["completado", "parcial", "suspendido"] as const).map(est => {
-                  const cfg = ESTADO_CONFIG[est];
-                  return (
-                    <button
-                      key={est}
-                      onClick={() => updateEstado(todayTopic, est)}
-                      className={cn(
-                        "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all active:scale-95",
-                        todayTopic.estado === est ? cfg.color : "bg-muted/30 text-muted-foreground border-transparent hover:bg-muted/60"
-                      )}
-                    >
-                      <cfg.icon className="h-3 w-3" />
-                      {cfg.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <TodayHighlight item={todayTopic} onToggleSubtema={toggleSubtema} onSetEstado={setManualEstado} />
           )}
 
           {/* Timeline by unit */}
@@ -291,8 +297,10 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
             {Object.entries(groupedByUnit).map(([uIdx, group]) => {
               const ui = parseInt(uIdx);
               const isExpanded = expandedUnits[ui] ?? false;
+              // Unit completion: all temas completados
               const unitCompleted = group.items.filter(i => i.estado === "completado").length;
               const unitTotal = group.items.length;
+              const unitDone = unitCompleted === unitTotal && unitTotal > 0;
 
               return (
                 <div key={ui} className="rounded-lg border bg-card overflow-hidden">
@@ -301,83 +309,24 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
                     onClick={() => setExpandedUnits(prev => ({ ...prev, [ui]: !prev[ui] }))}
                   >
                     {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
-                    <span className="text-xs font-bold text-primary uppercase tracking-wide shrink-0">U{ui + 1}</span>
-                    <span className="text-sm font-semibold flex-1 truncate">{group.titulo}</span>
-                    <Badge variant="outline" className="text-[10px] shrink-0">{unitCompleted}/{unitTotal}</Badge>
+                    <span className={cn("text-xs font-bold uppercase tracking-wide shrink-0", unitDone ? "text-success" : "text-primary")}>U{ui + 1}</span>
+                    <span className={cn("text-sm font-semibold flex-1 truncate", unitDone && "text-success")}>{group.titulo}</span>
+                    <Badge variant="outline" className={cn("text-[10px] shrink-0", unitDone && "border-success/30 text-success")}>
+                      {unitDone ? <Check className="h-3 w-3 mr-1" /> : null}{unitCompleted}/{unitTotal}
+                    </Badge>
                   </button>
 
                   {isExpanded && (
                     <div className="border-t divide-y">
-                      {group.items.map((item, idx) => {
-                        const cfg = ESTADO_CONFIG[item.estado];
-                        const isPast = item.fecha < hoyISO;
-                        const isToday = item.fecha === hoyISO;
-
-                        return (
-                          <div
-                            key={item.id || idx}
-                            className={cn(
-                              "px-3 py-2",
-                              isToday && "bg-primary/5",
-                              isPast && item.estado === "pendiente" && "bg-destructive/5"
-                            )}
-                          >
-                            <div className="flex items-center gap-2">
-                              {/* Timeline dot */}
-                              <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", cfg.dot)} />
-
-                              {/* Date */}
-                              <span className={cn(
-                                "text-[11px] font-mono shrink-0 w-16",
-                                isToday ? "text-primary font-bold" : "text-muted-foreground"
-                              )}>
-                                {formatDate(item.fecha)}
-                              </span>
-
-                              {/* Topic */}
-                              <span className={cn(
-                                "text-sm flex-1 truncate",
-                                item.estado === "completado" && "line-through text-muted-foreground",
-                                item.estado === "suspendido" && "line-through text-destructive/60"
-                              )}>
-                                {item.tema_titulo}
-                              </span>
-
-                              {/* Status buttons */}
-                              <div className="flex items-center gap-0.5 shrink-0">
-                                {(["completado", "parcial", "suspendido"] as const).map(est => {
-                                  const c = ESTADO_CONFIG[est];
-                                  return (
-                                    <button
-                                      key={est}
-                                      onClick={() => updateEstado(item, item.estado === est ? "pendiente" : est)}
-                                      className={cn(
-                                        "h-7 w-7 rounded-md flex items-center justify-center transition-all active:scale-95",
-                                        item.estado === est ? c.color : "text-muted-foreground/40 hover:text-muted-foreground"
-                                      )}
-                                      title={c.label}
-                                    >
-                                      <c.icon className="h-3.5 w-3.5" />
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {/* Subtemas */}
-                            {item.subtemas && item.subtemas.length > 0 && (
-                              <div className="pl-[calc(0.625rem+0.5rem+4rem+0.5rem)] pb-1 pt-0.5 space-y-0.5">
-                                {item.subtemas.map((sub, si) => (
-                                  <div key={si} className="flex items-center gap-1.5">
-                                    <span className="h-1 w-1 rounded-full bg-muted-foreground/40 shrink-0" />
-                                    <span className="text-[11px] text-muted-foreground">{sub}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                      {group.items.map((item, idx) => (
+                        <TimelineItem
+                          key={item.id || idx}
+                          item={item}
+                          hoyISO={hoyISO}
+                          onToggleSubtema={toggleSubtema}
+                          onSetEstado={setManualEstado}
+                        />
+                      ))}
                     </div>
                   )}
                 </div>
@@ -385,6 +334,123 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
             })}
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+/* ── Today Highlight ── */
+
+function TodayHighlight({ item, onToggleSubtema, onSetEstado }: {
+  item: PlanItem;
+  onToggleSubtema: (item: PlanItem, idx: number) => void;
+  onSetEstado: (item: PlanItem, estado: PlanItem["estado"]) => void;
+}) {
+  return (
+    <div className="rounded-lg border-2 border-primary bg-primary/5 p-3">
+      <div className="flex items-center gap-2 mb-1">
+        <CalendarCheck className="h-4 w-4 text-primary" />
+        <span className="text-xs font-bold text-primary uppercase tracking-wide">Tema de hoy</span>
+      </div>
+      <p className="text-sm font-semibold">{item.tema_titulo}</p>
+      <p className="text-[10px] text-muted-foreground">Unidad {item.unidad_index + 1}: {item.unidad_titulo}</p>
+
+      {/* Subtema checkboxes */}
+      {item.subtemas.length > 0 && (
+        <div className="mt-2 space-y-1.5">
+          {item.subtemas.map((sub, si) => (
+            <label key={si} className="flex items-center gap-2 cursor-pointer group">
+              <Checkbox
+                checked={sub.completado}
+                onCheckedChange={() => onToggleSubtema(item, si)}
+                disabled={item.estado === "suspendido"}
+                className="h-4 w-4"
+              />
+              <span className={cn("text-sm", sub.completado && "line-through text-muted-foreground")}>{sub.titulo}</span>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {/* Suspender button */}
+      <div className="flex items-center gap-1 mt-2">
+        <button
+          onClick={() => onSetEstado(item, "suspendido")}
+          className={cn(
+            "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-all active:scale-95",
+            item.estado === "suspendido"
+              ? ESTADO_CONFIG.suspendido.color
+              : "bg-muted/30 text-muted-foreground border-transparent hover:bg-muted/60"
+          )}
+        >
+          <XCircle className="h-3 w-3" /> Suspendido
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Timeline Item ── */
+
+function TimelineItem({ item, hoyISO, onToggleSubtema, onSetEstado }: {
+  item: PlanItem;
+  hoyISO: string;
+  onToggleSubtema: (item: PlanItem, idx: number) => void;
+  onSetEstado: (item: PlanItem, estado: PlanItem["estado"]) => void;
+}) {
+  const cfg = ESTADO_CONFIG[item.estado];
+  const isPast = item.fecha < hoyISO;
+  const isToday = item.fecha === hoyISO;
+
+  return (
+    <div className={cn("px-3 py-2", isToday && "bg-primary/5", isPast && item.estado === "pendiente" && "bg-destructive/5")}>
+      <div className="flex items-center gap-2">
+        <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", cfg.dot)} />
+        <span className={cn("text-[11px] font-mono shrink-0 w-16", isToday ? "text-primary font-bold" : "text-muted-foreground")}>
+          {formatDate(item.fecha)}
+        </span>
+        <span className={cn(
+          "text-sm flex-1 truncate",
+          item.estado === "completado" && "line-through text-muted-foreground",
+          item.estado === "suspendido" && "line-through text-destructive/60"
+        )}>
+          {item.tema_titulo}
+        </span>
+
+        {/* Suspender toggle */}
+        <button
+          onClick={() => onSetEstado(item, "suspendido")}
+          className={cn(
+            "h-7 w-7 rounded-md flex items-center justify-center transition-all active:scale-95 shrink-0",
+            item.estado === "suspendido" ? ESTADO_CONFIG.suspendido.color : "text-muted-foreground/40 hover:text-muted-foreground"
+          )}
+          title="Suspendido"
+        >
+          <XCircle className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* Subtema checkboxes */}
+      {item.subtemas.length > 0 && (
+        <div className="pl-[calc(0.625rem+0.5rem+4rem+0.5rem)] pb-1 pt-1 space-y-1">
+          {item.subtemas.map((sub, si) => (
+            <label key={si} className="flex items-center gap-2 cursor-pointer group">
+              <Checkbox
+                checked={sub.completado}
+                onCheckedChange={() => onToggleSubtema(item, si)}
+                disabled={item.estado === "suspendido"}
+                className="h-3.5 w-3.5"
+              />
+              <span className={cn(
+                "text-[11px]",
+                sub.completado ? "line-through text-muted-foreground" : "text-foreground",
+                item.estado === "suspendido" && "text-destructive/40 line-through"
+              )}>
+                {sub.titulo}
+              </span>
+            </label>
+          ))}
+        </div>
       )}
     </div>
   );

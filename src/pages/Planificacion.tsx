@@ -154,10 +154,7 @@ export default function Planificacion() {
                     </div>
                     <div className="flex flex-wrap gap-2 text-xs">
                       <Badge variant="outline" className="gap-1 border-success/30 text-success">
-                        <CheckCircle2 className="h-3 w-3" /> {stats.completado} completados
-                      </Badge>
-                      <Badge variant="outline" className="gap-1 border-muted-foreground/30 text-muted-foreground">
-                        <Clock className="h-3 w-3" /> {stats.pendiente} pendientes
+                        <CheckCircle2 className="h-3 w-3" /> {stats.completado}/{stats.total} subtemas
                       </Badge>
                       {stats.suspendido > 0 && (
                         <Badge variant="outline" className="gap-1 border-destructive/30 text-destructive">
