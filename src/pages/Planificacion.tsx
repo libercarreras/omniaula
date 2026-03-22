@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { CalendarDays, ArrowRight, CheckCircle2, Clock, XCircle, Loader2 } from "lucide-react";
+import { CalendarDays, ArrowRight, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
 interface ClaseInfo {
   id: string;
@@ -18,10 +18,7 @@ interface ClaseInfo {
 interface PlanStats {
   total: number;
   completado: number;
-  parcial: number;
-  pendiente: number;
   suspendido: number;
-  reprogramado: number;
 }
 
 export default function Planificacion() {
@@ -33,7 +30,7 @@ export default function Planificacion() {
 
   useEffect(() => {
     if (!user) return;
-    const fetch = async () => {
+    const fetchData = async () => {
       setLoading(true);
       const [clasesRes, planRes] = await Promise.all([
         supabase
@@ -42,7 +39,7 @@ export default function Planificacion() {
           .eq("user_id", user.id),
         supabase
           .from("planificacion_clases")
-          .select("clase_id, estado")
+          .select("clase_id, estado, notas")
           .eq("user_id", user.id),
       ]);
 
@@ -58,42 +55,51 @@ export default function Planificacion() {
       }
 
       if (planRes.data) {
+        // New format: each row = 1 subtema
+        // Completado is derived from notas JSON or estado field
         const map: Record<string, PlanStats> = {};
         for (const row of planRes.data as any[]) {
           if (!map[row.clase_id]) {
-            map[row.clase_id] = { total: 0, completado: 0, parcial: 0, pendiente: 0, suspendido: 0, reprogramado: 0 };
+            map[row.clase_id] = { total: 0, completado: 0, suspendido: 0 };
           }
           const s = map[row.clase_id];
-          // Count subtemas for granular progress
-          let subTotal = 0;
-          let subDone = 0;
-          if (row.notas) {
+
+          if (row.estado === "suspendido") {
+            s.suspendido++;
+            continue;
+          }
+
+          s.total++;
+
+          // Check completion from notas JSON or estado
+          let isCompleted = row.estado === "completado";
+          if (!isCompleted && row.notas) {
             try {
               const parsed = JSON.parse(row.notas);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                if (typeof parsed[0] === "object" && "titulo" in parsed[0]) {
-                  subTotal = parsed.length;
-                  subDone = parsed.filter((st: any) => st.completado).length;
-                } else {
-                  subTotal = parsed.length;
+              // New format: {subtema, completado}
+              if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                isCompleted = !!parsed.completado;
+              }
+              // Old format fallback: array of subtemas
+              else if (Array.isArray(parsed) && parsed.length > 0) {
+                if (typeof parsed[0] === "object" && "completado" in parsed[0]) {
+                  // Old format with multiple subtemas — count each
+                  s.total += parsed.length - 1; // already counted 1
+                  s.completado += parsed.filter((st: any) => st.completado).length;
+                  continue;
                 }
               }
             } catch {}
           }
-          if (subTotal === 0) subTotal = 1; // tema without subtemas counts as 1
-          s.total += subTotal;
-          s.completado += subDone;
-          if (row.estado === "suspendido") s.suspendido++;
-          else if (row.estado === "parcial") s.parcial++;
-          else if (row.estado === "pendiente") s.pendiente++;
-          else if (row.estado === "reprogramado") s.reprogramado++;
+
+          if (isCompleted) s.completado++;
         }
         setStatsMap(map);
       }
 
       setLoading(false);
     };
-    fetch();
+    fetchData();
   }, [user]);
 
   if (loading) {
@@ -125,8 +131,8 @@ export default function Planificacion() {
       <div className="grid gap-4">
         {clases.map((clase) => {
           const stats = statsMap[clase.id];
-          const hasPlanning = stats && stats.total > 0;
-          const pct = hasPlanning ? Math.round((stats.completado / stats.total) * 100) : 0;
+          const hasPlanning = stats && (stats.total > 0 || stats.suspendido > 0);
+          const pct = stats && stats.total > 0 ? Math.round((stats.completado / stats.total) * 100) : 0;
 
           return (
             <Card key={clase.id}>
@@ -159,11 +165,6 @@ export default function Planificacion() {
                       {stats.suspendido > 0 && (
                         <Badge variant="outline" className="gap-1 border-destructive/30 text-destructive">
                           <XCircle className="h-3 w-3" /> {stats.suspendido} suspendidos
-                        </Badge>
-                      )}
-                      {stats.parcial > 0 && (
-                        <Badge variant="outline" className="gap-1 border-warning/30 text-warning">
-                          {stats.parcial} parciales
                         </Badge>
                       )}
                     </div>
