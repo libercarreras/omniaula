@@ -133,9 +133,10 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
     setRows(parsed);
     setLoading(false);
 
-    // After loading, recalculate stale dates if needed
+    // After loading, recalculate stale dates if needed (reload after if changes made)
     if (parsed.length > 0) {
-      await recalcStaleDates(parsed);
+      const didRecalc = await recalcStaleDates(parsed, false);
+      if (didRecalc) await loadPlan();
     }
   };
 
