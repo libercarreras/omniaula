@@ -129,9 +129,14 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
       return; // migrateOldFormat calls loadPlan again
     }
 
-    setRows(rawRows.map(parseRowSubtema));
+    const parsed = rawRows.map(parseRowSubtema);
+    setRows(parsed);
     setLoading(false);
-  };
+
+    // After loading, recalculate stale dates if needed
+    if (parsed.length > 0) {
+      await recalcStaleDates(parsed);
+    }
 
   const migrateOldFormat = async (oldRows: any[]) => {
     const newRecords: any[] = [];
