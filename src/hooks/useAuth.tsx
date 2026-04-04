@@ -54,17 +54,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
-    const [profileRes, roleRes, limitsRes] = await Promise.all([
+    const [profileRes, roleRes, allLimitsRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("user_id", userId).single(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
-      null, // will fetch after profile
+      supabase.from("plan_limits").select("*"),
     ]);
 
     if (profileRes.data) {
       const p = profileRes.data as Profile;
       setProfile(p);
-      const { data: limits } = await supabase
-        .from("plan_limits").select("*").eq("plan", p.plan).single();
+      const limits = (allLimitsRes.data || []).find((l: any) => l.plan === p.plan) ?? null;
       if (limits) setPlanLimits(limits as PlanLimits);
     }
 
@@ -87,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          setTimeout(() => fetchProfile(session.user.id), 0);
+          await fetchProfile(session.user.id);
         } else {
           setProfile(null);
           setPlanLimits(null);
@@ -96,15 +95,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      }
-      setLoading(false);
-    });
 
     return () => subscription.unsubscribe();
   }, []);
