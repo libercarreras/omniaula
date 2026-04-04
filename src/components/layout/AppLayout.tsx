@@ -1,4 +1,5 @@
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { MobileNav } from "./MobileNav";
@@ -19,6 +20,7 @@ export function AppLayout() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
+  const location = useLocation();
 
   const initials = profile?.nombre
     ? profile.nombre.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -83,7 +85,9 @@ export function AppLayout() {
             </DropdownMenu>
           </header>
           <main className={`flex-1 p-4 md:p-6 ${isMobile ? "pb-24" : ""}`}>
-            <Outlet />
+            <ErrorBoundary resetKey={location.pathname} inline>
+              <Outlet />
+            </ErrorBoundary>
           </main>
           {isMobile && <MobileNav />}
         </div>
