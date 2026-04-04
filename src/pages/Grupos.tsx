@@ -12,7 +12,7 @@ import { InvitarDocente } from "@/components/colaboracion/InvitarDocente";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Link } from "react-router-dom";
 
 interface GrupoDB {
@@ -130,10 +130,10 @@ export default function Grupos() {
       }).eq("id", editingGrupo.id);
       setSaving(false);
       if (error) {
-        toast({ title: "Error", description: "No se pudo actualizar el grupo.", variant: "destructive" });
+        toast.error("Error", { description: "No se pudo actualizar el grupo." });
         return;
       }
-      toast({ title: "Grupo actualizado", description: `"${nombre.trim()}" fue actualizado correctamente.` });
+      toast.success("Grupo actualizado", { description: `"${nombre.trim()}" fue actualizado correctamente.` });
     } else {
       const { error } = await supabase.from("grupos").insert({
         nombre: nombre.trim(),
@@ -144,10 +144,10 @@ export default function Grupos() {
       });
       setSaving(false);
       if (error) {
-        toast({ title: "Error", description: "No se pudo crear el grupo.", variant: "destructive" });
+        toast.error("Error", { description: "No se pudo crear el grupo." });
         return;
       }
-      toast({ title: "Grupo creado", description: `"${nombre.trim()}" fue agregado correctamente.` });
+      toast.success("Grupo creado", { description: `"${nombre.trim()}" fue agregado correctamente.` });
     }
 
     setNombre(""); setAnio(""); setTurno(""); setInstitucionId("");
@@ -160,9 +160,9 @@ export default function Grupos() {
     if (!deleteTarget) return;
     const { error } = await supabase.from("grupos").delete().eq("id", deleteTarget.id);
     if (error) {
-      toast({ title: "Error", description: "No se pudo eliminar el grupo. Puede tener estudiantes o clases asociadas.", variant: "destructive" });
+      toast.error("Error", { description: "No se pudo eliminar el grupo. Puede tener estudiantes o clases asociadas." });
     } else {
-      toast({ title: "Grupo eliminado", description: `"${deleteTarget.nombre}" fue eliminado.` });
+      toast.success("Grupo eliminado", { description: `"${deleteTarget.nombre}" fue eliminado.` });
       fetchData();
     }
     setDeleteTarget(null);
@@ -188,10 +188,10 @@ export default function Grupos() {
     });
     setSavingClase(false);
     if (error) {
-      toast({ title: "Error", description: "No se pudo crear la clase.", variant: "destructive" });
+      toast.error("Error", { description: "No se pudo crear la clase." });
       return;
     }
-    toast({ title: "Clase creada", description: "La clase fue vinculada al grupo correctamente." });
+    toast.success("Clase creada", { description: "La clase fue vinculada al grupo correctamente." });
     setClaseDialogOpen(false);
     fetchData();
   };

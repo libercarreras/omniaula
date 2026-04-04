@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 export default function Materias() {
   const { user } = useAuth();
@@ -70,18 +70,18 @@ export default function Materias() {
       const { error } = await supabase.from("materias").update({ nombre: finalName, institucion_id: institucionId || null }).eq("id", editingMateria.id);
       setSaving(false);
       if (error) {
-        toast({ title: "Error", description: "No se pudo actualizar la materia.", variant: "destructive" });
+        toast.error("Error", { description: "No se pudo actualizar la materia." });
         return;
       }
-      toast({ title: "Materia actualizada", description: `"${finalName}" fue actualizada correctamente.` });
+      toast.success("Materia actualizada", { description: `"${finalName}" fue actualizada correctamente.` });
     } else {
       const { error } = await supabase.from("materias").insert({ nombre: finalName, user_id: user.id, institucion_id: institucionId || null });
       setSaving(false);
       if (error) {
-        toast({ title: "Error", description: "No se pudo crear la materia.", variant: "destructive" });
+        toast.error("Error", { description: "No se pudo crear la materia." });
         return;
       }
-      toast({ title: "Materia creada", description: `"${finalName}" fue agregada correctamente.` });
+      toast.success("Materia creada", { description: `"${finalName}" fue agregada correctamente.` });
     }
 
     setNombre("");
@@ -94,9 +94,9 @@ export default function Materias() {
     if (!deleteTarget) return;
     const { error } = await supabase.from("materias").delete().eq("id", deleteTarget.id);
     if (error) {
-      toast({ title: "Error", description: "No se pudo eliminar la materia. Verificá que no tenga clases asociadas.", variant: "destructive" });
+      toast.error("Error", { description: "No se pudo eliminar la materia. Verificá que no tenga clases asociadas." });
     } else {
-      toast({ title: "Materia eliminada", description: `"${deleteTarget.nombre}" fue eliminada.` });
+      toast.success("Materia eliminada", { description: `"${deleteTarget.nombre}" fue eliminada.` });
       fetchData();
     }
     setDeleteTarget(null);

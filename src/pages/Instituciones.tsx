@@ -9,7 +9,7 @@ import { Building2, Plus, Loader2, MapPin, Pencil, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion, type Institucion } from "@/hooks/useInstitucion";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
 export default function Instituciones() {
@@ -45,7 +45,7 @@ export default function Instituciones() {
     }).select().single();
 
     if (error || !inst) {
-      toast({ title: "Error", description: "No se pudo crear la institución.", variant: "destructive" });
+      toast.error("Error", { description: "No se pudo crear la institución." });
       setSaving(false);
       return;
     }
@@ -56,7 +56,7 @@ export default function Instituciones() {
       rol: "administrador",
     });
 
-    toast({ title: "Institución creada", description: `"${nombre.trim()}" fue creada correctamente.` });
+    toast.success("Institución creada", { description: `"${nombre.trim()}" fue creada correctamente.` });
     setNombre(""); setDireccion(""); setCiudad("");
     setDialogOpen(false);
     setSaving(false);
@@ -81,9 +81,9 @@ export default function Instituciones() {
     }).eq("id", editingInst.id);
 
     if (error) {
-      toast({ title: "Error", description: "No se pudo actualizar la institución.", variant: "destructive" });
+      toast.error("Error", { description: "No se pudo actualizar la institución." });
     } else {
-      toast({ title: "Institución actualizada" });
+      toast.success("Institución actualizada");
     }
     setEditingInst(null);
     setSaving(false);
@@ -95,9 +95,9 @@ export default function Instituciones() {
     setDeleting(true);
     const { error } = await supabase.from("instituciones").delete().eq("id", deleteInst.id);
     if (error) {
-      toast({ title: "Error", description: "No se pudo eliminar la institución.", variant: "destructive" });
+      toast.error("Error", { description: "No se pudo eliminar la institución." });
     } else {
-      toast({ title: "Institución eliminada" });
+      toast.success("Institución eliminada");
     }
     setDeleteInst(null);
     setDeleting(false);

@@ -11,7 +11,7 @@ import { Loader2, UserX, Plus, Pencil, Trash2, Upload, FileSpreadsheet, AlertTri
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface EstudianteDB {
   id: string;
@@ -121,10 +121,10 @@ export default function Estudiantes() {
       }).eq("id", editingEstudiante.id);
       setSaving(false);
       if (error) {
-        toast({ title: "Error", description: "No se pudo actualizar el estudiante.", variant: "destructive" });
+        toast.error("Error", { description: "No se pudo actualizar el estudiante." });
         return;
       }
-      toast({ title: "Estudiante actualizado", description: `"${finalName}" fue actualizado correctamente.` });
+      toast.success("Estudiante actualizado", { description: `"${finalName}" fue actualizado correctamente.` });
     } else {
       const { error } = await supabase.from("estudiantes").insert({
         nombre_completo: finalName,
@@ -134,10 +134,10 @@ export default function Estudiantes() {
       });
       setSaving(false);
       if (error) {
-        toast({ title: "Error", description: "No se pudo crear el estudiante.", variant: "destructive" });
+        toast.error("Error", { description: "No se pudo crear el estudiante." });
         return;
       }
-      toast({ title: "Estudiante agregado", description: `"${finalName}" fue registrado correctamente.` });
+      toast.success("Estudiante agregado", { description: `"${finalName}" fue registrado correctamente.` });
     }
 
     setNombre(""); setGrupoId(""); setNumeroLista("");
@@ -151,9 +151,9 @@ export default function Estudiantes() {
     if (!deleteTarget) return;
     const { error } = await supabase.from("estudiantes").delete().eq("id", deleteTarget.id);
     if (error) {
-      toast({ title: "Error", description: "No se pudo eliminar el estudiante. Puede tener registros asociados.", variant: "destructive" });
+      toast.error("Error", { description: "No se pudo eliminar el estudiante. Puede tener registros asociados." });
     } else {
-      toast({ title: "Estudiante eliminado", description: `"${deleteTarget.nombre_completo}" fue eliminado.` });
+      toast.success("Estudiante eliminado", { description: `"${deleteTarget.nombre_completo}" fue eliminado.` });
       fetchData();
     }
     setDeleteTarget(null);
@@ -174,7 +174,7 @@ export default function Estudiantes() {
       const text = ev.target?.result as string;
       const lines = text.split(/\r?\n/).filter(l => l.trim());
       if (lines.length < 2) {
-        toast({ title: "Archivo vacío", description: "El CSV debe tener al menos una fila de datos.", variant: "destructive" });
+        toast.error("Archivo vacío", { description: "El CSV debe tener al menos una fila de datos." });
         return;
       }
       const header = lines[0].toLowerCase().split(/[,;\t]/).map(h => h.trim());
@@ -182,7 +182,7 @@ export default function Estudiantes() {
       const numIdx = header.findIndex(h => h.includes("numero") || h.includes("lista") || h.includes("nro"));
 
       if (nameIdx === -1) {
-        toast({ title: "Formato incorrecto", description: "El CSV debe tener una columna 'nombre_completo' o 'nombre'.", variant: "destructive" });
+        toast.error("Formato incorrecto", { description: "El CSV debe tener una columna 'nombre_completo' o 'nombre'." });
         return;
       }
 
@@ -213,10 +213,10 @@ export default function Estudiantes() {
     const { error } = await supabase.from("estudiantes").insert(records);
     setImportingSaving(false);
     if (error) {
-      toast({ title: "Error", description: "No se pudieron importar los estudiantes.", variant: "destructive" });
+      toast.error("Error", { description: "No se pudieron importar los estudiantes." });
       return;
     }
-    toast({ title: "Importación exitosa", description: `Se importaron ${records.length} estudiantes.` });
+    toast.success("Importación exitosa", { description: `Se importaron ${records.length} estudiantes.` });
     setCsvDialogOpen(false);
     setCsvPreview([]);
     fetchData();
