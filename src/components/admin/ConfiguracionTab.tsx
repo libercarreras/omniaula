@@ -17,11 +17,12 @@ export default function ConfiguracionTab() {
 
   const fetchCurrentIcon = async () => {
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("app_settings")
       .select("value")
       .eq("key", "pwa_icon_512")
       .maybeSingle();
+    if (error) { console.error("fetchCurrentIcon:", error); setLoading(false); return; }
     if (data?.value) setIconUrl(data.value);
     setLoading(false);
   };
@@ -68,16 +69,19 @@ export default function ConfiguracionTab() {
 
       // Upsert app_settings
       for (const [key, value] of [["pwa_icon_512", publicUrl512], ["pwa_icon_192", publicUrl192]]) {
-        const { data: existing } = await supabase
+        const { data: existing, error: existingError } = await supabase
           .from("app_settings")
           .select("id")
           .eq("key", key)
           .maybeSingle();
+        if (existingError) throw existingError;
 
         if (existing) {
-          await supabase.from("app_settings").update({ value, updated_at: new Date().toISOString() }).eq("key", key);
+          const { error: updateError } = await supabase.from("app_settings").update({ value, updated_at: new Date().toISOString() }).eq("key", key);
+          if (updateError) throw updateError;
         } else {
-          await supabase.from("app_settings").insert({ key, value });
+          const { error: insertError } = await supabase.from("app_settings").insert({ key, value });
+          if (insertError) throw insertError;
         }
       }
 

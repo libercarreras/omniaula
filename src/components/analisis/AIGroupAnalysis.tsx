@@ -21,7 +21,8 @@ export function AIGroupAnalysis({ claseId, claseLabel, grupoId }: AIGroupAnalysi
 
     try {
       // Fetch real data
-      const { data: estudiantes } = await supabase.from("estudiantes").select("id, nombre_completo").eq("grupo_id", grupoId || "");
+      const { data: estudiantes, error: estError } = await supabase.from("estudiantes").select("id, nombre_completo").eq("grupo_id", grupoId || "");
+      if (estError) throw estError;
       const estIds = (estudiantes || []).map(e => e.id);
       const totalEstudiantes = estIds.length;
 
@@ -30,6 +31,9 @@ export function AIGroupAnalysis({ claseId, claseLabel, grupoId }: AIGroupAnalysi
         supabase.from("evaluaciones").select("id, nombre").eq("clase_id", claseId),
         supabase.from("desempeno_diario").select("estudiante_id, tarea, participacion_oral, rendimiento_aula, conducta").eq("clase_id", claseId),
       ]);
+      if (asistRes.error) throw asistRes.error;
+      if (evalRes.error) throw evalRes.error;
+      if (desempRes.error) throw desempRes.error;
 
       const asistData = asistRes.data || [];
       const totalAsist = asistData.length;
@@ -39,7 +43,8 @@ export function AIGroupAnalysis({ claseId, claseLabel, grupoId }: AIGroupAnalysi
       const evalIds = (evalRes.data || []).map(e => e.id);
       let notasData: any[] = [];
       if (evalIds.length > 0) {
-        const { data } = await supabase.from("notas").select("estudiante_id, nota").in("evaluacion_id", evalIds);
+        const { data, error: notasError } = await supabase.from("notas").select("estudiante_id, nota").in("evaluacion_id", evalIds);
+        if (notasError) throw notasError;
         notasData = (data || []).filter(n => n.nota !== null);
       }
 

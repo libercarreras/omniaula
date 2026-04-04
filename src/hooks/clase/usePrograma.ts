@@ -21,8 +21,10 @@ export function usePrograma(
     let cancelled = false;
 
     const load = async () => {
-      const { data } = await supabase.from("programas_anuales").select("*").eq("clase_id", claseId).maybeSingle();
-      if (cancelled || !data) return;
+      const { data, error } = await supabase.from("programas_anuales").select("*").eq("clase_id", claseId).maybeSingle();
+      if (cancelled) return;
+      if (error) { console.error("usePrograma load:", error); return; }
+      if (!data) return;
       setProgramaId(data.id);
       setProgramaContenido(data.contenido || "");
       setProgramaArchivoUrl((data as any).archivo_url || null);
@@ -37,18 +39,20 @@ export function usePrograma(
   const saveFn = useCallback(async () => {
     if (!userId || !claseId) return;
     if (programaId) {
-      await supabase.from("programas_anuales").update({
+      const { error: saveError } = await supabase.from("programas_anuales").update({
         contenido: programaContenido || null,
         archivo_url: programaArchivoUrl,
         archivo_nombre: programaArchivoNombre,
       }).eq("id", programaId);
+      if (saveError) { toast.error("Error al guardar el programa"); return; }
     } else {
-      const { data } = await supabase.from("programas_anuales").insert({
+      const { data, error: insertError } = await supabase.from("programas_anuales").insert({
         clase_id: claseId, user_id: userId,
         contenido: programaContenido || null,
         archivo_url: programaArchivoUrl,
         archivo_nombre: programaArchivoNombre,
       }).select("id").maybeSingle();
+      if (insertError) { toast.error("Error al guardar el programa"); return; }
       if (data) setProgramaId(data.id);
     }
   }, [programaContenido, programaArchivoUrl, programaArchivoNombre, programaId, claseId, userId]);
@@ -88,13 +92,15 @@ export function usePrograma(
     setSavingEstructura(true);
     try {
       if (programaId) {
-        await supabase.from("programas_anuales").update({ contenido_estructurado: est as any }).eq("id", programaId);
+        const { error: estUpdateError } = await supabase.from("programas_anuales").update({ contenido_estructurado: est as any }).eq("id", programaId);
+        if (estUpdateError) throw estUpdateError;
       } else {
-        const { data } = await supabase.from("programas_anuales").insert({
+        const { data, error: estInsertError } = await supabase.from("programas_anuales").insert({
           clase_id: claseId, user_id: userId,
           contenido: programaContenido || null,
           contenido_estructurado: est as any,
         }).select("id").maybeSingle();
+        if (estInsertError) throw estInsertError;
         if (data) setProgramaId(data.id);
       }
       setProgramaEstructura(est);

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useDebounceCallback } from "@/hooks/useDebounce";
 
@@ -39,16 +40,18 @@ export function useDiario(
       ]);
       if (cancelled) return;
 
+      if (diarioRes.error) { console.error("useDiario load:", diarioRes.error); return; }
       if (diarioRes.data) {
         setDiarioId(diarioRes.data.id);
         setDiarioTema(diarioRes.data.tema_trabajado || "");
         setDiarioActividad(diarioRes.data.actividad_realizada || "");
         setDiarioObs(diarioRes.data.observaciones || "");
       } else if (!isReadonly && userId) {
-        const { data: newDiario } = await supabase.from("diario_clase").insert({
+        const { data: newDiario, error: newDiarioError } = await supabase.from("diario_clase").insert({
           clase_id: claseId, user_id: userId, fecha: selectedDateISO,
           tema_trabajado: temaPlanificado || null,
         }).select("id").maybeSingle();
+        if (newDiarioError) { console.error("useDiario create:", newDiarioError); }
         if (!cancelled && newDiario) {
           setDiarioId(newDiario.id);
           setDiarioTema(temaPlanificado || "");
@@ -77,33 +80,41 @@ export function useDiario(
     const obs = diarioObsRef.current;
     let currentId = diarioIdRef.current;
 
-    if (currentId) {
-      await supabase.from("diario_clase").update({
-        tema_trabajado: tema || null,
-        actividad_realizada: actividad || null,
-        observaciones: obs || null,
-      }).eq("id", currentId);
-    } else {
-      const { data } = await supabase.from("diario_clase").insert({
-        clase_id: claseId, tema_trabajado: tema || null,
-        actividad_realizada: actividad || null,
-        observaciones: obs || null,
-        user_id: userId, fecha: selectedDateISO,
-      }).select("id").maybeSingle();
-      if (data) { setDiarioId(data.id); currentId = data.id; }
-    }
-
-    // Auto-update plan if tema was just filled in
-    if (tema && tema.trim()) {
-      const { data: todayPlan } = await supabase
-        .from("planificacion_clases").select("id, estado")
-        .eq("clase_id", claseId).eq("fecha", selectedDateISO).eq("estado", "pendiente");
-      if (todayPlan && todayPlan.length > 0) {
-        await supabase.from("planificacion_clases")
-          .update({ estado: "completado", diario_id: currentId })
-          .eq("id", todayPlan[0].id);
-        onPlanEstadoChange("completado");
+    try {
+      if (currentId) {
+        const { error: updateError } = await supabase.from("diario_clase").update({
+          tema_trabajado: tema || null,
+          actividad_realizada: actividad || null,
+          observaciones: obs || null,
+        }).eq("id", currentId);
+        if (updateError) throw updateError;
+      } else {
+        const { data, error: insertError } = await supabase.from("diario_clase").insert({
+          clase_id: claseId, tema_trabajado: tema || null,
+          actividad_realizada: actividad || null,
+          observaciones: obs || null,
+          user_id: userId, fecha: selectedDateISO,
+        }).select("id").maybeSingle();
+        if (insertError) throw insertError;
+        if (data) { setDiarioId(data.id); currentId = data.id; }
       }
+
+      // Auto-update plan if tema was just filled in
+      if (tema && tema.trim()) {
+        const { data: todayPlan, error: planError } = await supabase
+          .from("planificacion_clases").select("id, estado")
+          .eq("clase_id", claseId).eq("fecha", selectedDateISO).eq("estado", "pendiente");
+        if (planError) throw planError;
+        if (todayPlan && todayPlan.length > 0) {
+          const { error: planUpdateError } = await supabase.from("planificacion_clases")
+            .update({ estado: "completado", diario_id: currentId })
+            .eq("id", todayPlan[0].id);
+          if (planUpdateError) throw planUpdateError;
+          onPlanEstadoChange("completado");
+        }
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Error al guardar el diario");
     }
   }, [claseId, userId, selectedDateISO, onPlanEstadoChange]);
 

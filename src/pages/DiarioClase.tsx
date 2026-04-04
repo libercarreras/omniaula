@@ -35,28 +35,37 @@ export default function DiarioClase() {
     if (!user || !institucionActiva) return;
     const fetch = async () => {
       setLoading(true);
-      const { data: grpData } = await supabase.from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
-      const grupoIds = (grpData || []).map(g => g.id);
-      const gm: Record<string, string> = {};
-      (grpData || []).forEach(g => { gm[g.id] = g.nombre; });
-      setGrupos(gm);
+      try {
+        const { data: grpData, error: grpError } = await supabase.from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
+        if (grpError) throw grpError;
+        const grupoIds = (grpData || []).map(g => g.id);
+        const gm: Record<string, string> = {};
+        (grpData || []).forEach(g => { gm[g.id] = g.nombre; });
+        setGrupos(gm);
 
-      if (grupoIds.length === 0) { setClases([]); setEntries([]); setLoading(false); return; }
+        if (grupoIds.length === 0) { setClases([]); setEntries([]); setLoading(false); return; }
 
-      const [clsRes, matRes, diarioRes] = await Promise.all([
-        supabase.from("clases").select("*").in("grupo_id", grupoIds),
-        supabase.from("materias").select("id, nombre"),
-        supabase.from("diario_clase").select("*").order("fecha", { ascending: false }),
-      ]);
-      const clsData = clsRes.data || [];
-      setClases(clsData);
-      const mm: Record<string, string> = {};
-      (matRes.data || []).forEach(m => { mm[m.id] = m.nombre; });
-      setMaterias(mm);
-      const claseIds = new Set(clsData.map(c => c.id));
-      setEntries((diarioRes.data || []).filter(e => claseIds.has(e.clase_id)));
-      if (clsData.length > 0) setClaseId(clsData[0].id);
-      setLoading(false);
+        const [clsRes, matRes, diarioRes] = await Promise.all([
+          supabase.from("clases").select("*").in("grupo_id", grupoIds),
+          supabase.from("materias").select("id, nombre"),
+          supabase.from("diario_clase").select("*").order("fecha", { ascending: false }),
+        ]);
+        if (clsRes.error) throw clsRes.error;
+        if (matRes.error) throw matRes.error;
+        if (diarioRes.error) throw diarioRes.error;
+        const clsData = clsRes.data || [];
+        setClases(clsData);
+        const mm: Record<string, string> = {};
+        (matRes.data || []).forEach(m => { mm[m.id] = m.nombre; });
+        setMaterias(mm);
+        const claseIds = new Set(clsData.map(c => c.id));
+        setEntries((diarioRes.data || []).filter(e => claseIds.has(e.clase_id)));
+        if (clsData.length > 0) setClaseId(clsData[0].id);
+        setLoading(false);
+      } catch (e: any) {
+        toast.error(e.message || "Error al cargar el diario");
+        setLoading(false);
+      }
     };
     fetch();
   }, [user, institucionActiva]);
@@ -93,7 +102,8 @@ export default function DiarioClase() {
     toast.success("Entrada guardada en el diario");
     setDialogOpen(false);
     setTema(""); setActividad(""); setResumen("");
-    const { data } = await supabase.from("diario_clase").select("*").order("fecha", { ascending: false });
+    const { data, error: reloadError } = await supabase.from("diario_clase").select("*").order("fecha", { ascending: false });
+    if (reloadError) { console.error("DiarioClase reload:", reloadError); return; }
     const claseIds = new Set(clases.map(c => c.id));
     setEntries((data || []).filter(e => claseIds.has(e.clase_id)));
   };

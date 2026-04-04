@@ -6,6 +6,7 @@ import { Plus, Loader2, MessageSquare } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
+import { toast } from "sonner";
 
 const tipoLabel: Record<string, { label: string; variant: "default" | "destructive" | "secondary" }> = {
   participacion: { label: "Participación", variant: "default" },
@@ -25,20 +26,28 @@ export default function Seguimiento() {
     if (!user || !institucionActiva) return;
     const fetch = async () => {
       setLoading(true);
-      const { data: grpData } = await supabase.from("grupos").select("id").eq("institucion_id", institucionActiva.id);
-      const grupoIds = (grpData || []).map(g => g.id);
-      if (grupoIds.length === 0) { setObservaciones([]); setEstudiantes({}); setLoading(false); return; }
+      try {
+        const { data: grpData, error: grpError } = await supabase.from("grupos").select("id").eq("institucion_id", institucionActiva.id);
+        if (grpError) throw grpError;
+        const grupoIds = (grpData || []).map(g => g.id);
+        if (grupoIds.length === 0) { setObservaciones([]); setEstudiantes({}); setLoading(false); return; }
 
-      const { data: estData } = await supabase.from("estudiantes").select("id, nombre_completo").in("grupo_id", grupoIds);
-      const map: Record<string, string> = {};
-      (estData || []).forEach(e => { map[e.id] = e.nombre_completo; });
-      setEstudiantes(map);
+        const { data: estData, error: estError } = await supabase.from("estudiantes").select("id, nombre_completo").in("grupo_id", grupoIds);
+        if (estError) throw estError;
+        const map: Record<string, string> = {};
+        (estData || []).forEach(e => { map[e.id] = e.nombre_completo; });
+        setEstudiantes(map);
 
-      const estIds = Object.keys(map);
-      if (estIds.length === 0) { setObservaciones([]); setLoading(false); return; }
-      const { data: obsData } = await supabase.from("observaciones").select("*").in("estudiante_id", estIds).order("fecha", { ascending: false });
-      setObservaciones(obsData || []);
-      setLoading(false);
+        const estIds = Object.keys(map);
+        if (estIds.length === 0) { setObservaciones([]); setLoading(false); return; }
+        const { data: obsData, error: obsError } = await supabase.from("observaciones").select("*").in("estudiante_id", estIds).order("fecha", { ascending: false });
+        if (obsError) throw obsError;
+        setObservaciones(obsData || []);
+        setLoading(false);
+      } catch (e: any) {
+        toast.error(e.message || "Error al cargar seguimiento");
+        setLoading(false);
+      }
     };
     fetch();
   }, [user, institucionActiva]);

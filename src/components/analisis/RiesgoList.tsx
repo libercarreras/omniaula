@@ -25,7 +25,9 @@ export function RiesgoList({ claseId, grupoId }: Props) {
     if (!claseId || !grupoId) return;
     const analyze = async () => {
       setLoading(true);
-      const { data: estudiantes } = await supabase.from("estudiantes").select("id, nombre_completo").eq("grupo_id", grupoId);
+      try {
+      const { data: estudiantes, error: estError } = await supabase.from("estudiantes").select("id, nombre_completo").eq("grupo_id", grupoId);
+      if (estError) throw estError;
       if (!estudiantes || estudiantes.length === 0) { setRiesgo([]); setLoading(false); return; }
 
       const [asistRes, evalRes, desempRes] = await Promise.all([
@@ -33,11 +35,15 @@ export function RiesgoList({ claseId, grupoId }: Props) {
         supabase.from("evaluaciones").select("id").eq("clase_id", claseId),
         supabase.from("desempeno_diario").select("estudiante_id, tarea, participacion_oral, rendimiento_aula, conducta").eq("clase_id", claseId),
       ]);
+      if (asistRes.error) throw asistRes.error;
+      if (evalRes.error) throw evalRes.error;
+      if (desempRes.error) throw desempRes.error;
 
       const evalIds = (evalRes.data || []).map(e => e.id);
       let notasData: any[] = [];
       if (evalIds.length > 0) {
-        const { data } = await supabase.from("notas").select("estudiante_id, nota").in("evaluacion_id", evalIds);
+        const { data, error: notasError } = await supabase.from("notas").select("estudiante_id, nota").in("evaluacion_id", evalIds);
+        if (notasError) throw notasError;
         notasData = data || [];
       }
 
@@ -88,6 +94,10 @@ export function RiesgoList({ claseId, grupoId }: Props) {
       }
       setRiesgo(result);
       setLoading(false);
+      } catch (e: any) {
+        console.error("RiesgoList analyze:", e);
+        setLoading(false);
+      }
     };
     analyze();
   }, [claseId, grupoId]);

@@ -60,14 +60,21 @@ export default function Estudiantes() {
   const fetchData = async () => {
     if (!user || !institucionActiva) return;
     setLoading(true);
-    const { data: grpData } = await supabase.from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
-    const grps = grpData || [];
-    setGrupos(grps);
-    const grupoIds = grps.map(g => g.id);
-    if (grupoIds.length === 0) { setEstudiantes([]); setLoading(false); return; }
-    const { data: estData } = await supabase.from("estudiantes").select("id, nombre_completo, grupo_id, numero_lista").in("grupo_id", grupoIds);
-    setEstudiantes(estData || []);
-    setLoading(false);
+    try {
+      const { data: grpData, error: grpError } = await supabase.from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
+      if (grpError) throw grpError;
+      const grps = grpData || [];
+      setGrupos(grps);
+      const grupoIds = grps.map(g => g.id);
+      if (grupoIds.length === 0) { setEstudiantes([]); setLoading(false); return; }
+      const { data: estData, error: estError } = await supabase.from("estudiantes").select("id, nombre_completo, grupo_id, numero_lista").in("grupo_id", grupoIds);
+      if (estError) throw estError;
+      setEstudiantes(estData || []);
+      setLoading(false);
+    } catch (e: any) {
+      toast.error(e.message || "Error al cargar estudiantes");
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchData(); }, [user, institucionActiva]);

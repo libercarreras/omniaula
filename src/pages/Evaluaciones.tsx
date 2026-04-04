@@ -75,7 +75,9 @@ export default function Evaluaciones() {
     if (!user || !institucionActiva) return;
     const load = async () => {
       setLoading(true);
-      const { data: grpData } = await supabase.from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
+      try {
+      const { data: grpData, error: grpError } = await supabase.from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
+      if (grpError) throw grpError;
       const gruposList = grpData || [];
       setGrupos(gruposList);
       const grupoIds = gruposList.map(g => g.id);
@@ -86,6 +88,9 @@ export default function Evaluaciones() {
         supabase.from("materias").select("id, nombre"),
         supabase.from("evaluaciones").select("*").order("fecha", { ascending: false }),
       ]);
+      if (clsRes.error) throw clsRes.error;
+      if (matRes.error) throw matRes.error;
+      if (evRes.error) throw evRes.error;
       const clsData = clsRes.data || [];
       setClases(clsData);
       const mm: Record<string, string> = {};
@@ -97,11 +102,12 @@ export default function Evaluaciones() {
 
       // Load contenidos for all evaluaciones
       if (evFiltered.length > 0) {
-        const { data: contData } = await supabase
+        const { data: contData, error: contError } = await supabase
           .from("evaluacion_contenido")
           .select("*")
           .in("evaluacion_id", evFiltered.map(e => e.id))
           .order("orden");
+        if (contError) throw contError;
         const cm: Record<string, any[]> = {};
         (contData || []).forEach(c => {
           if (!cm[c.evaluacion_id]) cm[c.evaluacion_id] = [];
@@ -110,6 +116,10 @@ export default function Evaluaciones() {
         setContenidos(cm);
       }
       setLoading(false);
+      } catch (e: any) {
+        toast.error(e.message || "Error al cargar evaluaciones");
+        setLoading(false);
+      }
     };
     load();
   }, [user, institucionActiva]);
@@ -134,6 +144,8 @@ export default function Evaluaciones() {
         supabase.from("diario_clase").select("*").eq("clase_id", selectedClaseId)
           .gte("fecha", fechaDesde).lte("fecha", fechaHasta).order("fecha"),
       ]);
+      if (planRes.error) { console.error("loadContext plan:", planRes.error); }
+      if (diarioRes.error) { console.error("loadContext diario:", diarioRes.error); }
       setTemasPeriodo(planRes.data || []);
       setDiarioPeriodo(diarioRes.data || []);
     };
@@ -190,10 +202,12 @@ export default function Evaluaciones() {
       setWizardOpen(false);
       resetWizard();
       // Reload
-      const { data: newEv } = await supabase.from("evaluaciones").select("*").eq("id", ev.id).single();
+      const { data: newEv, error: newEvError } = await supabase.from("evaluaciones").select("*").eq("id", ev.id).single();
+      if (newEvError) throw newEvError;
       if (newEv) setEvaluaciones(prev => [newEv, ...prev]);
       if (preguntas.length > 0) {
-        const { data: newCont } = await supabase.from("evaluacion_contenido").select("*").eq("evaluacion_id", ev.id).order("orden");
+        const { data: newCont, error: newContError } = await supabase.from("evaluacion_contenido").select("*").eq("evaluacion_id", ev.id).order("orden");
+        if (newContError) throw newContError;
         setContenidos(prev => ({ ...prev, [ev.id]: newCont || [] }));
       }
     } catch (e: any) {
@@ -213,6 +227,8 @@ export default function Evaluaciones() {
         supabase.from("notas").select("*").eq("evaluacion_id", ev.id),
         supabase.from("estudiantes").select("id, nombre_completo, apellido, numero_lista").eq("grupo_id", cls.grupo_id).order("numero_lista"),
       ]);
+      if (notasRes.error) console.error("openDetail notas:", notasRes.error);
+      if (estRes.error) console.error("openDetail estudiantes:", estRes.error);
       setDetailNotas(notasRes.data || []);
       setDetailEstudiantes(estRes.data || []);
     }
@@ -221,8 +237,10 @@ export default function Evaluaciones() {
   const handleDeleteEval = async (evalId: string) => {
     setDeleting(true);
     try {
-      await supabase.from("evaluacion_contenido").delete().eq("evaluacion_id", evalId);
-      await supabase.from("notas").delete().eq("evaluacion_id", evalId);
+      const { error: contDelError } = await supabase.from("evaluacion_contenido").delete().eq("evaluacion_id", evalId);
+      if (contDelError) throw contDelError;
+      const { error: notasDelError } = await supabase.from("notas").delete().eq("evaluacion_id", evalId);
+      if (notasDelError) throw notasDelError;
       const { error } = await supabase.from("evaluaciones").delete().eq("id", evalId);
       if (error) throw error;
       setEvaluaciones(prev => prev.filter(e => e.id !== evalId));

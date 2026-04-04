@@ -20,31 +20,38 @@ export function RadarRiesgo() {
   useEffect(() => {
     if (!user || !institucionActiva) return;
     const analyze = async () => {
+      try {
       // Get grupos for institution
-      const { data: grupos } = await supabase.from("grupos").select("id").eq("institucion_id", institucionActiva.id);
+      const { data: grupos, error: grpError } = await supabase.from("grupos").select("id").eq("institucion_id", institucionActiva.id);
+      if (grpError) throw grpError;
       const grupoIds = (grupos || []).map(g => g.id);
       if (grupoIds.length === 0) return;
 
       // Get estudiantes
-      const { data: estudiantes } = await supabase.from("estudiantes").select("id, nombre_completo, grupo_id").in("grupo_id", grupoIds);
+      const { data: estudiantes, error: estError } = await supabase.from("estudiantes").select("id, nombre_completo, grupo_id").in("grupo_id", grupoIds);
+      if (estError) throw estError;
       if (!estudiantes || estudiantes.length === 0) return;
 
       // Get clases
-      const { data: clases } = await supabase.from("clases").select("id").in("grupo_id", grupoIds);
+      const { data: clases, error: clsError } = await supabase.from("clases").select("id").in("grupo_id", grupoIds);
+      if (clsError) throw clsError;
       const claseIds = (clases || []).map(c => c.id);
       if (claseIds.length === 0) return;
 
       // Get asistencia (last 30 days)
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const { data: asistencia } = await supabase.from("asistencia").select("estudiante_id, estado").in("clase_id", claseIds).gte("fecha", thirtyDaysAgo.toISOString().split("T")[0]);
+      const { data: asistencia, error: asistError } = await supabase.from("asistencia").select("estudiante_id, estado").in("clase_id", claseIds).gte("fecha", thirtyDaysAgo.toISOString().split("T")[0]);
+      if (asistError) throw asistError;
 
       // Get notas
-      const { data: evaluaciones } = await supabase.from("evaluaciones").select("id").in("clase_id", claseIds);
+      const { data: evaluaciones, error: evalError } = await supabase.from("evaluaciones").select("id").in("clase_id", claseIds);
+      if (evalError) throw evalError;
       const evIds = (evaluaciones || []).map(e => e.id);
       let notasData: any[] = [];
       if (evIds.length > 0) {
-        const { data } = await supabase.from("notas").select("estudiante_id, nota").in("evaluacion_id", evIds);
+        const { data, error: notasError } = await supabase.from("notas").select("estudiante_id, nota").in("evaluacion_id", evIds);
+        if (notasError) throw notasError;
         notasData = data || [];
       }
 
@@ -77,6 +84,9 @@ export function RadarRiesgo() {
         }
       }
       setEstudiantesRiesgo(riesgo);
+      } catch (e: any) {
+        console.error("RadarRiesgo analyze:", e);
+      }
     };
     analyze();
   }, [user, institucionActiva]);

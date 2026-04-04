@@ -44,7 +44,8 @@ export function useStudentMetrics() {
       const evalIds = evals.map(e => e.id);
       let notasData: any[] = [];
       if (evalIds.length > 0) {
-        const { data } = await supabase.from("notas").select("evaluacion_id, nota").eq("estudiante_id", studentId).in("evaluacion_id", evalIds);
+        const { data, error: notasError } = await supabase.from("notas").select("evaluacion_id, nota").eq("estudiante_id", studentId).in("evaluacion_id", evalIds);
+        if (notasError) throw notasError;
         notasData = data || [];
       }
       const evaluaciones = evals.map(ev => {
@@ -63,7 +64,8 @@ export function useStudentMetrics() {
       const tareaIds = (tareasRes.data || []).map(t => t.id);
       let tareasEntregadas = 0;
       if (tareaIds.length > 0) {
-        const { data: entregas } = await supabase.from("entregas").select("id").eq("estudiante_id", studentId).eq("estado", "entregado").in("tarea_id", tareaIds);
+        const { data: entregas, error: entregasError } = await supabase.from("entregas").select("id").eq("estudiante_id", studentId).eq("estado", "entregado").in("tarea_id", tareaIds);
+        if (entregasError) throw entregasError;
         tareasEntregadas = (entregas || []).length;
       }
 

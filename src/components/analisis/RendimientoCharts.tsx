@@ -25,18 +25,22 @@ export function RendimientoCharts({ claseId, grupoId }: Props) {
     if (!claseId || !grupoId) return;
     const load = async () => {
       setLoading(true);
+      try {
 
       // Get students
-      const { data: estudiantes } = await supabase.from("estudiantes").select("id").eq("grupo_id", grupoId);
+      const { data: estudiantes, error: estError } = await supabase.from("estudiantes").select("id").eq("grupo_id", grupoId);
+      if (estError) throw estError;
       const estIds = (estudiantes || []).map(e => e.id);
 
       // Get evaluaciones
-      const { data: evals } = await supabase.from("evaluaciones").select("id, nombre").eq("clase_id", claseId).order("fecha", { ascending: true });
+      const { data: evals, error: evalError } = await supabase.from("evaluaciones").select("id, nombre").eq("clase_id", claseId).order("fecha", { ascending: true });
+      if (evalError) throw evalError;
       const evalIds = (evals || []).map(e => e.id);
 
       let notasData: any[] = [];
       if (evalIds.length > 0 && estIds.length > 0) {
-        const { data } = await supabase.from("notas").select("evaluacion_id, nota, estudiante_id").in("evaluacion_id", evalIds);
+        const { data, error: notasError } = await supabase.from("notas").select("evaluacion_id, nota, estudiante_id").in("evaluacion_id", evalIds);
+        if (notasError) throw notasError;
         notasData = data || [];
       }
 
@@ -63,7 +67,8 @@ export function RendimientoCharts({ claseId, grupoId }: Props) {
       const promedioGral = allNotas.length > 0 ? Math.round((allNotas.reduce((a, b) => a + b, 0) / allNotas.length) * 10) / 10 : 0;
 
       // Asistencia semanal (últimas 6 semanas)
-      const { data: asistData } = await supabase.from("asistencia").select("fecha, estado").eq("clase_id", claseId).order("fecha", { ascending: true });
+      const { data: asistData, error: asistError } = await supabase.from("asistencia").select("fecha, estado").eq("clase_id", claseId).order("fecha", { ascending: true });
+      if (asistError) throw asistError;
       const asist = asistData || [];
 
       const weeks: { semana: string; porcentaje: number }[] = [];
@@ -93,6 +98,10 @@ export function RendimientoCharts({ claseId, grupoId }: Props) {
 
       setResumen({ totalEst: estIds.length, promedioGral, asistGral });
       setLoading(false);
+      } catch (e: any) {
+        console.error("RendimientoCharts load:", e);
+        setLoading(false);
+      }
     };
     load();
   }, [claseId, grupoId]);

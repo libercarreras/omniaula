@@ -42,7 +42,7 @@ export function TareaSheet({ open, onClose, claseId, userId, fecha, isReadonly, 
     setLoading(true);
     const startOfDay = `${fecha}T00:00:00.000Z`;
     const endOfDay = `${fecha}T23:59:59.999Z`;
-    const { data: tareasData } = await supabase
+    const { data: tareasData, error: tareasError } = await supabase
       .from("tareas")
       .select("id, titulo, descripcion, fecha_entrega")
       .eq("clase_id", claseId)
@@ -50,6 +50,7 @@ export function TareaSheet({ open, onClose, claseId, userId, fecha, isReadonly, 
       .lte("created_at", endOfDay)
       .order("created_at", { ascending: false });
 
+    if (tareasError) toast.error("Error al cargar tareas");
     setTareas(tareasData || []);
     setLoading(false);
   };
@@ -82,7 +83,8 @@ export function TareaSheet({ open, onClose, claseId, userId, fecha, isReadonly, 
   };
 
   const handleDelete = async (id: string) => {
-    await supabase.from("tareas").delete().eq("id", id);
+    const { error: deleteError } = await supabase.from("tareas").delete().eq("id", id);
+    if (deleteError) { toast.error("Error al eliminar la tarea"); return; }
     setTareas(prev => {
       const next = prev.filter(t => t.id !== id);
       onTareaChange(next.length > 0);
