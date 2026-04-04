@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
@@ -10,26 +11,27 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { UpdatePrompt } from "@/components/UpdatePrompt";
 import { InstallBanner } from "@/components/InstallBanner";
-import Dashboard from "./pages/Dashboard";
-import Grupos from "./pages/Grupos";
-import Estudiantes from "./pages/Estudiantes";
-import Asistencia from "./pages/Asistencia";
-import Evaluaciones from "./pages/Evaluaciones";
-import Seguimiento from "./pages/Seguimiento";
-import DiarioClase from "./pages/DiarioClase";
-import Planificacion from "./pages/Planificacion";
-import Informes from "./pages/Informes";
-import Analisis from "./pages/Analisis";
-import Materias from "./pages/Materias";
-import ModoClase from "./pages/ModoClase";
-import Perfil from "./pages/Perfil";
-import Administracion from "./pages/Administracion";
-import Configuracion from "./pages/Configuracion";
-import Instituciones from "./pages/Instituciones";
-import Login from "./pages/auth/Login";
-import RecoverPassword from "./pages/auth/RecoverPassword";
-import ResetPassword from "./pages/auth/ResetPassword";
 import NotFound from "./pages/NotFound";
+
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Grupos = lazy(() => import("./pages/Grupos"));
+const Estudiantes = lazy(() => import("./pages/Estudiantes"));
+const Asistencia = lazy(() => import("./pages/Asistencia"));
+const Evaluaciones = lazy(() => import("./pages/Evaluaciones"));
+const Seguimiento = lazy(() => import("./pages/Seguimiento"));
+const DiarioClase = lazy(() => import("./pages/DiarioClase"));
+const Planificacion = lazy(() => import("./pages/Planificacion"));
+const Informes = lazy(() => import("./pages/Informes"));
+const Analisis = lazy(() => import("./pages/Analisis"));
+const Materias = lazy(() => import("./pages/Materias"));
+const ModoClase = lazy(() => import("./pages/ModoClase"));
+const Perfil = lazy(() => import("./pages/Perfil"));
+const Administracion = lazy(() => import("./pages/Administracion"));
+const Configuracion = lazy(() => import("./pages/Configuracion"));
+const Instituciones = lazy(() => import("./pages/Instituciones"));
+const Login = lazy(() => import("./pages/auth/Login"));
+const RecoverPassword = lazy(() => import("./pages/auth/RecoverPassword"));
+const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
 
 const queryClient = new QueryClient();
 
@@ -44,6 +46,7 @@ const App = () => (
         <BrowserRouter>
         <AuthProvider>
         <InstitucionProvider>
+          <Suspense fallback={<div className="flex h-screen items-center justify-center"><span className="text-muted-foreground text-sm">Cargando…</span></div>}>
           <Routes>
             {/* Public auth routes */}
             <Route path="/login" element={<Login />} />
@@ -72,6 +75,7 @@ const App = () => (
 
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
         </InstitucionProvider>
         </AuthProvider>
       </BrowserRouter>
