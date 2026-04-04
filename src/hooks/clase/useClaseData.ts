@@ -1,46 +1,50 @@
-import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { qk } from "@/lib/queryKeys";
 import type { Clase, Materia, Grupo, Estudiante, Evaluacion } from "@/types/domain";
 
+async function fetchClaseData(claseId: string) {
+  const { data: clase } = await supabase.from("clases").select("*").eq("id", claseId).maybeSingle();
+  if (!clase) return null;
+
+  const [matRes, grpRes, estRes, evRes] = await Promise.all([
+    supabase.from("materias").select("*").eq("id", clase.materia_id).maybeSingle(),
+    supabase.from("grupos").select("*").eq("id", clase.grupo_id).maybeSingle(),
+    supabase.from("estudiantes").select("*").eq("grupo_id", clase.grupo_id).order("nombre_completo"),
+    supabase.from("evaluaciones").select("*").eq("clase_id", claseId),
+  ]);
+
+  return {
+    clase,
+    materia:      matRes.data ?? null,
+    grupo:        grpRes.data ?? null,
+    estudiantes:  (estRes.data ?? []) as Estudiante[],
+    evaluaciones: (evRes.data ?? []) as Evaluacion[],
+  };
+}
+
 export function useClaseData(claseId: string | undefined, userId: string | undefined) {
-  const [loading, setLoading] = useState(true);
-  const [clase, setClase] = useState<Clase | null>(null);
-  const [materia, setMateria] = useState<Materia | null>(null);
-  const [grupo, setGrupo] = useState<Grupo | null>(null);
-  const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
-  const [evaluaciones, setEvaluaciones] = useState<Evaluacion[]>([]);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (!userId || !claseId) return;
-    let cancelled = false;
+  const { isPending, data } = useQuery({
+    queryKey: qk.claseData(claseId!),
+    queryFn:  () => fetchClaseData(claseId!),
+    enabled:  !!userId && !!claseId,
+  });
 
-    const fetch = async () => {
-      setLoading(true);
-      const { data: claseData } = await supabase.from("clases").select("*").eq("id", claseId).maybeSingle();
-      if (!claseData || cancelled) { setLoading(false); return; }
+  const updateClase = (patch: Partial<Clase>) => {
+    queryClient.setQueryData(qk.claseData(claseId!), (prev: typeof data) =>
+      prev ? { ...prev, clase: prev.clase ? { ...prev.clase, ...patch } : prev.clase } : prev,
+    );
+  };
 
-      const [matRes, grpRes, estRes, evRes] = await Promise.all([
-        supabase.from("materias").select("*").eq("id", claseData.materia_id).maybeSingle(),
-        supabase.from("grupos").select("*").eq("id", claseData.grupo_id).maybeSingle(),
-        supabase.from("estudiantes").select("*").eq("grupo_id", claseData.grupo_id).order("nombre_completo"),
-        supabase.from("evaluaciones").select("*").eq("clase_id", claseId),
-      ]);
-
-      if (cancelled) return;
-      setClase(claseData);
-      setMateria(matRes.data);
-      setGrupo(grpRes.data);
-      setEstudiantes(estRes.data || []);
-      setEvaluaciones(evRes.data || []);
-      setLoading(false);
-    };
-
-    fetch();
-    return () => { cancelled = true; };
-  }, [userId, claseId]);
-
-  const updateClase = (patch: Partial<Clase>) =>
-    setClase((prev) => prev ? { ...prev, ...patch } : prev);
-
-  return { loading, clase, materia, grupo, estudiantes, evaluaciones, updateClase };
+  return {
+    loading:      isPending,
+    clase:        (data?.clase        ?? null) as Clase | null,
+    materia:      (data?.materia      ?? null) as Materia | null,
+    grupo:        (data?.grupo        ?? null) as Grupo | null,
+    estudiantes:  (data?.estudiantes  ?? [])   as Estudiante[],
+    evaluaciones: (data?.evaluaciones ?? [])   as Evaluacion[],
+    updateClase,
+  };
 }

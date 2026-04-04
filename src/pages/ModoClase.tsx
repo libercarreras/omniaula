@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useState, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { StudentDetailSheet } from "@/components/clase/StudentDetailSheet";
@@ -15,6 +16,7 @@ import { TareaSheet } from "@/components/clase/tabs/TareaSheet";
 import { EditClaseDialog } from "@/components/clase/EditClaseDialog";
 import { supabase } from "@/integrations/supabase/client";
 import type { Enums } from "@/integrations/supabase/types";
+import { qk } from "@/lib/queryKeys";
 import { useAuth } from "@/hooks/useAuth";
 import { useClaseData } from "@/hooks/clase/useClaseData";
 import { useDateSelector } from "@/hooks/clase/useDateSelector";
@@ -32,6 +34,7 @@ export default function ModoClase() {
   const { claseId } = useParams<{ claseId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   const { loading, clase, materia, grupo, estudiantes, evaluaciones, updateClase } = useClaseData(claseId, user?.id);
   const { selectedDate, selectedDateISO, isReadonly, isPastDate, handleDateChange } = useDateSelector();
@@ -44,7 +47,11 @@ export default function ModoClase() {
   const obs = useObservaciones(claseId, user?.id, selectedDateISO);
   const diario = useDiario(
     claseId, user?.id, selectedDateISO, isReadonly,
-    plan.temaPlanificado, plan.setPlanEstado,
+    plan.temaPlanificado,
+    (estado) => {
+      plan.setPlanEstado(estado);
+      queryClient.invalidateQueries({ queryKey: qk.planificacion(claseId!, selectedDateISO) });
+    },
   );
   const programa = usePrograma(claseId, user?.id);
 
@@ -203,18 +210,14 @@ export default function ModoClase() {
           planificacionStats={plan.planificacionStats}
           onChange={diario.handleDiarioChange}
           onChangePlanEstado={async (estado) => {
-            if (!claseId) return;
-            const { data: todayPlan } = await supabase
-              .from("planificacion_clases").select("id")
-              .eq("clase_id", claseId).eq("fecha", selectedDateISO);
-            if (todayPlan && todayPlan.length > 0) {
-              await supabase.from("planificacion_clases")
-                .update({ estado: estado as Enums<"estado_planificacion">, diario_id: diario.diarioId })
-                .eq("id", todayPlan[0].id);
-              plan.setPlanEstado(estado);
-              await plan.refreshStats();
-              toast.success("Estado actualizado");
-            }
+            if (!claseId || !plan.todayPlanId) return;
+            await supabase
+              .from("planificacion_clases")
+              .update({ estado: estado as Enums<"estado_planificacion">, diario_id: diario.diarioId })
+              .eq("id", plan.todayPlanId);
+            plan.setPlanEstado(estado);
+            queryClient.invalidateQueries({ queryKey: qk.planificacion(claseId, selectedDateISO) });
+            toast.success("Estado actualizado");
           }}
           onNavigatePrograma={() => setModoActivo("programa")}
         />

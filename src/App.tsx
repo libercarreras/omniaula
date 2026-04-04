@@ -33,7 +33,15 @@ const Login = lazy(() => import("./pages/auth/Login"));
 const RecoverPassword = lazy(() => import("./pages/auth/RecoverPassword"));
 const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,  // 5 min — classroom data doesn't change externally
+      gcTime:    1000 * 60 * 10, // 10 min
+      retry: 1,
+    },
+  },
+});
 
 const App = () => (
   <ErrorBoundary>
