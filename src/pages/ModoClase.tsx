@@ -14,6 +14,7 @@ import { ProgramaTab } from "@/components/clase/tabs/ProgramaTab";
 import { TareaSheet } from "@/components/clase/tabs/TareaSheet";
 import { EditClaseDialog } from "@/components/clase/EditClaseDialog";
 import { supabase } from "@/integrations/supabase/client";
+import type { Enums } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useClaseData } from "@/hooks/clase/useClaseData";
 import { useDateSelector } from "@/hooks/clase/useDateSelector";
@@ -216,7 +217,7 @@ export default function ModoClase() {
               .eq("clase_id", claseId).eq("fecha", selectedDateISO);
             if (todayPlan && todayPlan.length > 0) {
               await supabase.from("planificacion_clases")
-                .update({ estado: estado as any, diario_id: diario.diarioId })
+                .update({ estado: estado as Enums<"estado_planificacion">, diario_id: diario.diarioId })
                 .eq("id", todayPlan[0].id);
               plan.setPlanEstado(estado);
               await plan.refreshStats();

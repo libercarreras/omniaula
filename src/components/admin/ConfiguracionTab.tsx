@@ -17,7 +17,7 @@ export default function ConfiguracionTab() {
 
   const fetchCurrentIcon = async () => {
     setLoading(true);
-    const { data } = await (supabase as any)
+    const { data } = await supabase
       .from("app_settings")
       .select("value")
       .eq("key", "pwa_icon_512")
@@ -68,16 +68,16 @@ export default function ConfiguracionTab() {
 
       // Upsert app_settings
       for (const [key, value] of [["pwa_icon_512", publicUrl512], ["pwa_icon_192", publicUrl192]]) {
-        const { data: existing } = await (supabase as any)
+        const { data: existing } = await supabase
           .from("app_settings")
           .select("id")
           .eq("key", key)
           .maybeSingle();
 
         if (existing) {
-          await (supabase as any).from("app_settings").update({ value, updated_at: new Date().toISOString() }).eq("key", key);
+          await supabase.from("app_settings").update({ value, updated_at: new Date().toISOString() }).eq("key", key);
         } else {
-          await (supabase as any).from("app_settings").insert({ key, value });
+          await supabase.from("app_settings").insert({ key, value });
         }
       }
 

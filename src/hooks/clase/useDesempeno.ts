@@ -26,17 +26,17 @@ export function useDesempeno(
 
     const load = async () => {
       const [partRes, desRes] = await Promise.all([
-        (supabase.from("participacion_clase" as any) as any).select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO),
-        (supabase.from("desempeno_diario" as any) as any).select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO),
+        supabase.from("participacion_clase").select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO),
+        supabase.from("desempeno_diario").select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO),
       ]);
       if (cancelled) return;
 
       const partMap: Record<string, NivelParticipacion | null> = {};
-      ((partRes.data as any[]) || []).forEach((p: any) => { partMap[p.estudiante_id] = p.nivel; });
+      (partRes.data || []).forEach((p) => { partMap[p.estudiante_id] = p.nivel as NivelParticipacion; });
       setParticipacion(partMap);
 
       const desMap: Record<string, DesempenoRecord> = {};
-      ((desRes.data as any[]) || []).forEach((d: any) => {
+      (desRes.data || []).forEach((d) => {
         desMap[d.estudiante_id] = {
           tarea: d.tarea || null,
           participacion_oral: d.participacion_oral || null,
@@ -54,13 +54,13 @@ export function useDesempeno(
   const saveParticipacionFn = useCallback(async () => {
     if (!userId || !claseId) return;
     const current = participacionRef.current;
-    const { error: delErr } = await (supabase.from("participacion_clase" as any) as any).delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    const { error: delErr } = await supabase.from("participacion_clase").delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
     if (delErr) { toast.error("Error al guardar participación"); return; }
     const records = Object.entries(current)
       .filter(([, nivel]) => nivel !== null)
-      .map(([estudiante_id, nivel]) => ({ clase_id: claseId, estudiante_id, nivel, fecha: selectedDateISO, user_id: userId }));
+      .map(([estudiante_id, nivel]) => ({ clase_id: claseId, estudiante_id, nivel: nivel as NivelParticipacion, fecha: selectedDateISO, user_id: userId }));
     if (records.length > 0) {
-      const { error } = await (supabase.from("participacion_clase" as any) as any).insert(records);
+      const { error } = await supabase.from("participacion_clase").insert(records);
       if (error) toast.error("Error al guardar participación");
     }
   }, [claseId, userId, selectedDateISO]);
@@ -68,7 +68,7 @@ export function useDesempeno(
   const saveDesempenoFn = useCallback(async () => {
     if (!userId || !claseId) return;
     const current = desempenoRef.current;
-    const { error: delErr } = await (supabase.from("desempeno_diario" as any) as any).delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
+    const { error: delErr } = await supabase.from("desempeno_diario").delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
     if (delErr) { toast.error("Error al guardar desempeño"); return; }
     const records = Object.entries(current)
       .filter(([, r]) => r.tarea || r.participacion_oral || r.rendimiento_aula || r.conducta)
@@ -78,7 +78,7 @@ export function useDesempeno(
         rendimiento_aula: r.rendimiento_aula, conducta: r.conducta,
       }));
     if (records.length > 0) {
-      const { error } = await (supabase.from("desempeno_diario" as any) as any).insert(records);
+      const { error } = await supabase.from("desempeno_diario").insert(records);
       if (error) toast.error("Error al guardar desempeño");
     }
   }, [claseId, userId, selectedDateISO]);

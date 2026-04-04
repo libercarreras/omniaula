@@ -32,7 +32,7 @@ window.onunhandledrejection = (event) => {
 // Delay dynamic manifest injection so Chrome can capture beforeinstallprompt first
 setTimeout(async () => {
   try {
-    const { data } = await (supabase as any)
+    const { data } = await supabase
       .from("app_settings")
       .select("key, value")
       .in("key", ["pwa_icon_192", "pwa_icon_512"]);

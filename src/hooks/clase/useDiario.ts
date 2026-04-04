@@ -97,10 +97,10 @@ export function useDiario(
     if (tema && tema.trim()) {
       const { data: todayPlan } = await supabase
         .from("planificacion_clases").select("id, estado")
-        .eq("clase_id", claseId).eq("fecha", selectedDateISO).eq("estado", "pendiente" as any);
+        .eq("clase_id", claseId).eq("fecha", selectedDateISO).eq("estado", "pendiente");
       if (todayPlan && todayPlan.length > 0) {
         await supabase.from("planificacion_clases")
-          .update({ estado: "completado" as any, diario_id: currentId })
+          .update({ estado: "completado", diario_id: currentId })
           .eq("id", todayPlan[0].id);
         onPlanEstadoChange("completado");
       }
