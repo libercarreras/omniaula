@@ -38,10 +38,10 @@ export function useDesempeno(
       const desMap: Record<string, DesempenoRecord> = {};
       (desRes.data || []).forEach((d) => {
         desMap[d.estudiante_id] = {
-          tarea: d.tarea || null,
-          participacion_oral: d.participacion_oral || null,
-          rendimiento_aula: d.rendimiento_aula || null,
-          conducta: d.conducta || null,
+          tarea: (d.tarea as NivelDesempeno) || null,
+          participacion_oral: (d.participacion_oral as NivelDesempeno) || null,
+          rendimiento_aula: (d.rendimiento_aula as NivelDesempeno) || null,
+          conducta: (d.conducta as NivelDesempeno) || null,
         };
       });
       setDesempeno(desMap);
