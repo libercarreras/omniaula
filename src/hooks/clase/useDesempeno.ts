@@ -4,11 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useDebounceCallback } from "@/hooks/useDebounce";
 import type { NivelParticipacion, NivelDesempeno } from "@/components/clase/types";
 import type { DesempenoCategoria, DesempenoRecord } from "@/components/clase/tabs/DesempenoTab";
+import type { Estudiante } from "@/types/domain";
 
 export function useDesempeno(
   claseId: string | undefined,
   userId: string | undefined,
-  estudiantes: any[],
+  estudiantes: Estudiante[],
   selectedDateISO: string,
 ) {
   const [participacion, setParticipacion] = useState<Record<string, NivelParticipacion | null>>({});

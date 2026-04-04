@@ -66,7 +66,7 @@ export function useDiario(
         setDiarioObs("");
       }
 
-      const temas = (prevRes.data || []).map((d: any) => d.tema_trabajado).filter(Boolean) as string[];
+      const temas = (prevRes.data || []).map((d) => d.tema_trabajado).filter(Boolean) as string[];
       setDiarioSugerencias([...new Set(temas)]);
       isLoadedRef.current = true;
     };
@@ -115,8 +115,8 @@ export function useDiario(
           onPlanEstadoChange("completado");
         }
       }
-    } catch (e: any) {
-      toast.error(e.message || "Error al guardar el diario");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Error al guardar el diario");
     }
   }, [claseId, userId, selectedDateISO, onPlanEstadoChange]);
 

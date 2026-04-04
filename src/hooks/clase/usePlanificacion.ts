@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { PlanificacionClase } from "@/types/domain";
 
 export function usePlanificacion(claseId: string | undefined, selectedDateISO: string) {
   const [temaPlanificado, setTemaPlanificado] = useState<string | null>(null);
@@ -13,7 +14,7 @@ export function usePlanificacion(claseId: string | undefined, selectedDateISO: s
     const all = data || [];
     setPlanificacionStats({
       total: all.length,
-      completados: all.filter((p: any) => p.estado === "completado" || p.estado === "parcial").length,
+      completados: all.filter((p) => p.estado === "completado" || p.estado === "parcial").length,
     });
   }, [claseId]);
 
@@ -32,7 +33,7 @@ export function usePlanificacion(claseId: string | undefined, selectedDateISO: s
 
       if (cancelled) return;
 
-      const planData = (planRes.data || []) as any[];
+      const planData = (planRes.data || []) as Pick<PlanificacionClase, "tema_titulo" | "estado">[];
       if (planData.length > 0) {
         setTemaPlanificado(planData[0].tema_titulo);
         setPlanEstado(planData[0].estado);
@@ -46,7 +47,7 @@ export function usePlanificacion(claseId: string | undefined, selectedDateISO: s
       const allPlan = allPlanRes.data || [];
       setPlanificacionStats({
         total: allPlan.length,
-        completados: allPlan.filter((p: any) => p.estado === "completado" || p.estado === "parcial").length,
+        completados: allPlan.filter((p) => p.estado === "completado" || p.estado === "parcial").length,
       });
     };
 

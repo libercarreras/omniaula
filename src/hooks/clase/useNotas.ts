@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useDebounceCallback } from "@/hooks/useDebounce";
+import type { Evaluacion } from "@/types/domain";
 
 export function useNotas(
   claseId: string | undefined,
   userId: string | undefined,
-  evaluaciones: any[],
+  evaluaciones: Evaluacion[],
 ) {
   const [notasState, setNotasState] = useState<Record<string, string>>({});
   const [evaluacionActiva, setEvaluacionActiva] = useState<string | null>(null);
@@ -26,7 +27,7 @@ export function useNotas(
       const { data } = await supabase.from("notas").select("*").in("evaluacion_id", evIds);
       if (cancelled) return;
       const nMap: Record<string, string> = {};
-      (data || []).forEach((n: any) => {
+      (data || []).forEach((n) => {
         if (n.nota !== null) nMap[`${n.evaluacion_id}-${n.estudiante_id}`] = String(n.nota);
       });
       setNotasState(nMap);

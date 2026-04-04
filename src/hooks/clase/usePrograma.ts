@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useDebounceCallback } from "@/hooks/useDebounce";
+import type { Json } from "@/types/domain";
 
 export function usePrograma(
   claseId: string | undefined,
@@ -11,7 +12,7 @@ export function usePrograma(
   const [programaId, setProgramaId] = useState<string | null>(null);
   const [programaArchivoUrl, setProgramaArchivoUrl] = useState<string | null>(null);
   const [programaArchivoNombre, setProgramaArchivoNombre] = useState<string | null>(null);
-  const [programaEstructura, setProgramaEstructura] = useState<any>(null);
+  const [programaEstructura, setProgramaEstructura] = useState<Json | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [savingEstructura, setSavingEstructura] = useState(false);
   const isLoadedRef = useRef(false);
@@ -28,9 +29,9 @@ export function usePrograma(
       if (data) {
         setProgramaId(data.id);
         setProgramaContenido(data.contenido || "");
-        setProgramaArchivoUrl((data as any).archivo_url || null);
-        setProgramaArchivoNombre((data as any).archivo_nombre || null);
-        setProgramaEstructura((data as any).contenido_estructurado || null);
+        setProgramaArchivoUrl(data.archivo_url || null);
+        setProgramaArchivoNombre(data.archivo_nombre || null);
+        setProgramaEstructura(data.contenido_estructurado || null);
       }
       isLoadedRef.current = true;
     };
@@ -90,18 +91,18 @@ export function usePrograma(
     toast.success("Archivo eliminado");
   };
 
-  const handleSaveEstructura = async (est: any) => {
+  const handleSaveEstructura = async (est: Json) => {
     if (!claseId || !userId) return;
     setSavingEstructura(true);
     try {
       if (programaId) {
-        const { error: estUpdateError } = await supabase.from("programas_anuales").update({ contenido_estructurado: est as any }).eq("id", programaId);
+        const { error: estUpdateError } = await supabase.from("programas_anuales").update({ contenido_estructurado: est }).eq("id", programaId);
         if (estUpdateError) throw estUpdateError;
       } else {
         const { data, error: estInsertError } = await supabase.from("programas_anuales").insert({
           clase_id: claseId, user_id: userId,
           contenido: programaContenido || null,
-          contenido_estructurado: est as any,
+          contenido_estructurado: est,
         }).select("id").maybeSingle();
         if (estInsertError) throw estInsertError;
         if (data) setProgramaId(data.id);

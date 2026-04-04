@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Clase, Materia, Grupo, Estudiante, Evaluacion } from "@/types/domain";
 
 export function useClaseData(claseId: string | undefined, userId: string | undefined) {
   const [loading, setLoading] = useState(true);
-  const [clase, setClase] = useState<any>(null);
-  const [materia, setMateria] = useState<any>(null);
-  const [grupo, setGrupo] = useState<any>(null);
-  const [estudiantes, setEstudiantes] = useState<any[]>([]);
-  const [evaluaciones, setEvaluaciones] = useState<any[]>([]);
+  const [clase, setClase] = useState<Clase | null>(null);
+  const [materia, setMateria] = useState<Materia | null>(null);
+  const [grupo, setGrupo] = useState<Grupo | null>(null);
+  const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
+  const [evaluaciones, setEvaluaciones] = useState<Evaluacion[]>([]);
 
   useEffect(() => {
     if (!userId || !claseId) return;
@@ -38,8 +39,8 @@ export function useClaseData(claseId: string | undefined, userId: string | undef
     return () => { cancelled = true; };
   }, [userId, claseId]);
 
-  const updateClase = (patch: Partial<any>) =>
-    setClase((prev: any) => prev ? { ...prev, ...patch } : prev);
+  const updateClase = (patch: Partial<Clase>) =>
+    setClase((prev) => prev ? { ...prev, ...patch } : prev);
 
   return { loading, clase, materia, grupo, estudiantes, evaluaciones, updateClase };
 }

@@ -48,7 +48,12 @@ export function InstitucionProvider({ children }: { children: ReactNode }) {
       .select("institucion_id, rol, instituciones(id, nombre, direccion, ciudad, user_id)")
       .eq("user_id", user.id);
 
-    const mapped: Institucion[] = (data || []).map((row: any) => ({
+    type ProfesorInstitucionRow = {
+      institucion_id: string;
+      rol: string;
+      instituciones: { id: string; nombre: string; direccion: string | null; ciudad: string | null; user_id: string } | null;
+    };
+    const mapped: Institucion[] = (data || []).map((row: ProfesorInstitucionRow) => ({
       id: row.instituciones.id,
       nombre: row.instituciones.nombre,
       direccion: row.instituciones.direccion,

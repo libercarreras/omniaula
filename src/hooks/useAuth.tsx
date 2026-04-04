@@ -72,13 +72,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (allLimitsRes.data && !planLimitsCache) {
         planLimitsCache = allLimitsRes.data as PlanLimits[];
       }
-      const limits = (planLimitsCache || []).find((l: any) => l.plan === p.plan) ?? null;
+      const limits = (planLimitsCache || []).find((l) => l.plan === p.plan) ?? null;
       if (limits) setPlanLimits(limits as PlanLimits);
     }
 
     if (roleRes.data && roleRes.data.length > 0) {
       // Admin takes priority
-      const roles = roleRes.data.map((r: any) => r.role);
+      const roles = roleRes.data.map((r) => r.role);
       setRole(roles.includes("admin") ? "admin" : "docente");
     } else {
       setRole("docente");

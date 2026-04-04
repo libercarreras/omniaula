@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useDebounceCallback } from "@/hooks/useDebounce";
 import { tagObservaciones } from "@/components/clase/types";
+import type { Enums } from "@/integrations/supabase/types";
 
 export function useObservaciones(
   claseId: string | undefined,
@@ -25,7 +26,7 @@ export function useObservaciones(
       const { data } = await supabase.from("observaciones").select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO);
       if (cancelled) return;
       const oMap: Record<string, string[]> = {};
-      (data || []).forEach((o: any) => {
+      (data || []).forEach((o) => {
         if (!oMap[o.estudiante_id]) oMap[o.estudiante_id] = [];
         oMap[o.estudiante_id].push(o.tipo);
       });
@@ -42,11 +43,11 @@ export function useObservaciones(
     const current = obsRef.current;
     const { error: delErr } = await supabase.from("observaciones").delete().eq("clase_id", claseId).eq("fecha", selectedDateISO);
     if (delErr) { toast.error("Error al guardar observaciones"); return; }
-    const records: any[] = [];
+    const records: Array<{ clase_id: string; estudiante_id: string; tipo: Enums<"tipo_observacion">; descripcion: string; fecha: string; user_id: string }> = [];
     Object.entries(current).forEach(([estudiante_id, tipos]) => {
       tipos.forEach(tipo => {
         records.push({
-          clase_id: claseId, estudiante_id, tipo: tipo as any,
+          clase_id: claseId, estudiante_id, tipo: tipo as Enums<"tipo_observacion">,
           descripcion: tagObservaciones.find(t => t.tipo === tipo)?.label || tipo,
           fecha: selectedDateISO, user_id: userId,
         });

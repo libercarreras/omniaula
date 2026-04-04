@@ -4,11 +4,12 @@ import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useDebounceCallback } from "@/hooks/useDebounce";
 import type { EstadoAsistencia } from "@/components/clase/types";
+import type { Estudiante } from "@/types/domain";
 
 export function useAsistencia(
   claseId: string | undefined,
   userId: string | undefined,
-  estudiantes: any[],
+  estudiantes: Estudiante[],
   selectedDateISO: string,
   isReadonly: boolean,
 ) {
@@ -44,7 +45,7 @@ export function useAsistencia(
       } else {
         const asistMap: Record<string, EstadoAsistencia> = {};
         const motivoMap: Record<string, string> = {};
-        existing.forEach((a: any) => {
+        existing.forEach((a) => {
           asistMap[a.estudiante_id] = a.estado as EstadoAsistencia;
           if (a.motivo) motivoMap[a.estudiante_id] = a.motivo;
         });
@@ -71,7 +72,7 @@ export function useAsistencia(
         motivo: estado === "retiro" ? (currentMotivos[estudiante_id] || null) : null,
       }));
     if (records.length > 0) {
-      const { error } = await supabase.from("asistencia").insert(records as any);
+      const { error } = await supabase.from("asistencia").insert(records);
       if (error) toast.error("Error al guardar asistencia");
     }
   }, [claseId, userId, selectedDateISO]);
