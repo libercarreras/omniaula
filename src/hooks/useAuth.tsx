@@ -34,6 +34,8 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
 }
 
+let planLimitsCache: PlanLimits[] | null = null;
+
 const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
@@ -54,16 +56,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
+    const limitsPromise = planLimitsCache
+      ? Promise.resolve({ data: planLimitsCache, error: null })
+      : supabase.from("plan_limits").select("*");
+
     const [profileRes, roleRes, allLimitsRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("user_id", userId).single(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
-      supabase.from("plan_limits").select("*"),
+      limitsPromise,
     ]);
 
     if (profileRes.data) {
       const p = profileRes.data as Profile;
       setProfile(p);
-      const limits = (allLimitsRes.data || []).find((l: any) => l.plan === p.plan) ?? null;
+      if (allLimitsRes.data && !planLimitsCache) {
+        planLimitsCache = allLimitsRes.data as PlanLimits[];
+      }
+      const limits = (planLimitsCache || []).find((l: any) => l.plan === p.plan) ?? null;
       if (limits) setPlanLimits(limits as PlanLimits);
     }
 
@@ -82,9 +91,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
+        if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+          setLoading(false);
+          return;
+        }
         if (session?.user) {
           await fetchProfile(session.user.id);
         } else {
