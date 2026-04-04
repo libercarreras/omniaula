@@ -86,7 +86,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshProfile = async () => {
-    if (user) await fetchProfile(user.id);
+    if (!user) return;
+    try {
+      await fetchProfile(user.id);
+    } catch (err) {
+      console.error("[OmniAula][useAuth] refreshProfile falló:", err);
+    }
   };
 
   useEffect(() => {
@@ -98,14 +103,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false);
           return;
         }
-        if (session?.user) {
-          await fetchProfile(session.user.id);
-        } else {
+        try {
+          if (session?.user) {
+            await fetchProfile(session.user.id);
+          } else {
+            setProfile(null);
+            setPlanLimits(null);
+            setRole(null);
+          }
+        } catch (err) {
+          console.error("[OmniAula][useAuth] fetchProfile falló:", err);
           setProfile(null);
           setPlanLimits(null);
           setRole(null);
+        } finally {
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
