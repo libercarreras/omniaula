@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { StudentDetailSheet } from "@/components/clase/StudentDetailSheet";
@@ -33,22 +33,20 @@ export default function ModoClase() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const isInitialLoad = useRef(true);
-
   const { loading, clase, materia, grupo, estudiantes, evaluaciones, updateClase } = useClaseData(claseId, user?.id);
   const { selectedDate, selectedDateISO, isReadonly, isPastDate, handleDateChange } = useDateSelector();
 
   const plan = usePlanificacion(claseId, selectedDateISO);
 
-  const asistencia = useAsistencia(claseId, user?.id, estudiantes, selectedDateISO, isReadonly, isInitialLoad);
-  const desempeno = useDesempeno(claseId, user?.id, estudiantes, selectedDateISO, isInitialLoad);
-  const notas = useNotas(claseId, user?.id, evaluaciones, isInitialLoad);
-  const obs = useObservaciones(claseId, user?.id, selectedDateISO, isInitialLoad);
+  const asistencia = useAsistencia(claseId, user?.id, estudiantes, selectedDateISO, isReadonly);
+  const desempeno = useDesempeno(claseId, user?.id, estudiantes, selectedDateISO);
+  const notas = useNotas(claseId, user?.id, evaluaciones);
+  const obs = useObservaciones(claseId, user?.id, selectedDateISO);
   const diario = useDiario(
     claseId, user?.id, selectedDateISO, isReadonly,
-    plan.temaPlanificado, plan.setPlanEstado, isInitialLoad,
+    plan.temaPlanificado, plan.setPlanEstado,
   );
-  const programa = usePrograma(claseId, user?.id, isInitialLoad);
+  const programa = usePrograma(claseId, user?.id);
 
   // Simple local UI state
   const [modoActivo, setModoActivo] = useState<ModoActivo>("resumen");
@@ -58,17 +56,11 @@ export default function ModoClase() {
 
   const handleModoChange = (modo: ModoActivo) => {
     setModoActivo(modo);
-    // Lift the initial load guard once user navigates tabs
-    if (isInitialLoad.current) {
-      setTimeout(() => { isInitialLoad.current = false; }, 500);
-    }
   };
 
   const onDateChange = (date: Date) => {
     handleDateChange(date);
     setModoActivo("resumen");
-    isInitialLoad.current = true;
-    setTimeout(() => { isInitialLoad.current = false; }, 500);
   };
 
   // Current save status for header indicator

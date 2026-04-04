@@ -7,21 +7,22 @@ export function useNotas(
   claseId: string | undefined,
   userId: string | undefined,
   evaluaciones: any[],
-  isInitialLoad: React.MutableRefObject<boolean>,
 ) {
   const [notasState, setNotasState] = useState<Record<string, string>>({});
   const [evaluacionActiva, setEvaluacionActiva] = useState<string | null>(null);
 
   const notasRef = useRef(notasState);
   notasRef.current = notasState;
+  const isLoadedRef = useRef(false);
 
   useEffect(() => {
     if (!claseId) return;
     let cancelled = false;
+    isLoadedRef.current = false;
 
     const load = async () => {
       const evIds = evaluaciones.map(e => e.id);
-      if (evIds.length === 0) { setNotasState({}); return; }
+      if (evIds.length === 0) { setNotasState({}); isLoadedRef.current = true; return; }
       const { data } = await supabase.from("notas").select("*").in("evaluacion_id", evIds);
       if (cancelled) return;
       const nMap: Record<string, string> = {};
@@ -29,6 +30,7 @@ export function useNotas(
         if (n.nota !== null) nMap[`${n.evaluacion_id}-${n.estudiante_id}`] = String(n.nota);
       });
       setNotasState(nMap);
+      isLoadedRef.current = true;
     };
 
     load();
@@ -63,7 +65,7 @@ export function useNotas(
 
   const handleNotaChange = (key: string, value: string) => {
     setNotasState(prev => ({ ...prev, [key]: value }));
-    if (!isInitialLoad.current) debounce.trigger();
+    if (isLoadedRef.current) debounce.trigger();
   };
 
   return { notasState, evaluacionActiva, setEvaluacionActiva, saveStatus: debounce.status, handleNotaChange };

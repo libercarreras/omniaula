@@ -29,8 +29,8 @@ window.onunhandledrejection = (event) => {
   );
 };
 
-// Delay dynamic manifest injection so Chrome can capture beforeinstallprompt first
-setTimeout(async () => {
+// Inject dynamic manifest after load so Chrome fires beforeinstallprompt first
+window.addEventListener('load', async () => {
   try {
     const { data } = await supabase
       .from("app_settings")
@@ -69,6 +69,6 @@ setTimeout(async () => {
   } catch (e) {
     // Silently fail - fallback to static manifest
   }
-}, 3000);
+}, { once: true });
 
 createRoot(document.getElementById("root")!).render(<App />);

@@ -9,16 +9,17 @@ export function useObservaciones(
   claseId: string | undefined,
   userId: string | undefined,
   selectedDateISO: string,
-  isInitialLoad: React.MutableRefObject<boolean>,
 ) {
   const [obsState, setObsState] = useState<Record<string, string[]>>({});
 
   const obsRef = useRef(obsState);
   obsRef.current = obsState;
+  const isLoadedRef = useRef(false);
 
   useEffect(() => {
     if (!claseId) return;
     let cancelled = false;
+    isLoadedRef.current = false;
 
     const load = async () => {
       const { data } = await supabase.from("observaciones").select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO);
@@ -29,6 +30,7 @@ export function useObservaciones(
         oMap[o.estudiante_id].push(o.tipo);
       });
       setObsState(oMap);
+      isLoadedRef.current = true;
     };
 
     load();
@@ -64,7 +66,7 @@ export function useObservaciones(
       const next = current.includes(obsId) ? current.filter(id => id !== obsId) : [...current, obsId];
       return { ...prev, [estId]: next };
     });
-    if (!isInitialLoad.current) debounce.trigger();
+    if (isLoadedRef.current) debounce.trigger();
   };
 
   const obsStats = useMemo(() => Object.values(obsState).reduce((acc, arr) => acc + arr.length, 0), [obsState]);

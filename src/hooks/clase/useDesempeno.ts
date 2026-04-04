@@ -10,7 +10,6 @@ export function useDesempeno(
   userId: string | undefined,
   estudiantes: any[],
   selectedDateISO: string,
-  isInitialLoad: React.MutableRefObject<boolean>,
 ) {
   const [participacion, setParticipacion] = useState<Record<string, NivelParticipacion | null>>({});
   const [desempeno, setDesempeno] = useState<Record<string, DesempenoRecord>>({});
@@ -19,10 +18,12 @@ export function useDesempeno(
   participacionRef.current = participacion;
   const desempenoRef = useRef(desempeno);
   desempenoRef.current = desempeno;
+  const isLoadedRef = useRef(false);
 
   useEffect(() => {
     if (!claseId) return;
     let cancelled = false;
+    isLoadedRef.current = false;
 
     const load = async () => {
       const [partRes, desRes] = await Promise.all([
@@ -45,6 +46,7 @@ export function useDesempeno(
         };
       });
       setDesempeno(desMap);
+      isLoadedRef.current = true;
     };
 
     load();
@@ -88,7 +90,7 @@ export function useDesempeno(
 
   const marcarParticipacion = (estId: string, nivel: NivelParticipacion) => {
     setParticipacion(prev => ({ ...prev, [estId]: prev[estId] === nivel ? null : nivel }));
-    if (!isInitialLoad.current) partDebounce.trigger();
+    if (isLoadedRef.current) partDebounce.trigger();
   };
 
   const cambiarDesempeno = useCallback((estId: string, categoria: DesempenoCategoria, nivel: NivelDesempeno) => {
@@ -96,8 +98,8 @@ export function useDesempeno(
       const current = prev[estId] || { tarea: null, participacion_oral: null, rendimiento_aula: null, conducta: null };
       return { ...prev, [estId]: { ...current, [categoria]: nivel } };
     });
-    if (!isInitialLoad.current) desDebounce.trigger();
-  }, [desDebounce, isInitialLoad]);
+    if (isLoadedRef.current) desDebounce.trigger();
+  }, [desDebounce]);
 
   const marcarTodosDesempenoA = useCallback(() => {
     const nuevo: Record<string, DesempenoRecord> = {};
@@ -105,9 +107,9 @@ export function useDesempeno(
       nuevo[e.id] = { tarea: "A", participacion_oral: "A", rendimiento_aula: "A", conducta: "A" };
     });
     setDesempeno(nuevo);
-    if (!isInitialLoad.current) desDebounce.trigger();
+    if (isLoadedRef.current) desDebounce.trigger();
     toast.success("✓ Todos marcados con A");
-  }, [estudiantes, desDebounce, isInitialLoad]);
+  }, [estudiantes, desDebounce]);
 
   const desempenoSaveStatus = desDebounce.status;
 

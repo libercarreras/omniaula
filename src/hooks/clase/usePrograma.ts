@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useDebounceCallback } from "@/hooks/useDebounce";
@@ -6,7 +6,6 @@ import { useDebounceCallback } from "@/hooks/useDebounce";
 export function usePrograma(
   claseId: string | undefined,
   userId: string | undefined,
-  isInitialLoad: React.MutableRefObject<boolean>,
 ) {
   const [programaContenido, setProgramaContenido] = useState("");
   const [programaId, setProgramaId] = useState<string | null>(null);
@@ -15,21 +14,25 @@ export function usePrograma(
   const [programaEstructura, setProgramaEstructura] = useState<any>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [savingEstructura, setSavingEstructura] = useState(false);
+  const isLoadedRef = useRef(false);
 
   useEffect(() => {
     if (!claseId) return;
     let cancelled = false;
+    isLoadedRef.current = false;
 
     const load = async () => {
       const { data, error } = await supabase.from("programas_anuales").select("*").eq("clase_id", claseId).maybeSingle();
       if (cancelled) return;
       if (error) { console.error("usePrograma load:", error); return; }
-      if (!data) return;
-      setProgramaId(data.id);
-      setProgramaContenido(data.contenido || "");
-      setProgramaArchivoUrl((data as any).archivo_url || null);
-      setProgramaArchivoNombre((data as any).archivo_nombre || null);
-      setProgramaEstructura((data as any).contenido_estructurado || null);
+      if (data) {
+        setProgramaId(data.id);
+        setProgramaContenido(data.contenido || "");
+        setProgramaArchivoUrl((data as any).archivo_url || null);
+        setProgramaArchivoNombre((data as any).archivo_nombre || null);
+        setProgramaEstructura((data as any).contenido_estructurado || null);
+      }
+      isLoadedRef.current = true;
     };
 
     load();
@@ -61,7 +64,7 @@ export function usePrograma(
 
   const handleProgramaChange = (value: string) => {
     setProgramaContenido(value);
-    if (!isInitialLoad.current) debounce.trigger();
+    if (isLoadedRef.current) debounce.trigger();
   };
 
   const handleProgramaFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

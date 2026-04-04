@@ -10,7 +10,6 @@ export function useDiario(
   isReadonly: boolean,
   temaPlanificado: string | null,
   onPlanEstadoChange: (estado: string) => void,
-  isInitialLoad: React.MutableRefObject<boolean>,
 ) {
   const [diarioTema, setDiarioTema] = useState("");
   const [diarioActividad, setDiarioActividad] = useState("");
@@ -26,10 +25,12 @@ export function useDiario(
   diarioObsRef.current = diarioObs;
   const diarioIdRef = useRef(diarioId);
   diarioIdRef.current = diarioId;
+  const isLoadedRef = useRef(false);
 
   useEffect(() => {
     if (!claseId) return;
     let cancelled = false;
+    isLoadedRef.current = false;
 
     const load = async () => {
       const [diarioRes, prevRes] = await Promise.all([
@@ -67,6 +68,7 @@ export function useDiario(
 
       const temas = (prevRes.data || []).map((d: any) => d.tema_trabajado).filter(Boolean) as string[];
       setDiarioSugerencias([...new Set(temas)]);
+      isLoadedRef.current = true;
     };
 
     load();
@@ -124,7 +126,7 @@ export function useDiario(
     if (field === "tema") setDiarioTema(value);
     else if (field === "actividad") setDiarioActividad(value);
     else setDiarioObs(value);
-    if (!isInitialLoad.current) debounce.trigger();
+    if (isLoadedRef.current) debounce.trigger();
   };
 
   return { diarioTema, diarioActividad, diarioObs, diarioId, diarioSugerencias, saveStatus: debounce.status, handleDiarioChange };

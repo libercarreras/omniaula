@@ -11,7 +11,6 @@ export function useAsistencia(
   estudiantes: any[],
   selectedDateISO: string,
   isReadonly: boolean,
-  isInitialLoad: React.MutableRefObject<boolean>,
 ) {
   const [asistencia, setAsistencia] = useState<Record<string, EstadoAsistencia>>({});
   const [motivos, setMotivos] = useState<Record<string, string>>({});
@@ -20,10 +19,12 @@ export function useAsistencia(
   asistenciaRef.current = asistencia;
   const motivosRef = useRef(motivos);
   motivosRef.current = motivos;
+  const isLoadedRef = useRef(false);
 
   useEffect(() => {
     if (!claseId) return;
     let cancelled = false;
+    isLoadedRef.current = false;
 
     const load = async () => {
       const { data } = await supabase.from("asistencia").select("*").eq("clase_id", claseId).eq("fecha", selectedDateISO);
@@ -50,6 +51,7 @@ export function useAsistencia(
         setAsistencia(asistMap);
         setMotivos(motivoMap);
       }
+      isLoadedRef.current = true;
     };
 
     load();
@@ -83,14 +85,14 @@ export function useAsistencia(
     } else if (estado !== "retiro") {
       setMotivos(prev => { const n = { ...prev }; delete n[estId]; return n; });
     }
-    if (!isInitialLoad.current) debounce.trigger();
+    if (isLoadedRef.current) debounce.trigger();
   };
 
   const marcarTodosPresentes = () => {
     const nueva: Record<string, EstadoAsistencia> = {};
     estudiantes.forEach(e => { nueva[e.id] = "presente"; });
     setAsistencia(nueva);
-    if (!isInitialLoad.current) debounce.trigger();
+    if (isLoadedRef.current) debounce.trigger();
     toast.success("✓ Todos presentes");
   };
 
