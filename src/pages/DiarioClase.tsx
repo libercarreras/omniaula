@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,16 +12,14 @@ import { Plus, Sparkles, Loader2, BookOpen } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { qk } from "@/lib/queryKeys";
 import { toast } from "sonner";
 
 export default function DiarioClase() {
   const { user } = useAuth();
   const { institucionActiva } = useInstitucion();
-  const [loading, setLoading] = useState(true);
-  const [entries, setEntries] = useState<any[]>([]);
-  const [clases, setClases] = useState<any[]>([]);
-  const [materias, setMaterias] = useState<Record<string, string>>({});
-  const [grupos, setGrupos] = useState<Record<string, string>>({});
+  const queryClient = useQueryClient();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [tema, setTema] = useState("");
@@ -31,44 +29,83 @@ export default function DiarioClase() {
   const [resumen, setResumen] = useState("");
   const [generating, setGenerating] = useState(false);
 
+  const enabled = !!user && !!institucionActiva;
+
+  const { data: gruposData, isPending: loadingGrupos } = useQuery({
+    queryKey: qk.grupos(institucionActiva?.id ?? ""),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("grupos")
+        .select("id, nombre")
+        .eq("institucion_id", institucionActiva!.id);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled,
+  });
+
+  const grupoIds = useMemo(() => (gruposData ?? []).map(g => g.id), [gruposData]);
+
+  const { data: clasesData, isPending: loadingClases } = useQuery({
+    queryKey: qk.clasesByInst(institucionActiva?.id ?? ""),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clases")
+        .select("*")
+        .in("grupo_id", grupoIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: enabled && grupoIds.length > 0,
+  });
+
+  const { data: materiasData, isPending: loadingMaterias } = useQuery({
+    queryKey: qk.materias(user?.id ?? ""),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("materias").select("id, nombre");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled,
+  });
+
+  const claseIds = useMemo(() => (clasesData ?? []).map(c => c.id), [clasesData]);
+
+  const { data: entriesData, isPending: loadingEntries } = useQuery({
+    queryKey: qk.diarioPage(institucionActiva?.id ?? ""),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("diario_clase")
+        .select("*")
+        .in("clase_id", claseIds)
+        .order("fecha", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: enabled && claseIds.length > 0,
+  });
+
+  const clases = clasesData ?? [];
+  const entries = entriesData ?? [];
+  const grupos = useMemo(() => {
+    const map: Record<string, string> = {};
+    (gruposData ?? []).forEach(g => { map[g.id] = g.nombre; });
+    return map;
+  }, [gruposData]);
+  const materias = useMemo(() => {
+    const map: Record<string, string> = {};
+    (materiasData ?? []).forEach(m => { map[m.id] = m.nombre; });
+    return map;
+  }, [materiasData]);
+
+  // Set default selected clase when data arrives
   useEffect(() => {
-    if (!user || !institucionActiva) return;
-    const fetch = async () => {
-      setLoading(true);
-      try {
-        const { data: grpData, error: grpError } = await supabase.from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
-        if (grpError) throw grpError;
-        const grupoIds = (grpData || []).map(g => g.id);
-        const gm: Record<string, string> = {};
-        (grpData || []).forEach(g => { gm[g.id] = g.nombre; });
-        setGrupos(gm);
+    if (clases.length > 0 && !claseId) {
+      setClaseId(clases[0].id);
+    }
+  }, [clases, claseId]);
 
-        if (grupoIds.length === 0) { setClases([]); setEntries([]); setLoading(false); return; }
-
-        const [clsRes, matRes, diarioRes] = await Promise.all([
-          supabase.from("clases").select("*").in("grupo_id", grupoIds),
-          supabase.from("materias").select("id, nombre"),
-          supabase.from("diario_clase").select("*").order("fecha", { ascending: false }),
-        ]);
-        if (clsRes.error) throw clsRes.error;
-        if (matRes.error) throw matRes.error;
-        if (diarioRes.error) throw diarioRes.error;
-        const clsData = clsRes.data || [];
-        setClases(clsData);
-        const mm: Record<string, string> = {};
-        (matRes.data || []).forEach(m => { mm[m.id] = m.nombre; });
-        setMaterias(mm);
-        const claseIds = new Set(clsData.map(c => c.id));
-        setEntries((diarioRes.data || []).filter(e => claseIds.has(e.clase_id)));
-        if (clsData.length > 0) setClaseId(clsData[0].id);
-        setLoading(false);
-      } catch (e: any) {
-        toast.error(e.message || "Error al cargar el diario");
-        setLoading(false);
-      }
-    };
-    fetch();
-  }, [user, institucionActiva]);
+  const loading = loadingGrupos || loadingClases || loadingMaterias || loadingEntries;
 
   const getClaseLabel = (id: string) => {
     const c = clases.find(cl => cl.id === id);
@@ -92,21 +129,27 @@ export default function DiarioClase() {
     } finally { setGenerating(false); }
   };
 
-  const guardarEntrada = async () => {
-    if (!user || !claseId) return;
-    const { error } = await supabase.from("diario_clase").insert({
-      clase_id: claseId, tema_trabajado: tema, actividad_realizada: actividad,
-      observaciones: resumen || null, user_id: user.id,
-    });
-    if (error) { toast.error("Error al guardar"); return; }
-    toast.success("Entrada guardada en el diario");
-    setDialogOpen(false);
-    setTema(""); setActividad(""); setResumen("");
-    const { data, error: reloadError } = await supabase.from("diario_clase").select("*").order("fecha", { ascending: false });
-    if (reloadError) { console.error("DiarioClase reload:", reloadError); return; }
-    const claseIds = new Set(clases.map(c => c.id));
-    setEntries((data || []).filter(e => claseIds.has(e.clase_id)));
-  };
+  const { mutate: guardarEntrada } = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("diario_clase").insert({
+        clase_id: claseId,
+        tema_trabajado: tema,
+        actividad_realizada: actividad,
+        observaciones: resumen || null,
+        user_id: user!.id,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk.diarioPage(institucionActiva!.id) });
+      toast.success("Entrada guardada en el diario");
+      setDialogOpen(false);
+      setTema("");
+      setActividad("");
+      setResumen("");
+    },
+    onError: () => toast.error("Error al guardar"),
+  });
 
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
@@ -180,7 +223,7 @@ export default function DiarioClase() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={guardarEntrada} disabled={!tema.trim()}>Guardar entrada</Button>
+            <Button onClick={() => guardarEntrada()} disabled={!tema.trim()}>Guardar entrada</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

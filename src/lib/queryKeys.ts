@@ -24,4 +24,11 @@ export const qk = {
   evalContenidos:   (evalIdsKey: string)                                       => ["evalContenidos",   evalIdsKey]                        as const,
   periodContext:    (claseId: string, desde: string, hasta: string)            => ["periodContext",    claseId, desde, hasta]             as const,
   estudiantesByGrupo: (grupoId: string)                                        => ["estudiantesByGrupo", grupoId]                          as const,
+
+  // ── Page-level & detail queries (Phase 3) ─────────────────────────────
+  diarioPage:           (institucionId: string)                              => ["diarioPage",           institucionId]                     as const,
+  studentDetail:        (studentId: string)                                  => ["studentDetail",         studentId]                         as const,
+  studentObservaciones: (studentId: string)                                  => ["studentObservaciones",  studentId]                         as const,
+  studentAsistencia:    (studentId: string, claseId: string)                 => ["studentAsistencia",     studentId, claseId]                as const,
+  studentNotas:         (studentId: string)                                  => ["studentNotas",          studentId]                         as const,
 };

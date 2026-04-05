@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -6,48 +6,91 @@ import { FileText, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
+import { useQuery } from "@tanstack/react-query";
+import { qk } from "@/lib/queryKeys";
 import { AIFullReport } from "@/components/informes/AIFullReport";
 import { BulletinCommentGenerator } from "@/components/informes/BulletinCommentGenerator";
 
 export default function Informes() {
   const { user } = useAuth();
   const { institucionActiva } = useInstitucion();
-  const [loading, setLoading] = useState(true);
-  const [clases, setClases] = useState<any[]>([]);
-  const [materias, setMaterias] = useState<Record<string, string>>({});
-  const [grupos, setGrupos] = useState<Record<string, string>>({});
-  const [estudiantes, setEstudiantes] = useState<any[]>([]);
   const [claseSeleccionada, setClaseSeleccionada] = useState("");
   const [estudianteSeleccionado, setEstudianteSeleccionado] = useState("");
 
+  const enabled = !!user && !!institucionActiva;
+
+  const { data: gruposData, isPending: loadingGrupos } = useQuery({
+    queryKey: qk.grupos(institucionActiva?.id ?? ""),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("grupos")
+        .select("id, nombre")
+        .eq("institucion_id", institucionActiva!.id);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled,
+  });
+
+  const grupoIds = useMemo(() => (gruposData ?? []).map(g => g.id), [gruposData]);
+
+  const { data: clasesData, isPending: loadingClases } = useQuery({
+    queryKey: qk.clasesByInst(institucionActiva?.id ?? ""),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clases")
+        .select("*")
+        .in("grupo_id", grupoIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: enabled && grupoIds.length > 0,
+  });
+
+  const { data: materiasData, isPending: loadingMaterias } = useQuery({
+    queryKey: qk.materias(user?.id ?? ""),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("materias").select("id, nombre");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled,
+  });
+
+  const { data: estudiantesData, isPending: loadingEstudiantes } = useQuery({
+    queryKey: qk.estudiantesByInst(institucionActiva?.id ?? ""),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("estudiantes")
+        .select("id, nombre_completo, grupo_id")
+        .in("grupo_id", grupoIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: enabled && grupoIds.length > 0,
+  });
+
+  const clases = clasesData ?? [];
+  const estudiantes = estudiantesData ?? [];
+  const grupos = useMemo(() => {
+    const map: Record<string, string> = {};
+    (gruposData ?? []).forEach(g => { map[g.id] = g.nombre; });
+    return map;
+  }, [gruposData]);
+  const materias = useMemo(() => {
+    const map: Record<string, string> = {};
+    (materiasData ?? []).forEach(m => { map[m.id] = m.nombre; });
+    return map;
+  }, [materiasData]);
+
+  // Set default selected clase when data arrives
   useEffect(() => {
-    if (!user || !institucionActiva) return;
-    const fetch = async () => {
-      setLoading(true);
-      const { data: grpData } = await supabase.from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
-      const grupoIds = (grpData || []).map(g => g.id);
-      const gm: Record<string, string> = {};
-      (grpData || []).forEach(g => { gm[g.id] = g.nombre; });
-      setGrupos(gm);
+    if (clases.length > 0 && !claseSeleccionada) {
+      setClaseSeleccionada(clases[0].id);
+    }
+  }, [clases, claseSeleccionada]);
 
-      if (grupoIds.length === 0) { setClases([]); setEstudiantes([]); setLoading(false); return; }
-
-      const [clsRes, matRes, estRes] = await Promise.all([
-        supabase.from("clases").select("*").in("grupo_id", grupoIds),
-        supabase.from("materias").select("id, nombre"),
-        supabase.from("estudiantes").select("id, nombre_completo, grupo_id").in("grupo_id", grupoIds),
-      ]);
-      setClases(clsRes.data || []);
-      const mm: Record<string, string> = {};
-      (matRes.data || []).forEach(m => { mm[m.id] = m.nombre; });
-      setMaterias(mm);
-      setEstudiantes(estRes.data || []);
-      if (clsRes.data?.length) setClaseSeleccionada(clsRes.data[0].id);
-      setLoading(false);
-    };
-    fetch();
-  }, [user, institucionActiva]);
-
+  // Sync estudianteSeleccionado when clase changes
   useEffect(() => {
     if (!claseSeleccionada) return;
     const clase = clases.find(c => c.id === claseSeleccionada);
@@ -56,6 +99,8 @@ export default function Informes() {
     if (ests.length) setEstudianteSeleccionado(ests[0].id);
     else setEstudianteSeleccionado("");
   }, [claseSeleccionada, clases, estudiantes]);
+
+  const loading = loadingGrupos || loadingClases || loadingMaterias || loadingEstudiantes;
 
   const getClaseLabel = (id: string) => {
     const c = clases.find(cl => cl.id === id);

@@ -1,11 +1,13 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect, useMemo } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, BarChart3, Loader2, Users, TrendingUp, PieChart } from "lucide-react";
+import { BarChart3, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
+import { useQuery } from "@tanstack/react-query";
+import { qk } from "@/lib/queryKeys";
 import { AIGroupAnalysis } from "@/components/analisis/AIGroupAnalysis";
 import { RendimientoCharts } from "@/components/analisis/RendimientoCharts";
 import { RiesgoList } from "@/components/analisis/RiesgoList";
@@ -13,37 +15,68 @@ import { RiesgoList } from "@/components/analisis/RiesgoList";
 export default function Analisis() {
   const { user } = useAuth();
   const { institucionActiva } = useInstitucion();
-  const [loading, setLoading] = useState(true);
-  const [clases, setClases] = useState<any[]>([]);
-  const [materias, setMaterias] = useState<Record<string, string>>({});
-  const [grupos, setGrupos] = useState<Record<string, string>>({});
   const [claseSeleccionada, setClaseSeleccionada] = useState("");
 
+  const enabled = !!user && !!institucionActiva;
+
+  const { data: gruposData, isPending: loadingGrupos } = useQuery({
+    queryKey: qk.grupos(institucionActiva?.id ?? ""),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("grupos")
+        .select("id, nombre")
+        .eq("institucion_id", institucionActiva!.id);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled,
+  });
+
+  const grupoIds = useMemo(() => (gruposData ?? []).map(g => g.id), [gruposData]);
+
+  const { data: clasesData, isPending: loadingClases } = useQuery({
+    queryKey: qk.clasesByInst(institucionActiva?.id ?? ""),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clases")
+        .select("*")
+        .in("grupo_id", grupoIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: enabled && grupoIds.length > 0,
+  });
+
+  const { data: materiasData, isPending: loadingMaterias } = useQuery({
+    queryKey: qk.materias(user?.id ?? ""),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("materias").select("id, nombre");
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled,
+  });
+
+  const clases = clasesData ?? [];
+  const grupos = useMemo(() => {
+    const map: Record<string, string> = {};
+    (gruposData ?? []).forEach(g => { map[g.id] = g.nombre; });
+    return map;
+  }, [gruposData]);
+  const materias = useMemo(() => {
+    const map: Record<string, string> = {};
+    (materiasData ?? []).forEach(m => { map[m.id] = m.nombre; });
+    return map;
+  }, [materiasData]);
+
+  // Set default selected clase when data arrives
   useEffect(() => {
-    if (!user || !institucionActiva) return;
-    const fetch = async () => {
-      setLoading(true);
-      const { data: grpData } = await supabase.from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
-      const grupoIds = (grpData || []).map(g => g.id);
-      const gm: Record<string, string> = {};
-      (grpData || []).forEach(g => { gm[g.id] = g.nombre; });
-      setGrupos(gm);
+    if (clases.length > 0 && !claseSeleccionada) {
+      setClaseSeleccionada(clases[0].id);
+    }
+  }, [clases, claseSeleccionada]);
 
-      if (grupoIds.length === 0) { setClases([]); setLoading(false); return; }
-
-      const [clsRes, matRes] = await Promise.all([
-        supabase.from("clases").select("*").in("grupo_id", grupoIds),
-        supabase.from("materias").select("id, nombre"),
-      ]);
-      setClases(clsRes.data || []);
-      const mm: Record<string, string> = {};
-      (matRes.data || []).forEach(m => { mm[m.id] = m.nombre; });
-      setMaterias(mm);
-      if (clsRes.data && clsRes.data.length > 0) setClaseSeleccionada(clsRes.data[0].id);
-      setLoading(false);
-    };
-    fetch();
-  }, [user, institucionActiva]);
+  const loading = loadingGrupos || loadingClases || loadingMaterias;
 
   const getClaseLabel = (id: string) => {
     const c = clases.find(cl => cl.id === id);

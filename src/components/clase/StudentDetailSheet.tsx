@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
@@ -9,10 +9,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   UserCheck, ClipboardCheck, MessageSquare,
-  Check, X, Clock, Copy, Loader2, AlertTriangle,
+  Copy, Loader2, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { qk } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
 
 interface StudentDetailSheetProps {
@@ -61,31 +63,69 @@ const riskConfig: Record<RiskLevel, { label: string; color: string; bgColor: str
 };
 
 export function StudentDetailSheet({ studentId, claseId, open, onClose }: StudentDetailSheetProps) {
-  const [student, setStudent] = useState<any>(null);
-  const [observaciones, setObservaciones] = useState<any[]>([]);
-  const [asistenciaHist, setAsistenciaHist] = useState<any[]>([]);
-  const [notasHist, setNotasHist] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const sid = studentId ?? "";
+  const fetchEnabled = !!studentId && open;
 
-  useEffect(() => {
-    if (!studentId || !open) return;
-    setLoading(true);
-    const fetch = async () => {
-      const [estRes, obsRes, asistRes, notasRes] = await Promise.all([
-        supabase.from("estudiantes").select("*").eq("id", studentId).maybeSingle(),
-        supabase.from("observaciones").select("*").eq("estudiante_id", studentId).order("fecha", { ascending: false }).limit(30),
-        supabase.from("asistencia").select("*").eq("estudiante_id", studentId).eq("clase_id", claseId).order("fecha", { ascending: false }).limit(20),
-        supabase.from("notas").select("*, evaluaciones(nombre, tipo)").eq("estudiante_id", studentId),
-      ]);
-      setStudent(estRes.data);
-      setObservaciones(obsRes.data || []);
-      setAsistenciaHist(asistRes.data || []);
-      const notasData = (notasRes.data || []).filter((n: any) => n.evaluaciones);
-      setNotasHist(notasData);
-      setLoading(false);
-    };
-    fetch();
-  }, [studentId, open, claseId]);
+  const { data: student, isLoading: loadingStudent } = useQuery({
+    queryKey: qk.studentDetail(sid),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("estudiantes")
+        .select("*")
+        .eq("id", sid)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: fetchEnabled,
+  });
+
+  const { data: observaciones = [], isLoading: loadingObs } = useQuery({
+    queryKey: qk.studentObservaciones(sid),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("observaciones")
+        .select("*")
+        .eq("estudiante_id", sid)
+        .order("fecha", { ascending: false })
+        .limit(30);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: fetchEnabled,
+  });
+
+  const { data: asistenciaHist = [], isLoading: loadingAsist } = useQuery({
+    queryKey: qk.studentAsistencia(sid, claseId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("asistencia")
+        .select("*")
+        .eq("estudiante_id", sid)
+        .eq("clase_id", claseId)
+        .order("fecha", { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: fetchEnabled,
+  });
+
+  const { data: notasRaw = [], isLoading: loadingNotas } = useQuery({
+    queryKey: qk.studentNotas(sid),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("notas")
+        .select("*, evaluaciones(nombre, tipo)")
+        .eq("estudiante_id", sid);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: fetchEnabled,
+  });
+
+  const notasHist = useMemo(() => notasRaw.filter((n: any) => n.evaluaciones), [notasRaw]);
+  const loading = loadingStudent || loadingObs || loadingAsist || loadingNotas;
 
   const risk = useMemo(() => {
     if (!student) return null;
@@ -153,7 +193,6 @@ export function StudentDetailSheet({ studentId, claseId, open, onClose }: Studen
                     {promedio && (
                       <Badge className="text-[10px] bg-primary/10 text-primary">Prom: {promedio}</Badge>
                     )}
-                    {/* Risk indicator */}
                     {risk && risk.level !== "bajo" && (
                       <Badge className={cn("text-[10px] gap-1", riskConfig[risk.level].bgColor, riskConfig[risk.level].color)}>
                         <AlertTriangle className="h-2.5 w-2.5" />
@@ -168,7 +207,6 @@ export function StudentDetailSheet({ studentId, claseId, open, onClose }: Studen
               </div>
             </SheetHeader>
 
-            {/* Risk details */}
             {risk && risk.level !== "bajo" && risk.reasons.length > 0 && (
               <div className={cn("rounded-lg p-3 mb-3 border", riskConfig[risk.level].bgColor)}>
                 <p className={cn("text-xs font-semibold flex items-center gap-1.5 mb-1", riskConfig[risk.level].color)}>
