@@ -63,7 +63,7 @@ export default function Dashboard() {
   const nombre = profile?.nombre?.split(" ")[0] || "Profesor";
 
   const { data = EMPTY_DATA, isLoading } = useQuery({
-    queryKey: qk.clasesByInst(institucionActiva?.id ?? ""),
+    queryKey: qk.dashboard(institucionActiva?.id ?? ""),
     enabled: !!user && !!institucionActiva,
     queryFn: async (): Promise<DashboardData> => {
       const { data: gruposData } = await supabase

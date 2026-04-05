@@ -104,16 +104,17 @@ export default function Grupos() {
     },
   });
 
-  const { data: sharedGrupoIds = new Set<string>() } = useQuery<Set<string>>({
+  const { data: collabGrupoIds = [] } = useQuery<string[]>({
     queryKey: qk.grupoColabs(user?.id ?? ""),
     enabled: !!user,
     queryFn: async () => {
-      const grupoIdSet = new Set(gruposRaw.map(g => g.id));
       const { data } = await supabase
         .from("grupo_colaboradores").select("grupo_id").eq("colaborador_user_id", user!.id).eq("estado", "aceptada");
-      return new Set((data || []).filter(d => grupoIdSet.has(d.grupo_id)).map(d => d.grupo_id));
+      return (data || []).map(d => d.grupo_id);
     },
   });
+  const grupoIdSet = new Set(gruposRaw.map(g => g.id));
+  const sharedGrupoIds = new Set(collabGrupoIds.filter(id => grupoIdSet.has(id)));
 
   const isLoading = loadingGrupos || loadingMaterias;
 

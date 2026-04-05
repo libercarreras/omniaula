@@ -14,6 +14,7 @@ export const qk = {
   programa:      (claseId: string)               => ["programa", claseId]                as const,
 
   // ── High-traffic pages (Phase 2) ───────────────────────────────────────
+  dashboard:        (institucionId: string)                                    => ["dashboard",        institucionId]                     as const,
   grupos:           (institucionId: string)                                    => ["grupos",           institucionId]                     as const,
   materias:         (userId: string)                                           => ["materias",         userId]                            as const,
   clasesByInst:     (institucionId: string)                                    => ["clasesByInst",     institucionId]                     as const,
