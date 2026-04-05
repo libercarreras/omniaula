@@ -3,6 +3,7 @@
  * Import `qk` wherever you need to match, invalidate, or set query data.
  */
 export const qk = {
+  // ── ModoClase (Phase 1) ────────────────────────────────────────────────
   claseData:     (claseId: string)               => ["claseData", claseId]               as const,
   asistencia:    (claseId: string, date: string) => ["asistencia", claseId, date]        as const,
   desempeno:     (claseId: string, date: string) => ["desempeno", claseId, date]         as const,
@@ -11,4 +12,15 @@ export const qk = {
   diario:        (claseId: string, date: string) => ["diario", claseId, date]            as const,
   planificacion: (claseId: string, date: string) => ["planificacion", claseId, date]    as const,
   programa:      (claseId: string)               => ["programa", claseId]                as const,
+
+  // ── High-traffic pages (Phase 2) ───────────────────────────────────────
+  grupos:           (institucionId: string)                                    => ["grupos",           institucionId]                     as const,
+  materias:         (userId: string)                                           => ["materias",         userId]                            as const,
+  clasesByInst:     (institucionId: string)                                    => ["clasesByInst",     institucionId]                     as const,
+  estudiantesByInst:(institucionId: string)                                    => ["estudiantesByInst",institucionId]                     as const,
+  grupoColabs:      (userId: string)                                           => ["grupoColabs",      userId]                            as const,
+  evaluaciones:     (institucionId: string)                                    => ["evaluaciones",     institucionId]                     as const,
+  evalContenidos:   (evalIdsKey: string)                                       => ["evalContenidos",   evalIdsKey]                        as const,
+  periodContext:    (claseId: string, desde: string, hasta: string)            => ["periodContext",    claseId, desde, hasta]             as const,
+  estudiantesByGrupo: (grupoId: string)                                        => ["estudiantesByGrupo", grupoId]                          as const,
 };

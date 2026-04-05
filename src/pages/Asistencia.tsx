@@ -11,73 +11,117 @@ import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
 import { useDebounceCallback } from "@/hooks/useDebounce";
 import { toast } from "sonner";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { qk } from "@/lib/queryKeys";
 
 type EstadoAsistencia = "presente" | "falta" | "tarde" | "retiro" | null;
+
+interface ClaseDB { id: string; grupo_id: string; materia_id: string; }
+interface GrupoDB  { id: string; nombre: string; }
+interface MateriaDB { id: string; nombre: string; }
+interface EstudianteDB { id: string; nombre_completo: string; numero_lista: number | null; }
+interface AsistenciaDB { estudiante_id: string; estado: string; motivo?: string | null; }
 
 export default function Asistencia() {
   const { user } = useAuth();
   const { institucionActiva } = useInstitucion();
-  const [loading, setLoading] = useState(true);
-  const [clases, setClases] = useState<any[]>([]);
-  const [materias, setMaterias] = useState<Record<string, string>>({});
-  const [grupos, setGrupos] = useState<Record<string, string>>({});
+  const queryClient = useQueryClient();
+
   const [claseSeleccionada, setClaseSeleccionada] = useState("");
-  const [estudiantes, setEstudiantes] = useState<any[]>([]);
   const [asistencia, setAsistencia] = useState<Record<string, EstadoAsistencia>>({});
   const [motivos, setMotivos] = useState<Record<string, string>>({});
   const [retiroDialog, setRetiroDialog] = useState<{ estId: string; nombre: string } | null>(null);
   const [retiroMotivo, setRetiroMotivo] = useState("");
 
   const hoyISO = new Date().toISOString().split("T")[0];
+  const instId  = institucionActiva?.id ?? "";
 
+  // ── Query A: grupos ────────────────────────────────────────────────────────
+  const { data: grupos = [] } = useQuery<GrupoDB[]>({
+    queryKey: qk.grupos(instId),
+    enabled: !!user && !!instId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("grupos").select("id, nombre").eq("institucion_id", instId);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const grupoIds  = grupos.map(g => g.id);
+  const gruposMap = Object.fromEntries(grupos.map(g => [g.id, g.nombre]));
+
+  // ── Query B: clases ────────────────────────────────────────────────────────
+  const { data: clases = [], isLoading: loadingClases } = useQuery<ClaseDB[]>({
+    queryKey: qk.clasesByInst(instId),
+    enabled: grupoIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("clases").select("*").in("grupo_id", grupoIds);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // ── Query C: materias ──────────────────────────────────────────────────────
+  const { data: materiasData = [], isLoading: loadingMaterias } = useQuery<MateriaDB[]>({
+    queryKey: qk.materias(user?.id ?? ""),
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("materias").select("id, nombre");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const materiasMap = Object.fromEntries(materiasData.map(m => [m.id, m.nombre]));
+
+  // Auto-select first clase once clases load
   useEffect(() => {
-    if (!user || !institucionActiva) return;
-    const fetchData = async () => {
-      setLoading(true);
-      const { data: grpData } = await supabase.from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
-      const grupoIds = (grpData || []).map(g => g.id);
-      const gm: Record<string, string> = {};
-      (grpData || []).forEach(g => { gm[g.id] = g.nombre; });
-      setGrupos(gm);
+    if (clases.length > 0 && !claseSeleccionada) {
+      setClaseSeleccionada(clases[0].id);
+    }
+  }, [clases, claseSeleccionada]);
 
-      if (grupoIds.length === 0) { setClases([]); setLoading(false); return; }
+  const grupoId = clases.find(c => c.id === claseSeleccionada)?.grupo_id ?? "";
 
-      const [clsRes, matRes] = await Promise.all([
-        supabase.from("clases").select("*").in("grupo_id", grupoIds),
-        supabase.from("materias").select("id, nombre"),
-      ]);
-      setClases(clsRes.data || []);
-      const mm: Record<string, string> = {};
-      (matRes.data || []).forEach(m => { mm[m.id] = m.nombre; });
-      setMaterias(mm);
-      if (clsRes.data && clsRes.data.length > 0) setClaseSeleccionada(clsRes.data[0].id);
-      setLoading(false);
-    };
-    fetchData();
-  }, [user, institucionActiva]);
+  // ── Query D: estudiantes for selected clase's grupo ────────────────────────
+  const { data: estudiantes = [] } = useQuery<EstudianteDB[]>({
+    queryKey: qk.estudiantesByGrupo(grupoId),
+    enabled: !!grupoId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("estudiantes").select("id, nombre_completo, numero_lista")
+        .eq("grupo_id", grupoId).order("nombre_completo");
+      if (error) throw error;
+      return data || [];
+    },
+  });
 
+  // ── Query E: asistencia initial load ──────────────────────────────────────
+  const { data: asistenciaData } = useQuery<AsistenciaDB[]>({
+    queryKey: qk.asistencia(claseSeleccionada, hoyISO),
+    enabled: !!claseSeleccionada,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("asistencia").select("*").eq("clase_id", claseSeleccionada).eq("fecha", hoyISO);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // Seed local state when asistencia query data changes (class switch or initial load)
   useEffect(() => {
-    if (!claseSeleccionada || !user) return;
-    const clase = clases.find(c => c.id === claseSeleccionada);
-    if (!clase) return;
-    const loadData = async () => {
-      const [estRes, asistRes] = await Promise.all([
-        supabase.from("estudiantes").select("id, nombre_completo, numero_lista").eq("grupo_id", clase.grupo_id).order("nombre_completo"),
-        supabase.from("asistencia").select("*").eq("clase_id", claseSeleccionada).eq("fecha", hoyISO),
-      ]);
-      setEstudiantes(estRes.data || []);
-      const asistMap: Record<string, EstadoAsistencia> = {};
-      const motivoMap: Record<string, string> = {};
-      (asistRes.data || []).forEach(a => {
-        asistMap[a.estudiante_id] = a.estado as EstadoAsistencia;
-        if ((a as any).motivo) motivoMap[a.estudiante_id] = (a as any).motivo;
-      });
-      setAsistencia(asistMap);
-      setMotivos(motivoMap);
-    };
-    loadData();
-  }, [claseSeleccionada, clases, user, hoyISO]);
+    if (!asistenciaData) return;
+    const asistMap: Record<string, EstadoAsistencia> = {};
+    const motivoMap: Record<string, string> = {};
+    asistenciaData.forEach(a => {
+      asistMap[a.estudiante_id] = a.estado as EstadoAsistencia;
+      if (a.motivo) motivoMap[a.estudiante_id] = a.motivo;
+    });
+    setAsistencia(asistMap);
+    setMotivos(motivoMap);
+  }, [asistenciaData]);
 
+  // ── Debounced save ─────────────────────────────────────────────────────────
   const asistenciaRef = useRef(asistencia);
   asistenciaRef.current = asistencia;
   const motivosRef = useRef(motivos);
@@ -86,23 +130,26 @@ export default function Asistencia() {
   const saveAsistenciaFn = useCallback(async () => {
     if (!user || !claseSeleccionada) return;
     const currentAsistencia = asistenciaRef.current;
-    const currentMotivos = motivosRef.current;
+    const currentMotivos    = motivosRef.current;
     await supabase.from("asistencia").delete().eq("clase_id", claseSeleccionada).eq("fecha", hoyISO);
     const records = Object.entries(currentAsistencia)
       .filter(([, estado]) => estado !== null)
       .map(([estudiante_id, estado]) => ({
-        clase_id: claseSeleccionada, estudiante_id, estado: estado as "presente" | "falta" | "tarde" | "retiro", fecha: hoyISO, user_id: user.id,
+        clase_id: claseSeleccionada, estudiante_id, estado: estado as "presente" | "falta" | "tarde" | "retiro",
+        fecha: hoyISO, user_id: user.id,
         motivo: estado === "retiro" ? (currentMotivos[estudiante_id] || null) : null,
       }));
     if (records.length > 0) await supabase.from("asistencia").insert(records as any);
-  }, [claseSeleccionada, user, hoyISO]);
+    queryClient.invalidateQueries({ queryKey: qk.asistencia(claseSeleccionada, hoyISO) });
+  }, [claseSeleccionada, user, hoyISO, queryClient]);
 
   const { trigger, status } = useDebounceCallback(saveAsistenciaFn, 1500);
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
   const getClaseLabel = (id: string) => {
     const c = clases.find(cl => cl.id === id);
     if (!c) return "?";
-    return `${materias[c.materia_id] || "?"} - ${grupos[c.grupo_id] || "?"}`;
+    return `${materiasMap[c.materia_id] || "?"} - ${gruposMap[c.grupo_id] || "?"}`;
   };
 
   const marcar = (estId: string, estado: EstadoAsistencia, motivo?: string) => {
@@ -117,7 +164,6 @@ export default function Asistencia() {
 
   const handleRetiroClick = (estId: string, nombre: string) => {
     if (asistencia[estId] === "retiro") {
-      // Toggle off
       marcar(estId, "retiro");
     } else {
       setRetiroMotivo(motivos[estId] || "");
@@ -131,9 +177,7 @@ export default function Asistencia() {
     const motivo = retiroMotivo.trim();
     setRetiroDialog(null);
     setRetiroMotivo("");
-    requestAnimationFrame(() => {
-      marcar(estId, "retiro", motivo);
-    });
+    requestAnimationFrame(() => { marcar(estId, "retiro", motivo); });
   };
 
   const marcarTodosPresentes = () => {
@@ -147,9 +191,11 @@ export default function Asistencia() {
 
   const stats = {
     presentes: Object.values(asistencia).filter(v => v === "presente").length,
-    faltas: Object.values(asistencia).filter(v => v === "falta").length,
-    tardes: Object.values(asistencia).filter(v => v === "tarde").length,
+    faltas:    Object.values(asistencia).filter(v => v === "falta").length,
+    tardes:    Object.values(asistencia).filter(v => v === "tarde").length,
   };
+
+  const loading = loadingClases || loadingMaterias;
 
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
@@ -217,9 +263,9 @@ export default function Asistencia() {
                   <div className={cn(
                     "flex items-center justify-between p-3 rounded-lg border-l-4 transition-colors",
                     estado === "presente" ? "bg-success/5 border-l-success" :
-                    estado === "falta" ? "bg-destructive/5 border-l-destructive" :
-                    estado === "tarde" ? "bg-warning/5 border-l-warning" :
-                    estado === "retiro" ? "bg-muted/30 border-l-muted-foreground" :
+                    estado === "falta"    ? "bg-destructive/5 border-l-destructive" :
+                    estado === "tarde"    ? "bg-warning/5 border-l-warning" :
+                    estado === "retiro"   ? "bg-muted/30 border-l-muted-foreground" :
                     "bg-muted/30 border-l-transparent"
                   )}>
                     <button className="font-medium text-left flex-1" onClick={() => marcar(est.id, "presente")}>
@@ -250,7 +296,6 @@ export default function Asistencia() {
         </CardContent>
       </Card>
 
-      {/* Retiro reason dialog */}
       <Dialog open={!!retiroDialog} onOpenChange={(open) => { if (!open) setRetiroDialog(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

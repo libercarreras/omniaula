@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
 import { toast } from "sonner";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { qk } from "@/lib/queryKeys";
 
 interface EstudianteDB {
   id: string;
@@ -37,15 +39,13 @@ function normalizeName(name: string): string {
 export default function Estudiantes() {
   const { user } = useAuth();
   const { institucionActiva } = useInstitucion();
-  const [loading, setLoading] = useState(true);
-  const [estudiantes, setEstudiantes] = useState<EstudianteDB[]>([]);
-  const [grupos, setGrupos] = useState<GrupoDB[]>([]);
+  const queryClient = useQueryClient();
+
   const [filtroGrupo, setFiltroGrupo] = useState("todos");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [nombre, setNombre] = useState("");
   const [grupoId, setGrupoId] = useState("");
   const [numeroLista, setNumeroLista] = useState("");
-  const [saving, setSaving] = useState(false);
   const [editingEstudiante, setEditingEstudiante] = useState<EstudianteDB | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EstudianteDB | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
@@ -54,30 +54,113 @@ export default function Estudiantes() {
   const [csvDialogOpen, setCsvDialogOpen] = useState(false);
   const [csvGrupoId, setCsvGrupoId] = useState("");
   const [csvPreview, setCsvPreview] = useState<CSVRow[]>([]);
-  const [importingSaving, setImportingSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchData = async () => {
-    if (!user || !institucionActiva) return;
-    setLoading(true);
-    try {
-      const { data: grpData, error: grpError } = await supabase.from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
-      if (grpError) throw grpError;
-      const grps = grpData || [];
-      setGrupos(grps);
-      const grupoIds = grps.map(g => g.id);
-      if (grupoIds.length === 0) { setEstudiantes([]); setLoading(false); return; }
-      const { data: estData, error: estError } = await supabase.from("estudiantes").select("id, nombre_completo, grupo_id, numero_lista").in("grupo_id", grupoIds);
-      if (estError) throw estError;
-      setEstudiantes(estData || []);
-      setLoading(false);
-    } catch (e: any) {
-      toast.error(e.message || "Error al cargar estudiantes");
-      setLoading(false);
-    }
+  const instId = institucionActiva?.id ?? "";
+
+  // ── Queries ──────────────────────────────────────────────────────────────
+
+  const { data: grupos = [], isLoading: loadingGrupos } = useQuery<GrupoDB[]>({
+    queryKey: qk.grupos(instId),
+    enabled: !!user && !!instId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("grupos").select("id, nombre").eq("institucion_id", instId);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const grupoIds = grupos.map(g => g.id);
+
+  const { data: estudiantes = [], isLoading: loadingEstudiantes } = useQuery<EstudianteDB[]>({
+    queryKey: qk.estudiantesByInst(instId),
+    enabled: grupoIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("estudiantes").select("id, nombre_completo, grupo_id, numero_lista").in("grupo_id", grupoIds);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const isLoading = loadingGrupos || (grupoIds.length > 0 && loadingEstudiantes);
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: qk.estudiantesByInst(instId) });
   };
 
-  useEffect(() => { fetchData(); }, [user, institucionActiva]);
+  // ── Mutations ─────────────────────────────────────────────────────────────
+
+  const saveMutation = useMutation({
+    mutationFn: async ({ finalName, grupoId, numeroLista, editingId }: {
+      finalName: string; grupoId: string; numeroLista: string; editingId: string | null;
+    }) => {
+      if (editingId) {
+        const { error } = await supabase.from("estudiantes").update({
+          nombre_completo: finalName,
+          grupo_id: grupoId,
+          numero_lista: numeroLista ? parseInt(numeroLista) : null,
+        }).eq("id", editingId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("estudiantes").insert({
+          nombre_completo: finalName,
+          grupo_id: grupoId,
+          numero_lista: numeroLista ? parseInt(numeroLista) : null,
+          user_id: user!.id,
+        });
+        if (error) throw error;
+      }
+    },
+    onSuccess: (_, vars) => {
+      if (vars.editingId) {
+        toast.success("Estudiante actualizado", { description: `"${vars.finalName}" fue actualizado correctamente.` });
+      } else {
+        toast.success("Estudiante agregado", { description: `"${vars.finalName}" fue registrado correctamente.` });
+      }
+      setNombre(""); setGrupoId(""); setNumeroLista("");
+      setEditingEstudiante(null);
+      setDuplicateWarning(null);
+      setDialogOpen(false);
+      invalidate();
+    },
+    onError: (_, vars) => {
+      toast.error("Error", { description: vars.editingId ? "No se pudo actualizar el estudiante." : "No se pudo crear el estudiante." });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("estudiantes").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Estudiante eliminado", { description: `"${deleteTarget?.nombre_completo}" fue eliminado.` });
+      setDeleteTarget(null);
+      invalidate();
+    },
+    onError: () => {
+      toast.error("Error", { description: "No se pudo eliminar el estudiante. Puede tener registros asociados." });
+    },
+  });
+
+  const csvMutation = useMutation({
+    mutationFn: async ({ records }: { records: { nombre_completo: string; numero_lista: number; grupo_id: string; user_id: string }[] }) => {
+      const { error } = await supabase.from("estudiantes").insert(records);
+      if (error) throw error;
+    },
+    onSuccess: (_, { records }) => {
+      toast.success("Importación exitosa", { description: `Se importaron ${records.length} estudiantes.` });
+      setCsvDialogOpen(false);
+      setCsvPreview([]);
+      invalidate();
+    },
+    onError: () => {
+      toast.error("Error", { description: "No se pudieron importar los estudiantes." });
+    },
+  });
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
 
   const checkDuplicate = (name: string, groupId: string) => {
     const normalized = normalizeName(name).toLowerCase();
@@ -91,9 +174,7 @@ export default function Estudiantes() {
 
   const openCreate = () => {
     setEditingEstudiante(null);
-    setNombre("");
-    setGrupoId("");
-    setNumeroLista("");
+    setNombre(""); setGrupoId(""); setNumeroLista("");
     setDuplicateWarning(null);
     setDialogOpen(true);
   };
@@ -115,61 +196,18 @@ export default function Estudiantes() {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!user || !nombre.trim() || !grupoId) return;
-    setSaving(true);
-    const finalName = normalizeName(nombre);
-
-    if (editingEstudiante) {
-      const { error } = await supabase.from("estudiantes").update({
-        nombre_completo: finalName,
-        grupo_id: grupoId,
-        numero_lista: numeroLista ? parseInt(numeroLista) : null,
-      }).eq("id", editingEstudiante.id);
-      setSaving(false);
-      if (error) {
-        toast.error("Error", { description: "No se pudo actualizar el estudiante." });
-        return;
-      }
-      toast.success("Estudiante actualizado", { description: `"${finalName}" fue actualizado correctamente.` });
-    } else {
-      const { error } = await supabase.from("estudiantes").insert({
-        nombre_completo: finalName,
-        grupo_id: grupoId,
-        numero_lista: numeroLista ? parseInt(numeroLista) : null,
-        user_id: user.id,
-      });
-      setSaving(false);
-      if (error) {
-        toast.error("Error", { description: "No se pudo crear el estudiante." });
-        return;
-      }
-      toast.success("Estudiante agregado", { description: `"${finalName}" fue registrado correctamente.` });
-    }
-
-    setNombre(""); setGrupoId(""); setNumeroLista("");
-    setEditingEstudiante(null);
-    setDuplicateWarning(null);
-    setDialogOpen(false);
-    fetchData();
+    saveMutation.mutate({
+      finalName: normalizeName(nombre),
+      grupoId,
+      numeroLista,
+      editingId: editingEstudiante?.id ?? null,
+    });
   };
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    const { error } = await supabase.from("estudiantes").delete().eq("id", deleteTarget.id);
-    if (error) {
-      toast.error("Error", { description: "No se pudo eliminar el estudiante. Puede tener registros asociados." });
-    } else {
-      toast.success("Estudiante eliminado", { description: `"${deleteTarget.nombre_completo}" fue eliminado.` });
-      fetchData();
-    }
-    setDeleteTarget(null);
-  };
-
-  // CSV handling
   const openCsvDialog = () => {
-    setCsvGrupoId("");
-    setCsvPreview([]);
+    setCsvGrupoId(""); setCsvPreview([]);
     setCsvDialogOpen(true);
   };
 
@@ -208,31 +246,21 @@ export default function Estudiantes() {
     reader.readAsText(file);
   };
 
-  const handleCsvImport = async () => {
+  const handleCsvImport = () => {
     if (!user || !csvGrupoId || csvPreview.length === 0) return;
-    setImportingSaving(true);
     const records = csvPreview.map((r, idx) => ({
       nombre_completo: r.nombre_completo,
       numero_lista: r.numero_lista ?? idx + 1,
       grupo_id: csvGrupoId,
       user_id: user.id,
     }));
-    const { error } = await supabase.from("estudiantes").insert(records);
-    setImportingSaving(false);
-    if (error) {
-      toast.error("Error", { description: "No se pudieron importar los estudiantes." });
-      return;
-    }
-    toast.success("Importación exitosa", { description: `Se importaron ${records.length} estudiantes.` });
-    setCsvDialogOpen(false);
-    setCsvPreview([]);
-    fetchData();
+    csvMutation.mutate({ records });
   };
 
   const filtered = filtroGrupo === "todos" ? estudiantes : estudiantes.filter(e => e.grupo_id === filtroGrupo);
   const grupoMap = Object.fromEntries(grupos.map(g => [g.id, g.nombre]));
 
-  if (loading) {
+  if (isLoading) {
     return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
@@ -340,8 +368,8 @@ export default function Estudiantes() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={!nombre.trim() || !grupoId || saving}>
-              {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            <Button onClick={handleSave} disabled={!nombre.trim() || !grupoId || saveMutation.isPending}>
+              {saveMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               {editingEstudiante ? "Guardar cambios" : "Agregar estudiante"}
             </Button>
           </DialogFooter>
@@ -400,8 +428,8 @@ export default function Estudiantes() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCsvDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCsvImport} disabled={!csvGrupoId || csvPreview.length === 0 || importingSaving}>
-              {importingSaving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            <Button onClick={handleCsvImport} disabled={!csvGrupoId || csvPreview.length === 0 || csvMutation.isPending}>
+              {csvMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Importar {csvPreview.length} estudiantes
             </Button>
           </DialogFooter>
@@ -419,7 +447,7 @@ export default function Estudiantes() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Eliminar</AlertDialogAction>
+            <AlertDialogAction onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Eliminar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

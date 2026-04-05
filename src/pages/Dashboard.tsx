@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { BookOpen, AlertTriangle, ClipboardCheck, Users, Plus, Loader2, Clock, ArrowRight, CalendarDays } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -9,6 +9,8 @@ import { InvitacionesPendientes } from "@/components/colaboracion/InvitacionesPe
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useQuery } from "@tanstack/react-query";
+import { qk } from "@/lib/queryKeys";
 
 interface ClaseWithRelations {
   id: string;
@@ -39,37 +41,39 @@ function parseHorarioDia(horario: string | null): { dia: number | null; hora: st
 
 const DIAS_NOMBRE = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
+interface DashboardData {
+  clases: ClaseWithRelations[];
+  totalEstudiantes: number;
+  totalEvaluaciones: number;
+  materias: Record<string, string>;
+  grupos: Record<string, string>;
+  estudiantesPorGrupo: Record<string, number>;
+  totalMaterias: number;
+  totalGrupos: number;
+}
+
+const EMPTY_DATA: DashboardData = {
+  clases: [], totalEstudiantes: 0, totalEvaluaciones: 0,
+  materias: {}, grupos: {}, estudiantesPorGrupo: {}, totalMaterias: 0, totalGrupos: 0,
+};
+
 export default function Dashboard() {
   const { profile, user } = useAuth();
   const { institucionActiva } = useInstitucion();
   const nombre = profile?.nombre?.split(" ")[0] || "Profesor";
-  const [loading, setLoading] = useState(true);
-  const [clases, setClases] = useState<ClaseWithRelations[]>([]);
-  const [totalEstudiantes, setTotalEstudiantes] = useState(0);
-  const [totalEvaluaciones, setTotalEvaluaciones] = useState(0);
-  const [materias, setMaterias] = useState<Record<string, string>>({});
-  const [grupos, setGrupos] = useState<Record<string, string>>({});
-  const [estudiantesPorGrupo, setEstudiantesPorGrupo] = useState<Record<string, number>>({});
-  const [totalMaterias, setTotalMaterias] = useState(0);
-  const [totalGrupos, setTotalGrupos] = useState(0);
 
-  useEffect(() => {
-    if (!user || !institucionActiva) { setLoading(false); return; }
-    const fetchData = async () => {
-      setLoading(true);
+  const { data = EMPTY_DATA, isLoading } = useQuery({
+    queryKey: qk.clasesByInst(institucionActiva?.id ?? ""),
+    enabled: !!user && !!institucionActiva,
+    queryFn: async (): Promise<DashboardData> => {
       const { data: gruposData } = await supabase
-        .from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
+        .from("grupos").select("id, nombre").eq("institucion_id", institucionActiva!.id);
       const grupoIds = (gruposData || []).map(g => g.id);
       const grpMap: Record<string, string> = {};
       (gruposData || []).forEach(g => { grpMap[g.id] = g.nombre; });
-      setGrupos(grpMap);
-      setTotalGrupos(grupoIds.length);
 
       if (grupoIds.length === 0) {
-        setClases([]); setTotalEstudiantes(0); setTotalEvaluaciones(0);
-        setMaterias({});
-        setLoading(false);
-        return;
+        return { ...EMPTY_DATA, grupos: grpMap };
       }
 
       const [clasesRes, materiasRes, estudiantesRes, evaluacionesRes] = await Promise.all([
@@ -81,25 +85,28 @@ export default function Dashboard() {
 
       const matMap: Record<string, string> = {};
       (materiasRes.data || []).forEach(m => { matMap[m.id] = m.nombre; });
-      setMaterias(matMap);
-      setTotalMaterias((materiasRes.data || []).length);
 
-      // Count students per group
       const epg: Record<string, number> = {};
       (estudiantesRes.data || []).forEach(e => { epg[e.grupo_id] = (epg[e.grupo_id] || 0) + 1; });
-      setEstudiantesPorGrupo(epg);
 
       const clasesInst = clasesRes.data || [];
-      setClases(clasesInst);
-      setTotalEstudiantes((estudiantesRes.data || []).length);
-
       const claseIds = new Set(clasesInst.map(c => c.id));
       const evsFiltered = (evaluacionesRes.data || []).filter(e => claseIds.has(e.clase_id));
-      setTotalEvaluaciones(evsFiltered.length);
-      setLoading(false);
-    };
-    fetchData();
-  }, [user, institucionActiva]);
+
+      return {
+        clases: clasesInst,
+        totalEstudiantes: (estudiantesRes.data || []).length,
+        totalEvaluaciones: evsFiltered.length,
+        materias: matMap,
+        grupos: grpMap,
+        estudiantesPorGrupo: epg,
+        totalMaterias: (materiasRes.data || []).length,
+        totalGrupos: grupoIds.length,
+      };
+    },
+  });
+
+  const { clases, totalEstudiantes, totalEvaluaciones, materias, grupos, estudiantesPorGrupo, totalMaterias, totalGrupos } = data;
 
   const getClaseLabel = (clase: ClaseWithRelations) =>
     `${materias[clase.materia_id] || "?"} - ${grupos[clase.grupo_id] || "?"}`;
@@ -122,7 +129,6 @@ export default function Dashboard() {
       else if (dia === diaManana) mananaList.push(c);
       else otrasList.push(c);
     });
-    // Sort by hora
     const sortByHora = (a: ClaseWithRelations, b: ClaseWithRelations) => {
       const ha = parseHorarioDia(a.horario).hora;
       const hb = parseHorarioDia(b.horario).hora;
@@ -133,7 +139,7 @@ export default function Dashboard() {
     return { clasesHoy: hoyList, clasesManana: mananaList, clasesOtras: otrasList };
   }, [clases, diaHoy]);
 
-  if (loading) {
+  if (isLoading) {
     return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 

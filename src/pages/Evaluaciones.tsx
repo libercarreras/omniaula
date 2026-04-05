@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
 import { toast } from "sonner";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { qk } from "@/lib/queryKeys";
 
 const tipoLabel: Record<string, string> = {
   prueba_escrita: "Prueba escrita", oral: "Oral", trabajo_practico: "Trabajo práctico",
@@ -30,15 +32,22 @@ const tipoColor: Record<string, string> = {
 type Modalidad = "manual" | "preguntas" | "multiple_opcion" | "mixta";
 type Pregunta = { tipo_pregunta: string; enunciado: string; opciones?: { texto: string; correcta: boolean }[]; puntos: number };
 
+interface MainData {
+  grupos: any[];
+  clases: any[];
+  materias: Record<string, string>;
+  evaluaciones: any[];
+  contenidos: Record<string, any[]>;
+}
+
+const EMPTY_MAIN: MainData = { grupos: [], clases: [], materias: {}, evaluaciones: [], contenidos: {} };
+
 export default function Evaluaciones() {
   const { user } = useAuth();
   const { institucionActiva } = useInstitucion();
-  const [loading, setLoading] = useState(true);
-  const [evaluaciones, setEvaluaciones] = useState<any[]>([]);
-  const [materias, setMaterias] = useState<Record<string, string>>({});
-  const [grupos, setGrupos] = useState<any[]>([]);
-  const [clases, setClases] = useState<any[]>([]);
-  const [contenidos, setContenidos] = useState<Record<string, any[]>>({});
+  const queryClient = useQueryClient();
+
+  const instId = institucionActiva?.id ?? "";
 
   // Wizard state
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -56,11 +65,6 @@ export default function Evaluaciones() {
   const [peso, setPeso] = useState<string>("");
   const [preguntas, setPreguntas] = useState<Pregunta[]>([]);
   const [generating, setGenerating] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  // Period context
-  const [temasPeriodo, setTemasPeriodo] = useState<any[]>([]);
-  const [diarioPeriodo, setDiarioPeriodo] = useState<any[]>([]);
 
   // Detail sheet
   const [detailEval, setDetailEval] = useState<any | null>(null);
@@ -68,20 +72,19 @@ export default function Evaluaciones() {
   const [detailNotas, setDetailNotas] = useState<any[]>([]);
   const [detailEstudiantes, setDetailEstudiantes] = useState<any[]>([]);
   const [deletingEvalId, setDeletingEvalId] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
-  // Load evaluaciones
-  useEffect(() => {
-    if (!user || !institucionActiva) return;
-    const load = async () => {
-      setLoading(true);
-      try {
-      const { data: grpData, error: grpError } = await supabase.from("grupos").select("id, nombre").eq("institucion_id", institucionActiva.id);
+  // ── Queries ──────────────────────────────────────────────────────────────
+
+  const { data: mainData = EMPTY_MAIN, isLoading } = useQuery<MainData>({
+    queryKey: qk.evaluaciones(instId),
+    enabled: !!user && !!instId,
+    queryFn: async () => {
+      const { data: grpData, error: grpError } = await supabase
+        .from("grupos").select("id, nombre").eq("institucion_id", instId);
       if (grpError) throw grpError;
       const gruposList = grpData || [];
-      setGrupos(gruposList);
       const grupoIds = gruposList.map(g => g.id);
-      if (grupoIds.length === 0) { setEvaluaciones([]); setClases([]); setLoading(false); return; }
+      if (grupoIds.length === 0) return { ...EMPTY_MAIN, grupos: gruposList };
 
       const [clsRes, matRes, evRes] = await Promise.all([
         supabase.from("clases").select("id, materia_id, grupo_id").in("grupo_id", grupoIds),
@@ -91,38 +94,107 @@ export default function Evaluaciones() {
       if (clsRes.error) throw clsRes.error;
       if (matRes.error) throw matRes.error;
       if (evRes.error) throw evRes.error;
+
       const clsData = clsRes.data || [];
-      setClases(clsData);
       const mm: Record<string, string> = {};
       (matRes.data || []).forEach(m => { mm[m.id] = m.nombre; });
-      setMaterias(mm);
+
       const claseIds = new Set(clsData.map(c => c.id));
       const evFiltered = (evRes.data || []).filter(e => claseIds.has(e.clase_id));
-      setEvaluaciones(evFiltered);
 
-      // Load contenidos for all evaluaciones
+      let contenidosMap: Record<string, any[]> = {};
       if (evFiltered.length > 0) {
         const { data: contData, error: contError } = await supabase
-          .from("evaluacion_contenido")
-          .select("*")
-          .in("evaluacion_id", evFiltered.map(e => e.id))
-          .order("orden");
+          .from("evaluacion_contenido").select("*")
+          .in("evaluacion_id", evFiltered.map(e => e.id)).order("orden");
         if (contError) throw contError;
-        const cm: Record<string, any[]> = {};
         (contData || []).forEach(c => {
-          if (!cm[c.evaluacion_id]) cm[c.evaluacion_id] = [];
-          cm[c.evaluacion_id].push(c);
+          if (!contenidosMap[c.evaluacion_id]) contenidosMap[c.evaluacion_id] = [];
+          contenidosMap[c.evaluacion_id].push(c);
         });
-        setContenidos(cm);
       }
-      setLoading(false);
-      } catch (e: any) {
-        toast.error(e.message || "Error al cargar evaluaciones");
-        setLoading(false);
+
+      return { grupos: gruposList, clases: clsData, materias: mm, evaluaciones: evFiltered, contenidos: contenidosMap };
+    },
+  });
+
+  const { grupos, clases, materias, evaluaciones, contenidos } = mainData;
+
+  // Period context — only when wizard step 1 is fully filled
+  const periodEnabled = !!selectedClaseId && !!fechaDesde && !!fechaHasta;
+  const { data: periodData } = useQuery({
+    queryKey: qk.periodContext(selectedClaseId, fechaDesde, fechaHasta),
+    enabled: periodEnabled,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const [planRes, diarioRes] = await Promise.all([
+        supabase.from("planificacion_clases").select("*").eq("clase_id", selectedClaseId)
+          .gte("fecha", fechaDesde).lte("fecha", fechaHasta)
+          .in("estado", ["completado", "parcial"]).order("fecha"),
+        supabase.from("diario_clase").select("*").eq("clase_id", selectedClaseId)
+          .gte("fecha", fechaDesde).lte("fecha", fechaHasta).order("fecha"),
+      ]);
+      if (planRes.error) console.error("periodContext plan:", planRes.error);
+      if (diarioRes.error) console.error("periodContext diario:", diarioRes.error);
+      return { temasPeriodo: planRes.data || [], diarioPeriodo: diarioRes.data || [] };
+    },
+  });
+
+  const temasPeriodo = periodData?.temasPeriodo ?? [];
+  const diarioPeriodo = periodData?.diarioPeriodo ?? [];
+
+  // ── Mutations ─────────────────────────────────────────────────────────────
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: qk.evaluaciones(instId) });
+
+  const createMutation = useMutation({
+    mutationFn: async ({ evalPayload, preguntasToSave }: { evalPayload: object; preguntasToSave: Pregunta[] }) => {
+      const { data: ev, error: evErr } = await supabase
+        .from("evaluaciones").insert(evalPayload).select().single();
+      if (evErr) throw evErr;
+
+      if (preguntasToSave.length > 0) {
+        const rows = preguntasToSave.map((p, i) => ({
+          evaluacion_id: ev.id, orden: i, tipo_pregunta: p.tipo_pregunta,
+          enunciado: p.enunciado, opciones: p.opciones || null, puntos: p.puntos,
+          user_id: user!.id,
+        }));
+        const { error: cErr } = await supabase.from("evaluacion_contenido").insert(rows);
+        if (cErr) throw cErr;
       }
-    };
-    load();
-  }, [user, institucionActiva]);
+    },
+    onSuccess: () => {
+      toast.success("Evaluación creada exitosamente");
+      setWizardOpen(false);
+      resetWizard();
+      invalidate();
+    },
+    onError: (e: any) => {
+      toast.error(e.message || "Error al guardar");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (evalId: string) => {
+      const { error: contDelError } = await supabase.from("evaluacion_contenido").delete().eq("evaluacion_id", evalId);
+      if (contDelError) throw contDelError;
+      const { error: notasDelError } = await supabase.from("notas").delete().eq("evaluacion_id", evalId);
+      if (notasDelError) throw notasDelError;
+      const { error } = await supabase.from("evaluaciones").delete().eq("id", evalId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setDetailEval(null);
+      setDeletingEvalId(null);
+      toast.success("Evaluación eliminada");
+      invalidate();
+    },
+    onError: (e: any) => {
+      toast.error(e.message || "Error al eliminar");
+    },
+  });
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   const clasesDelGrupo = useMemo(() => clases.filter(c => c.grupo_id === selectedGrupoId), [clases, selectedGrupoId]);
 
@@ -132,25 +204,6 @@ export default function Evaluaciones() {
     const grp = grupos.find(g => g.id === c.grupo_id);
     return `${materias[c.materia_id] || "?"} - ${grp?.nombre || "?"}`;
   };
-
-  // Load period context when clase + dates selected
-  useEffect(() => {
-    if (!selectedClaseId || !fechaDesde || !fechaHasta) { setTemasPeriodo([]); setDiarioPeriodo([]); return; }
-    const loadContext = async () => {
-      const [planRes, diarioRes] = await Promise.all([
-        supabase.from("planificacion_clases").select("*").eq("clase_id", selectedClaseId)
-          .gte("fecha", fechaDesde).lte("fecha", fechaHasta)
-          .in("estado", ["completado", "parcial"]).order("fecha"),
-        supabase.from("diario_clase").select("*").eq("clase_id", selectedClaseId)
-          .gte("fecha", fechaDesde).lte("fecha", fechaHasta).order("fecha"),
-      ]);
-      if (planRes.error) { console.error("loadContext plan:", planRes.error); }
-      if (diarioRes.error) { console.error("loadContext diario:", diarioRes.error); }
-      setTemasPeriodo(planRes.data || []);
-      setDiarioPeriodo(diarioRes.data || []);
-    };
-    loadContext();
-  }, [selectedClaseId, fechaDesde, fechaHasta]);
 
   const resetWizard = () => {
     setStep(1); setSelectedGrupoId(""); setSelectedClaseId("");
@@ -177,50 +230,21 @@ export default function Evaluaciones() {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!nombre.trim()) { toast.error("Ingresá un nombre para la evaluación"); return; }
     if (!selectedClaseId) { toast.error("Seleccioná una clase"); return; }
-    setSaving(true);
-    try {
-      const { data: ev, error: evErr } = await supabase.from("evaluaciones").insert({
-        nombre, tipo: tipo as any, fecha: fecha || null, peso: peso ? Number(peso) : null,
-        clase_id: selectedClaseId, user_id: user!.id,
-      }).select().single();
-      if (evErr) throw evErr;
-
-      if (preguntas.length > 0) {
-        const rows = preguntas.map((p, i) => ({
-          evaluacion_id: ev.id, orden: i, tipo_pregunta: p.tipo_pregunta,
-          enunciado: p.enunciado, opciones: p.opciones || null, puntos: p.puntos,
-          user_id: user!.id,
-        }));
-        const { error: cErr } = await supabase.from("evaluacion_contenido").insert(rows);
-        if (cErr) throw cErr;
-      }
-
-      toast.success("Evaluación creada exitosamente");
-      setWizardOpen(false);
-      resetWizard();
-      // Reload
-      const { data: newEv, error: newEvError } = await supabase.from("evaluaciones").select("*").eq("id", ev.id).single();
-      if (newEvError) throw newEvError;
-      if (newEv) setEvaluaciones(prev => [newEv, ...prev]);
-      if (preguntas.length > 0) {
-        const { data: newCont, error: newContError } = await supabase.from("evaluacion_contenido").select("*").eq("evaluacion_id", ev.id).order("orden");
-        if (newContError) throw newContError;
-        setContenidos(prev => ({ ...prev, [ev.id]: newCont || [] }));
-      }
-    } catch (e: any) {
-      toast.error(e.message || "Error al guardar");
-    } finally {
-      setSaving(false);
-    }
+    createMutation.mutate({
+      evalPayload: {
+        nombre, tipo: tipo as any, fecha: fecha || null,
+        peso: peso ? Number(peso) : null, clase_id: selectedClaseId, user_id: user!.id,
+      },
+      preguntasToSave: preguntas,
+    });
   };
 
   const openDetail = async (ev: any) => {
     setDetailEval(ev);
     setDetailContenido(contenidos[ev.id] || []);
-    // Load notas + estudiantes for this eval
     const cls = clases.find(c => c.id === ev.clase_id);
     if (cls) {
       const [notasRes, estRes] = await Promise.all([
@@ -231,27 +255,6 @@ export default function Evaluaciones() {
       if (estRes.error) console.error("openDetail estudiantes:", estRes.error);
       setDetailNotas(notasRes.data || []);
       setDetailEstudiantes(estRes.data || []);
-    }
-  };
-
-  const handleDeleteEval = async (evalId: string) => {
-    setDeleting(true);
-    try {
-      const { error: contDelError } = await supabase.from("evaluacion_contenido").delete().eq("evaluacion_id", evalId);
-      if (contDelError) throw contDelError;
-      const { error: notasDelError } = await supabase.from("notas").delete().eq("evaluacion_id", evalId);
-      if (notasDelError) throw notasDelError;
-      const { error } = await supabase.from("evaluaciones").delete().eq("id", evalId);
-      if (error) throw error;
-      setEvaluaciones(prev => prev.filter(e => e.id !== evalId));
-      setContenidos(prev => { const n = { ...prev }; delete n[evalId]; return n; });
-      setDetailEval(null);
-      setDeletingEvalId(null);
-      toast.success("Evaluación eliminada");
-    } catch (e: any) {
-      toast.error(e.message || "Error al eliminar");
-    } finally {
-      setDeleting(false);
     }
   };
 
@@ -327,7 +330,7 @@ export default function Evaluaciones() {
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (isLoading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   const canAdvanceStep1 = selectedGrupoId && selectedClaseId && fechaDesde && fechaHasta;
   const canAdvanceStep2 = modalidad === "manual" || preguntas.length > 0;
@@ -614,8 +617,8 @@ export default function Evaluaciones() {
                       <Printer className="h-4 w-4" /> Imprimir
                     </Button>
                   )}
-                  <Button onClick={handleSave} disabled={saving || !nombre.trim()} className="gap-2">
-                    {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando...</> : <><Plus className="h-4 w-4" /> Crear evaluación</>}
+                  <Button onClick={handleSave} disabled={createMutation.isPending || !nombre.trim()} className="gap-2">
+                    {createMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando...</> : <><Plus className="h-4 w-4" /> Crear evaluación</>}
                   </Button>
                 </div>
               </div>
@@ -728,13 +731,13 @@ export default function Evaluaciones() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={deleting}
-              onClick={() => deletingEvalId && handleDeleteEval(deletingEvalId)}
+              disabled={deleteMutation.isPending}
+              onClick={() => deletingEvalId && deleteMutation.mutate(deletingEvalId)}
             >
-              {deleting ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Eliminando...</> : "Eliminar"}
+              {deleteMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Eliminando...</> : "Eliminar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
