@@ -13,5 +13,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
+    // Evita problemas de bloqueo de sesión en entornos con StrictMode o recargas rápidas
+    detectSessionInUrl: false,
   }
 });

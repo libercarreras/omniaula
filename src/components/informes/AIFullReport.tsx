@@ -14,16 +14,25 @@ interface Props {
   estudiantes: any[];
 }
 
+function truncateToWords(text: string, maxWords: number): string {
+  const words = text.trim().split(/\s+/);
+  if (words.length <= maxWords) return text;
+  return words.slice(0, maxWords).join(' ') + '...';
+}
+
 export function AIFullReport({ studentId, claseId, claseLabel, estudiantes }: Props) {
+  const [reportsByStudent, setReportsByStudent] = useState<Record<string, string>>({});
+  const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   const [report, setReport] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [wordCount, setWordCount] = useState(60);
+  const wordCountOptions = [30, 60, 90];
   const { fetchMetrics } = useStudentMetrics();
   const student = estudiantes.find(e => e.id === studentId);
 
   const generateReport = async () => {
     if (!student) return;
     setIsGenerating(true);
-    setReport("");
     try {
       const metrics = await fetchMetrics(studentId, claseId);
       const response = await supabase.functions.invoke("generate-student-report", {
@@ -40,10 +49,72 @@ export function AIFullReport({ studentId, claseId, claseLabel, estudiantes }: Pr
         },
       });
       if (response.error) throw new Error(response.error.message);
-      setReport(response.data?.report || "");
+      const rawReport = response.data?.report || "";
+      const finalReport = truncateToWords(rawReport, wordCount);
+      setReport(finalReport);
       toast.success("Informe generado con IA");
     } catch {
-      setReport(`Informe de ${student.nombre_completo} — ${claseLabel}\n\nSe requieren más datos para generar un informe completo.`);
+      const fallback = `Informe de ${student.nombre_completo} — ${claseLabel}\n\nSe requieren más datos para generar un informe completo.`;
+      setReport(fallback);
+      toast.info("Informe generado localmente");
+    } finally { setIsGenerating(false); }
+  };
+
+  const generateAllReports = async () => {
+    setIsGeneratingAll(true);
+    const allReports: Record<string, string> = {};
+    for (const s of estudiantes) {
+      try {
+        const metrics = await fetchMetrics(s.id, claseId);
+        const response = await supabase.functions.invoke("generate-student-report", {
+          body: {
+            studentName: s.nombre_completo,
+            claseLabel,
+            asistencia: metrics.asistencia,
+            promedio: metrics.promedio,
+            participacion: metrics.participacion,
+            observaciones: metrics.observaciones,
+            tareasEntregadas: metrics.tareasEntregadas,
+            tareasTotal: metrics.tareasTotal,
+            evaluaciones: metrics.evaluaciones,
+          },
+        });
+        if (response.error) throw new Error(response.error.message);
+        const raw = response.data?.report || "";
+        allReports[s.id] = truncateToWords(raw, wordCount);
+      } catch {
+        allReports[s.id] = `Informe de ${s.nombre_completo} — ${claseLabel}\n\nSe requieren más datos para generar un informe completo.`;
+      }
+    }
+    setReportsByStudent(allReports);
+    toast.success("Informes generados para todos los alumnos");
+    setIsGeneratingAll(false);
+  };
+    if (!student) return;
+    setIsGenerating(true);
+    try {
+      const metrics = await fetchMetrics(studentId, claseId);
+      const response = await supabase.functions.invoke("generate-student-report", {
+        body: {
+          studentName: student.nombre_completo,
+          claseLabel,
+          asistencia: metrics.asistencia,
+          promedio: metrics.promedio,
+          participacion: metrics.participacion,
+          observaciones: metrics.observaciones,
+          tareasEntregadas: metrics.tareasEntregadas,
+          tareasTotal: metrics.tareasTotal,
+          evaluaciones: metrics.evaluaciones,
+        },
+      });
+      if (response.error) throw new Error(response.error.message);
+      const rawReport = response.data?.report || "";
+      const finalReport = truncateToWords(rawReport, wordCount);
+      setReport(finalReport);
+      toast.success("Informe generado con IA");
+    } catch {
+      const fallback = `Informe de ${student.nombre_completo} — ${claseLabel}\n\nSe requieren más datos para generar un informe completo.`;
+      setReport(fallback);
       toast.info("Informe generado localmente");
     } finally { setIsGenerating(false); }
   };
@@ -55,21 +126,84 @@ export function AIFullReport({ studentId, claseId, claseLabel, estudiantes }: Pr
           <div className="flex items-start gap-3">
             <Sparkles className="h-5 w-5 text-accent shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium text-sm">Informe completo con IA</p>
+              <p className="font-medium text-sm">Informe con IA</p>
               <p className="text-xs text-muted-foreground mt-1">Genera un informe narrativo basado en datos reales de asistencia, notas, desempeño y observaciones.</p>
             </div>
           </div>
         </CardContent>
       </Card>
-      <Button className="w-full gap-2" size="lg" onClick={generateReport} disabled={isGenerating}>
-        {isGenerating ? <><Loader2 className="h-4 w-4 animate-spin" /> Recopilando datos y generando...</> : <><Sparkles className="h-4 w-4" /> Generar informe completo</>}
-      </Button>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="font-medium text-sm">Longitud:</span>
+        <select
+          value={wordCount}
+          onChange={e => setWordCount(Number(e.target.value))}
+          className="rounded bg-white px-2 py-1 text-sm"
+        >
+          {[wordCountOptions.map(c => (
+            <option key={c} value={c}>
+              {c} palabras
+            </option>
+          ))]}
+        </select>
+      </div>
+      <div className="flex gap-2">
+        <Button className="flex-1 gap-2" size="lg" onClick={generateReport} disabled={isGenerating}>
+          {isGenerating ? <><Loader2 className="h-4 w-4 animate-spin" /> Generando...</> : <><Sparkles className="h-4 w-4" /> Generar informe individual</>}
+        </Button>
+        <Button variant="secondary" className="gap-2" onClick={generateAllReports} disabled={isGeneratingAll || estudiantes.length === 0}>
+          {isGeneratingAll ? <><Loader2 className="h-4 w-4 animate-spin" /> Generando todos...</> : <><Sparkles className="h-4 w-4" /> Generar todos los informes</>}
+        </Button>
+      </div>
+
+      {/* Informe individual */}
       {report && (
-        <div className="space-y-3">
-          <Textarea value={report} onChange={e => setReport(e.target.value)} className="min-h-[250px] text-sm" />
-          <div className="flex gap-2 flex-wrap">
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { navigator.clipboard.writeText(report); toast.success("Copiado"); }}><Copy className="h-4 w-4" /> Copiar</Button>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => window.print()}><Printer className="h-4 w-4" /> Imprimir</Button>
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">Informe de {student?.nombre_completo}</p>
+              <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => { navigator.clipboard.writeText(report); toast.success("Copiado"); }}>
+                <Copy className="h-4 w-4" /> Copiar
+              </Button>
+            </div>
+            <Textarea value={report} onChange={e => setReport(e.target.value)} className="min-h-[200px] text-sm" />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Informes de todos los alumnos */}
+      {Object.keys(reportsByStudent).length > 0 && (
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium">Informes generados ({Object.keys(reportsByStudent).length})</h3>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => {
+              const allText = Object.entries(reportsByStudent).map(([id, text]) => `${text}\n---`).join('\n');
+              navigator.clipboard.writeText(allText);
+              toast.success("Todos los informes copiados");
+            }}>
+              Copiar todos
+            </Button>
+          </div>
+          <div className="space-y-4">
+            {estudiantes.map(est => (
+              <Card key={est.id}>
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">{est.nombre_completo}</p>
+                    <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => {
+                      navigator.clipboard.writeText(reportsByStudent[est.id]);
+                      toast.success(`Informe de ${est.nombre_completo} copiado`);
+                    }}>
+                      <Copy className="h-4 w-4" /> Copiar
+                    </Button>
+                  </div>
+                  <Textarea
+                    value={reportsByStudent[est.id]}
+                    onChange={e => setReportsByStudent(prev => ({ ...prev, [est.id]: e.target.value }))}
+                    className="min-h-[150px] text-sm"
+                  />
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
       )}
