@@ -95,8 +95,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // Timeout: if onAuthStateChange hasn't fired in 10s, stop loading
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn("[OmniAula][useAuth] Auth timeout — forcing loading=false");
+        setLoading(false);
+      }
+    }, 10000);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        clearTimeout(timeout);
         setSession(session);
         setUser(session?.user ?? null);
         if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
@@ -122,7 +131,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {

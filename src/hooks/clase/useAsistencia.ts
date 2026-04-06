@@ -54,7 +54,9 @@ export function useAsistencia(
         fecha:         selectedDateISO,
         user_id:       userId,
       }));
-      void supabase.from("asistencia").insert(records);
+      supabase.from("asistencia").insert(records).then(({ error }) => {
+        if (error) console.error("[OmniAula][useAsistencia] Error auto-inserting:", error);
+      });
     } else {
       const asistMap: Record<string, EstadoAsistencia> = {};
       const motivoMap: Record<string, string> = {};

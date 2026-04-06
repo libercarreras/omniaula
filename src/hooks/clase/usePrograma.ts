@@ -19,6 +19,14 @@ export function usePrograma(
   const [savingEstructura,      setSavingEstructura]      = useState(false);
 
   const isLoadedRef = useRef(false);
+  const contenidoRef = useRef(programaContenido);
+  contenidoRef.current = programaContenido;
+  const archivoUrlRef = useRef(programaArchivoUrl);
+  archivoUrlRef.current = programaArchivoUrl;
+  const archivoNombreRef = useRef(programaArchivoNombre);
+  archivoNombreRef.current = programaArchivoNombre;
+  const programaIdRef = useRef(programaId);
+  programaIdRef.current = programaId;
 
   const { data: rawData, isPending } = useQuery({
     queryKey: qk.programa(claseId!),
@@ -29,14 +37,14 @@ export function usePrograma(
         .eq("clase_id", claseId!)
         .maybeSingle();
       if (error) { console.error("usePrograma load:", error); return null; }
-      return data; // null when no programa exists yet — that's a valid settled state
+      return data;
     },
     enabled: !!claseId,
   });
 
   useEffect(() => {
     isLoadedRef.current = false;
-    if (isPending) return; // query hasn't settled yet
+    if (isPending) return;
     if (rawData) {
       setProgramaId(rawData.id);
       setProgramaContenido(rawData.contenido || "");
@@ -44,21 +52,25 @@ export function usePrograma(
       setProgramaArchivoNombre(rawData.archivo_nombre || null);
       setProgramaEstructura(rawData.contenido_estructurado || null);
     }
-    // rawData === null → no programa yet; local state stays blank, user can start typing
     isLoadedRef.current = true;
-  }, [rawData, isPending]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rawData, isPending]);
 
   const saveFn = useCallback(async () => {
     if (!userId || !claseId) return;
-    if (programaId) {
+    const currentContenido = contenidoRef.current;
+    const currentUrl = archivoUrlRef.current;
+    const currentNombre = archivoNombreRef.current;
+    const currentId = programaIdRef.current;
+
+    if (currentId) {
       const { error: saveError } = await supabase
         .from("programas_anuales")
         .update({
-          contenido:       programaContenido || null,
-          archivo_url:     programaArchivoUrl,
-          archivo_nombre:  programaArchivoNombre,
+          contenido:       currentContenido || null,
+          archivo_url:     currentUrl,
+          archivo_nombre:  currentNombre,
         })
-        .eq("id", programaId);
+        .eq("id", currentId);
       if (saveError) { toast.error("Error al guardar el programa"); return; }
     } else {
       const { data, error: insertError } = await supabase
@@ -66,16 +78,16 @@ export function usePrograma(
         .insert({
           clase_id:      claseId,
           user_id:       userId,
-          contenido:     programaContenido || null,
-          archivo_url:   programaArchivoUrl,
-          archivo_nombre: programaArchivoNombre,
+          contenido:     currentContenido || null,
+          archivo_url:   currentUrl,
+          archivo_nombre: currentNombre,
         })
         .select("id")
         .maybeSingle();
       if (insertError) { toast.error("Error al guardar el programa"); return; }
       if (data) setProgramaId(data.id);
     }
-  }, [programaContenido, programaArchivoUrl, programaArchivoNombre, programaId, claseId, userId]);
+  }, [claseId, userId]);
 
   const debounce = useDebounceCallback(saveFn, 3000);
 
