@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Users, UserPlus, Share2, Loader2, FolderOpen, Pencil, Trash2, BookOpen, MapPin, Clock } from "lucide-react";
+import { Plus, Users, UserPlus, Share2, Loader2, FolderOpen, Pencil, Trash2, BookOpen, MapPin, Clock, Wand2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InvitarDocente } from "@/components/colaboracion/InvitarDocente";
 import { supabase } from "@/integrations/supabase/client";
+import { UploadStudentsAI } from "@/components/UploadStudentsAI";
 import { useAuth } from "@/hooks/useAuth";
 import { useInstitucion } from "@/hooks/useInstitucion";
 import { toast } from "sonner";
@@ -62,6 +63,11 @@ export default function Grupos() {
   const [claseMateriaId, setClaseMateriaId] = useState("");
   const [claseHorario, setClaseHorario] = useState("");
   const [claseAula, setClaseAula] = useState("");
+
+  // AI student upload state
+  const [aiUploadOpen, setAiUploadOpen] = useState(false);
+  const [aiUploadGrupoId, setAiUploadGrupoId] = useState("");
+  const [aiUploadGrupoNombre, setAiUploadGrupoNombre] = useState("");
 
   const instId = institucionActiva?.id ?? "";
 
@@ -219,6 +225,12 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
     setClaseDialogOpen(true);
   };
 
+  const openAiUploadDialog = (grupoId: string, grupoNombre: string) => {
+    setAiUploadGrupoId(grupoId);
+    setAiUploadGrupoNombre(grupoNombre);
+    setAiUploadOpen(true);
+  };
+
   const materiaMap = Object.fromEntries(materias.map(m => [m.id, m.nombre]));
 
   if (isLoading) return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -295,6 +307,9 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
                   <div className="mt-3 pt-3 border-t flex gap-2 flex-wrap">
                     <Button variant="outline" size="sm" className="gap-1.5" onClick={() => openClaseDialog(grupo.id)}>
                       <Plus className="h-3.5 w-3.5" /> Crear clase
+                    </Button>
+                    <Button variant="outline" size="sm" className="gap-1.5" onClick={() => openAiUploadDialog(grupo.id, grupo.nombre)}>
+                      <Wand2 className="h-3.5 w-3.5" /> IA
                     </Button>
                     <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setSelectedGrupo({ id: grupo.id, nombre: grupo.nombre }); setInviteOpen(true); }}>
                       <UserPlus className="h-3.5 w-3.5" /> Invitar docente
@@ -408,6 +423,15 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
       {selectedGrupo && (
         <InvitarDocente open={inviteOpen} onClose={() => setInviteOpen(false)} grupoId={selectedGrupo.id} grupoNombre={selectedGrupo.nombre} />
       )}
+
+      <UploadStudentsAI
+        grupoId={aiUploadGrupoId}
+        isOpen={aiUploadOpen}
+        onOpenChange={setAiUploadOpen}
+        onSuccess={() => {
+          invalidateGrupos();
+        }}
+      />
     </div>
   );
 }

@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.dynamic-manifest]
 verify_jwt = false
+
+[functions.extract-students-ai]
+verify_jwt = false
