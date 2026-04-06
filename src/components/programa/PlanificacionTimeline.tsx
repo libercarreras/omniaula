@@ -14,7 +14,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 
 /* ── Types ── */
 
-/** Each DB row = 1 subtema (the minimal scheduling unit) */
 interface SubtemaRow {
   id?: string;
   fecha: string;
@@ -52,24 +51,17 @@ function formatDate(fecha: string) {
   return `${DIAS_NOMBRE[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`;
 }
 
-/**
- * Detect old format (1 row per tema with subtemas array in notas, or null notas
- * when the estructura has subtemas) and return true if migration is needed.
- */
 function isOldFormat(rows: any[]): boolean {
   return rows.some(r => {
-    // Null notas = old format row that was never migrated
     if (!r.notas) return true;
     try {
       const parsed = JSON.parse(r.notas);
-      // Array = old format (multiple subtemas packed in one row)
       if (Array.isArray(parsed)) return true;
       return false;
     } catch { return false; }
   });
 }
 
-/** Parse a single-row notas field for new format: {"subtema":"...", "completado": bool} */
 function parseRowSubtema(row: any): SubtemaRow {
   let subtema_titulo = row.tema_titulo;
   let completado = row.estado === "completado";
@@ -106,6 +98,7 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
   const [generating, setGenerating] = useState(false);
   const [expandedUnits, setExpandedUnits] = useState<Record<number, boolean>>({});
   const migrationDone = useRef(false);
+  const recalcInProgress = useRef(false);
 
   const hoyISO = new Date().toISOString().split("T")[0];
 
@@ -114,29 +107,41 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
   /* ── Load & auto-migrate ── */
   const loadPlan = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("planificacion_clases")
-      .select("*")
-      .eq("clase_id", claseId)
-      .order("fecha", { ascending: true });
+    try {
+      const { data, error } = await supabase
+        .from("planificacion_clases")
+        .select("*")
+        .eq("clase_id", claseId)
+        .order("fecha", { ascending: true });
 
-    const rawRows = data || [];
+      if (error) {
+        console.error("loadPlan error:", error);
+        setLoading(false);
+        return;
+      }
 
-    // Auto-migrate old format (1 row per tema → N rows per subtema)
-    if (!migrationDone.current && rawRows.length > 0 && isOldFormat(rawRows)) {
-      migrationDone.current = true;
-      await migrateOldFormat(rawRows);
-      return; // migrateOldFormat calls loadPlan again
-    }
+      const rawRows = data || [];
 
-    const parsed = rawRows.map(parseRowSubtema);
-    setRows(parsed);
-    setLoading(false);
+      // Auto-migrate old format (1 row per tema → N rows per subtema)
+      if (!migrationDone.current && rawRows.length > 0 && isOldFormat(rawRows)) {
+        migrationDone.current = true;
+        await migrateOldFormat(rawRows);
+        return; // migrateOldFormat calls loadPlan once more
+      }
 
-    // After loading, recalculate stale dates if needed (reload after if changes made)
-    if (parsed.length > 0) {
-      const didRecalc = await recalcStaleDates(parsed, false);
-      if (didRecalc) await loadPlan();
+      const parsed = rawRows.map(parseRowSubtema);
+
+      // Recalc stale dates WITHOUT recursion — updates DB and local state directly
+      if (parsed.length > 0 && !recalcInProgress.current) {
+        const recalculated = await recalcStaleDatesInPlace(parsed);
+        setRows(recalculated);
+      } else {
+        setRows(parsed);
+      }
+    } catch (err) {
+      console.error("loadPlan unexpected error:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -160,7 +165,6 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
       }
 
       if (subtemas.length <= 1) {
-        // Single subtema or no subtemas — keep as-is but convert notas format
         const sub = subtemas[0];
         const subTitulo = sub?.titulo || row.tema_titulo;
         const subCompletado = sub?.completado || row.estado === "completado";
@@ -173,13 +177,12 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
         continue;
       }
 
-      // Multiple subtemas → expand into N rows
       idsToDelete.push(row.id);
-      subtemas.forEach((sub, si) => {
+      subtemas.forEach((sub) => {
         newRecords.push({
           clase_id: row.clase_id,
           user_id: row.user_id,
-          fecha: row.fecha, // all get same date initially; recalc will fix
+          fecha: row.fecha,
           unidad_index: row.unidad_index,
           tema_index: row.tema_index,
           unidad_titulo: row.unidad_titulo,
@@ -190,7 +193,6 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
       });
     }
 
-    // Delete old rows and insert new ones
     if (idsToDelete.length > 0) {
       await supabase.from("planificacion_clases").delete().in("id", idsToDelete);
     }
@@ -200,6 +202,54 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
 
     toast.info("Planificación actualizada al nuevo formato por subtema.");
     await loadPlan();
+  };
+
+  /* ── Recalc stale dates — NO recursion, returns updated rows ── */
+  const recalcStaleDatesInPlace = async (currentRows: SubtemaRow[]): Promise<SubtemaRow[]> => {
+    if (recalcInProgress.current) return currentRows;
+    recalcInProgress.current = true;
+
+    try {
+      const pendingRows = currentRows
+        .filter(r => r.estado === "pendiente" || r.estado === "parcial")
+        .sort((a, b) => a.unidad_index - b.unidad_index || a.tema_index - b.tema_index);
+
+      if (pendingRows.length === 0) return currentRows;
+
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const futureDates = getFutureClassDates(horario, tomorrow, pendingRows.length);
+      if (futureDates.length === 0) return currentRows;
+
+      const updates: Array<{ id: string; fecha: string }> = [];
+      pendingRows.forEach((row, idx) => {
+        const newFecha = futureDates[Math.min(idx, futureDates.length - 1)];
+        if (row.id && newFecha !== row.fecha) {
+          updates.push({ id: row.id, fecha: newFecha });
+        }
+      });
+
+      if (updates.length === 0) return currentRows;
+
+      // Update DB
+      await Promise.all(
+        updates.map(u => supabase.from("planificacion_clases").update({ fecha: u.fecha }).eq("id", u.id))
+      );
+
+      // Update local state directly — no reload
+      const updateMap = new Map(updates.map(u => [u.id, u.fecha]));
+      const updatedRows = currentRows.map(r =>
+        r.id && updateMap.has(r.id) ? { ...r, fecha: updateMap.get(r.id)! } : r
+      );
+
+      toast.info(`${updates.length} subtema(s) reprogramado(s) a las próximas clases disponibles.`);
+      return updatedRows;
+    } catch (err) {
+      console.error("recalcStaleDatesInPlace error:", err);
+      return currentRows;
+    } finally {
+      recalcInProgress.current = false;
+    }
   };
 
   /* ── Generate ── */
@@ -246,63 +296,32 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
     }
   };
 
-  /* ── Recalculate stale dates ── */
-  const recalcStaleDates = useCallback(async (updatedRows: SubtemaRow[], reloadAfter = true): Promise<boolean> => {
-    // Get ALL pending/partial rows sorted by curriculum order
-    const pendingRows = updatedRows
-      .filter(r => r.estado === "pendiente" || r.estado === "parcial")
-      .sort((a, b) => a.unidad_index - b.unidad_index || a.tema_index - b.tema_index);
-
-    if (pendingRows.length === 0) return false;
-
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const futureDates = getFutureClassDates(horario, tomorrow, pendingRows.length);
-    if (futureDates.length === 0) {
-      toast.warning("No se pudieron recalcular fechas: verificá el horario de la clase.");
-      return false;
-    }
-
-    const updates: Array<{ id: string; fecha: string }> = [];
-    pendingRows.forEach((row, idx) => {
-      const newFecha = futureDates[Math.min(idx, futureDates.length - 1)];
-      if (row.id && newFecha !== row.fecha) {
-        updates.push({ id: row.id, fecha: newFecha });
-      }
-    });
-
-    if (updates.length === 0) return false;
-    await Promise.all(
-      updates.map(u => supabase.from("planificacion_clases").update({ fecha: u.fecha }).eq("id", u.id))
-    );
-    toast.info(`${updates.length} subtema(s) reprogramado(s) a las próximas clases disponibles.`);
-    if (reloadAfter) await loadPlan();
-    return true;
-  }, [horario, hoyISO]);
-
-  /* ── Toggle subtema ── */
+  /* ── Toggle subtema — updates DB + local state, then recalc in-place ── */
   const toggleSubtema = useCallback(async (row: SubtemaRow) => {
     if (!row.id) return;
     const newCompleted = !row.completado;
     const newEstado = newCompleted ? "completado" : "pendiente";
 
+    // Optimistic local update
     const updatedRows = rows.map(r =>
       r.id === row.id ? { ...r, completado: newCompleted, estado: newEstado as SubtemaRow["estado"] } : r
     );
     setRows(updatedRows);
 
+    // Persist to DB
     await supabase.from("planificacion_clases").update({
       notas: JSON.stringify({ subtema: row.subtema_titulo, completado: newCompleted }),
       estado: newEstado,
     }).eq("id", row.id);
 
-    // If just completed, check for stale dates
+    // Recalc dates in-place if just completed
     if (newCompleted) {
-      await recalcStaleDates(updatedRows);
+      const recalculated = await recalcStaleDatesInPlace(updatedRows);
+      setRows(recalculated);
     }
-  }, [rows, recalcStaleDates]);
+  }, [rows, horario]);
 
-  /* ── Suspend tema (all subtemas of that tema) ── */
+  /* ── Suspend tema ── */
   const toggleSuspendTema = useCallback(async (unidadIdx: number, temaIdx: number) => {
     const temaRows = rows.filter(r => r.unidad_index === unidadIdx && r.tema_index === temaIdx);
     const allSuspended = temaRows.every(r => r.estado === "suspendido");
@@ -318,15 +337,14 @@ export function PlanificacionTimeline({ claseId, userId, horario, estructura }: 
 
     const ids = temaRows.map(r => r.id).filter(Boolean) as string[];
     await Promise.all(
-      ids.map(id => supabase.from("planificacion_clases").update({
-        estado: newEstado,
-      }).eq("id", id))
+      ids.map(id => supabase.from("planificacion_clases").update({ estado: newEstado }).eq("id", id))
     );
 
     if (newEstado === "suspendido") {
-      await recalcStaleDates(updatedRows);
+      const recalculated = await recalcStaleDatesInPlace(updatedRows);
+      setRows(recalculated);
     }
-  }, [rows, recalcStaleDates]);
+  }, [rows, horario]);
 
   /* ── Stats ── */
   const stats = useMemo(() => {
