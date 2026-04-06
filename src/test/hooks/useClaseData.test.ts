@@ -72,9 +72,9 @@ describe("useClaseData", () => {
 
     const callCountBeforeUpdate = fromMock.mock.calls.length;
 
-    act(() => { result.current.updateClase({ fecha: "2026-04-06" }); });
+    act(() => { result.current.updateClase({ horario: "lunes" } as any); });
 
-    expect(result.current.clase?.fecha).toBe("2026-04-06");
+    expect((result.current.clase as any)?.horario).toBe("lunes");
     // No additional Supabase calls — purely a cache mutation
     expect(fromMock.mock.calls.length).toBe(callCountBeforeUpdate);
   });

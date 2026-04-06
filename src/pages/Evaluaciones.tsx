@@ -148,9 +148,9 @@ export default function Evaluaciones() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: qk.evaluaciones(instId) });
 
   const createMutation = useMutation({
-    mutationFn: async ({ evalPayload, preguntasToSave }: { evalPayload: object; preguntasToSave: Pregunta[] }) => {
+mutationFn: async ({ evalPayload, preguntasToSave }: { evalPayload: any; preguntasToSave: Pregunta[] }) => {
       const { data: ev, error: evErr } = await supabase
-        .from("evaluaciones").insert(evalPayload).select().single();
+        .from("evaluaciones").insert(evalPayload as any).select().single();
       if (evErr) throw evErr;
 
       if (preguntasToSave.length > 0) {
