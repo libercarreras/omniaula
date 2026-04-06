@@ -18,7 +18,7 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { user, error } = await validateJWT(req, ["profesor", "admin"]);
+    const { user, error } = await validateJWT(req, ["docente", "admin"]);
 
     if (error) {
       return errorResponse(error.message, error.status, corsHeaders);
