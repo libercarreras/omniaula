@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Sparkles, Loader2, Copy, Printer } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sparkles, Loader2, Copy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useStudentMetrics } from "@/hooks/useStudentMetrics";
 import { toast } from "sonner";
@@ -12,12 +13,6 @@ interface Props {
   claseId: string;
   claseLabel: string;
   estudiantes: any[];
-}
-
-function truncateToWords(text: string, maxWords: number): string {
-  const words = text.trim().split(/\s+/);
-  if (words.length <= maxWords) return text;
-  return words.slice(0, maxWords).join(' ') + '...';
 }
 
 export function AIFullReport({ studentId, claseId, claseLabel, estudiantes }: Props) {
@@ -46,12 +41,12 @@ export function AIFullReport({ studentId, claseId, claseLabel, estudiantes }: Pr
           tareasEntregadas: metrics.tareasEntregadas,
           tareasTotal: metrics.tareasTotal,
           evaluaciones: metrics.evaluaciones,
+          desempeno: metrics.desempeno,
+          wordCount,
         },
       });
       if (response.error) throw new Error(response.error.message);
-      const rawReport = response.data?.report || "";
-      const finalReport = truncateToWords(rawReport, wordCount);
-      setReport(finalReport);
+      setReport(response.data?.report || "");
       toast.success("Informe generado con IA");
     } catch {
       const fallback = `Informe de ${student.nombre_completo} — ${claseLabel}\n\nSe requieren más datos para generar un informe completo.`;
@@ -77,11 +72,12 @@ export function AIFullReport({ studentId, claseId, claseLabel, estudiantes }: Pr
             tareasEntregadas: metrics.tareasEntregadas,
             tareasTotal: metrics.tareasTotal,
             evaluaciones: metrics.evaluaciones,
+            desempeno: metrics.desempeno,
+            wordCount,
           },
         });
         if (response.error) throw new Error(response.error.message);
-        const raw = response.data?.report || "";
-        allReports[s.id] = truncateToWords(raw, wordCount);
+        allReports[s.id] = response.data?.report || "";
       } catch {
         allReports[s.id] = `Informe de ${s.nombre_completo} — ${claseLabel}\n\nSe requieren más datos para generar un informe completo.`;
       }
@@ -89,34 +85,6 @@ export function AIFullReport({ studentId, claseId, claseLabel, estudiantes }: Pr
     setReportsByStudent(allReports);
     toast.success("Informes generados para todos los alumnos");
     setIsGeneratingAll(false);
-  };
-    if (!student) return;
-    setIsGenerating(true);
-    try {
-      const metrics = await fetchMetrics(studentId, claseId);
-      const response = await supabase.functions.invoke("generate-student-report", {
-        body: {
-          studentName: student.nombre_completo,
-          claseLabel,
-          asistencia: metrics.asistencia,
-          promedio: metrics.promedio,
-          participacion: metrics.participacion,
-          observaciones: metrics.observaciones,
-          tareasEntregadas: metrics.tareasEntregadas,
-          tareasTotal: metrics.tareasTotal,
-          evaluaciones: metrics.evaluaciones,
-        },
-      });
-      if (response.error) throw new Error(response.error.message);
-      const rawReport = response.data?.report || "";
-      const finalReport = truncateToWords(rawReport, wordCount);
-      setReport(finalReport);
-      toast.success("Informe generado con IA");
-    } catch {
-      const fallback = `Informe de ${student.nombre_completo} — ${claseLabel}\n\nSe requieren más datos para generar un informe completo.`;
-      setReport(fallback);
-      toast.info("Informe generado localmente");
-    } finally { setIsGenerating(false); }
   };
 
   return (
@@ -133,18 +101,17 @@ export function AIFullReport({ studentId, claseId, claseLabel, estudiantes }: Pr
         </CardContent>
       </Card>
       <div className="flex items-center gap-2 mb-3">
-        <span className="font-medium text-sm">Longitud:</span>
-        <select
-          value={wordCount}
-          onChange={e => setWordCount(Number(e.target.value))}
-          className="rounded bg-white px-2 py-1 text-sm"
-        >
-          {[wordCountOptions.map(c => (
-            <option key={c} value={c}>
-              {c} palabras
-            </option>
-          ))]}
-        </select>
+        <span className="font-medium text-sm">Longitud del informe:</span>
+        <Select value={String(wordCount)} onValueChange={v => setWordCount(Number(v))}>
+          <SelectTrigger className="w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="30">30 palabras</SelectItem>
+            <SelectItem value="60">60 palabras</SelectItem>
+            <SelectItem value="90">90 palabras</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <div className="flex gap-2">
         <Button className="flex-1 gap-2" size="lg" onClick={generateReport} disabled={isGenerating}>

@@ -5,7 +5,8 @@
       "Bash(npm run:*)",
       "Bash(npm install:*)",
       "Bash(npx tsc:*)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(npx eslint:*)"
     ]
   }
 }

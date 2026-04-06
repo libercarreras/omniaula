@@ -9,28 +9,30 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { studentName, claseLabel, asistencia, promedio, participacion, observaciones, tareasEntregadas, tareasTotal, evaluaciones } = await req.json();
+    const { studentName, claseLabel, asistencia, promedio, participacion, observaciones, tareasEntregadas, tareasTotal, evaluaciones, desempeno, wordCount }: any = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const prompt = `Eres un asistente pedagógico para docentes de nivel secundario en Argentina. Genera un informe narrativo detallado sobre el siguiente estudiante. El informe debe ser profesional, objetivo y útil para compartir con familias o archivos escolares.
+    const prompt = `Eres un asistente pedagógico para docentes de nivel secundario en Argentina. Genera un informe narrativo sobre el siguiente estudiante. El informe debe ser profesional, objetivo y útil para compartir con familias o archivos escolares.
 
 Datos del estudiante:
 - Nombre: ${studentName}
 - Clase: ${claseLabel}
 - Asistencia: ${asistencia}%
 - Promedio de notas: ${promedio}
-- Participación: ${participacion}
+- Nivel de participación: ${participacion}
 - Tareas entregadas: ${tareasEntregadas} de ${tareasTotal}
 - Observaciones del docente: ${observaciones?.join(". ") || "Sin observaciones"}
-${evaluaciones ? `- Evaluaciones: ${JSON.stringify(evaluaciones)}` : ""}
+${evaluaciones?.length ? `- Evaluaciones: ${evaluaciones.map((e: any) => `${e.nombre} (${e.nota})`).join(", ")}` : ""}
+${desempeno ? `- Desempeño (escala 0-3): Tarea ${desempeno.tarea >= 0 ? desempeno.tarea.toFixed(1) : "N/A"}, Participación oral ${desempeno.participacion_oral >= 0 ? desempeno.participacion_oral.toFixed(1) : "N/A"}, Rendimiento en aula ${desempeno.rendimiento_aula >= 0 ? desempeno.rendimiento_aula.toFixed(1) : "N/A"}, Conducta ${desempeno.conducta >= 0 ? desempeno.conducta.toFixed(1) : "N/A"}` : ""}
 
-Genera un informe de 3-4 párrafos que incluya:
-1. Resumen general del desempeño
-2. Fortalezas observadas
-3. Áreas de mejora
-4. Recomendaciones para el siguiente período
+${wordCount === 30
+  ? `Genera un informe de aproximadamente 30 palabras: una oración concisa que resuma el nivel de asistencia, el rendimiento académico general y una fortaleza o área de mejora clave.`
+  : wordCount === 90
+  ? `Genera un informe de aproximadamente 90 palabras que incluya: (1) resumen general del desempeño, (2) fortalezas observadas, (3) áreas de mejora y (4) una recomendación para el siguiente período.`
+  : `Genera un informe de aproximadamente 60 palabras: 1-2 párrafos breves que cubran un resumen del desempeño y una fortaleza o área de mejora, mencionando las tareas entregadas.`
+}
 
 Escribe en español, en tercera persona, con tono profesional y constructivo.`;
 
