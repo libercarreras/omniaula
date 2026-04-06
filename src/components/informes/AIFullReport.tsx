@@ -66,9 +66,7 @@ export function AIFullReport({ studentId, claseId, claseLabel, estudiantes }: Pr
   const generateSingleReport = async (s: any): Promise<{ id: string; report: string }> => {
     try {
       const metrics = await fetchMetrics(s.id, claseId);
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000);
-      const response = await supabase.functions.invoke("generate-student-report", {
+      const invokePromise = supabase.functions.invoke("generate-student-report", {
         body: {
           studentName: s.nombre_completo,
           claseLabel,
@@ -83,7 +81,10 @@ export function AIFullReport({ studentId, claseId, claseLabel, estudiantes }: Pr
           wordCount,
         },
       });
-      clearTimeout(timeout);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout")), 30000)
+      );
+      const response = await Promise.race([invokePromise, timeoutPromise]);
       if (response.error) throw new Error(response.error.message);
       const raw = response.data?.report || "";
       return { id: s.id, report: truncateToWords(raw, wordCount) };
