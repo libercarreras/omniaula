@@ -14,6 +14,7 @@ import { useInstitucion } from "@/hooks/useInstitucion";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { qk } from "@/lib/queryKeys";
+import { createStudentWithEdgeFunction } from "@/lib/createStudentWithEdgeFunction";
 
 interface EstudianteDB {
   id: string;
@@ -103,13 +104,11 @@ export default function Estudiantes() {
         }).eq("id", editingId);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("estudiantes").insert({
+        await createStudentWithEdgeFunction({
           nombre_completo: finalName,
           grupo_id: grupoId,
           numero_lista: numeroLista ? parseInt(numeroLista) : null,
-          user_id: user!.id,
         });
-        if (error) throw error;
       }
     },
     onSuccess: (_, vars) => {
