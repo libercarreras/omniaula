@@ -18,7 +18,7 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { user, error } = await validateJWT(req, ["profesor", "admin"]);
+    const { user, error } = await validateJWT(req, ["docente", "admin"]);
 
     if (error) {
       return errorResponse(error.message, error.status, corsHeaders);
@@ -55,11 +55,7 @@ serve(async (req: Request) => {
     // Check if evaluation exists and belongs to user's institution (via clase)
     const { data: evalData, error: evalError } = await client
       .from("evaluaciones")
-      .select(`
-        id,
-        clase_id,
-        clases (grupo_id)
-      `)
+      .select("id, clase_id")
       .eq("id", evaluacion_id)
       .single();
 
@@ -67,10 +63,18 @@ serve(async (req: Request) => {
       return errorResponse("Evaluation not found", 404, corsHeaders);
     }
 
-    // Optional: verify profesor has access to this clase/grupo
-    // Could add check here that user teaches this clase
+    // Get the grupo_id from the clase
+    const { data: claseData, error: claseError } = await client
+      .from("clases")
+      .select("grupo_id")
+      .eq("id", evalData.clase_id)
+      .single();
 
-    // Check if student belongs to the evaluation's group (via clase)
+    if (claseError || !claseData) {
+      return errorResponse("Class not found", 404, corsHeaders);
+    }
+
+    // Check if student belongs to the evaluation's group
     const { data: studentData, error: studentError } = await client
       .from("estudiantes")
       .select("grupo_id")
@@ -81,7 +85,7 @@ serve(async (req: Request) => {
       return errorResponse("Student not found", 404, corsHeaders);
     }
 
-    if (studentData.grupo_id !== evalData.clases?.grupo_id) {
+    if (studentData.grupo_id !== claseData.grupo_id) {
       return errorResponse(
         "Student does not belong to the evaluation's group",
         400,
