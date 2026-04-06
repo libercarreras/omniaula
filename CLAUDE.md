@@ -7,9 +7,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 npm run dev        # Start dev server (Vite HMR, port 8080)
 npm run build      # Production build
+npm run build:dev  # Development build (unminified)
 npm run lint       # ESLint across entire project
 npm run test       # Run unit tests once (Vitest)
 npm run test:watch # Vitest in watch mode
+npx vitest run src/path/to/file.test.ts  # Run a single test file
+npx playwright test  # E2E tests (Playwright, requires dev server running)
 ```
 
 TypeScript is intentionally loose — `strictNullChecks` is disabled. Do not enable it.

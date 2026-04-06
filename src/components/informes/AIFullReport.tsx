@@ -8,6 +8,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useStudentMetrics } from "@/hooks/useStudentMetrics";
 import { toast } from "sonner";
 
+function truncateToWords(text: string, maxWords: number): string {
+  const words = text.trim().split(/\s+/);
+  if (words.length <= maxWords) return text;
+  return words.slice(0, maxWords).join(' ') + '...';
+}
+
 interface Props {
   studentId: string;
   claseId: string;
@@ -46,7 +52,8 @@ export function AIFullReport({ studentId, claseId, claseLabel, estudiantes }: Pr
         },
       });
       if (response.error) throw new Error(response.error.message);
-      setReport(response.data?.report || "");
+      const rawReport = response.data?.report || "";
+      setReport(truncateToWords(rawReport, wordCount));
       toast.success("Informe generado con IA");
     } catch {
       const fallback = `Informe de ${student.nombre_completo} — ${claseLabel}\n\nSe requieren más datos para generar un informe completo.`;
@@ -77,7 +84,8 @@ export function AIFullReport({ studentId, claseId, claseLabel, estudiantes }: Pr
           },
         });
         if (response.error) throw new Error(response.error.message);
-        allReports[s.id] = response.data?.report || "";
+        const raw = response.data?.report || "";
+        allReports[s.id] = truncateToWords(raw, wordCount);
       } catch {
         allReports[s.id] = `Informe de ${s.nombre_completo} — ${claseLabel}\n\nSe requieren más datos para generar un informe completo.`;
       }
