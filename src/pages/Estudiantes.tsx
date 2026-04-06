@@ -103,13 +103,12 @@ export default function Estudiantes() {
         }).eq("id", editingId);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("estudiantes").insert({
+        const { createStudentWithEdgeFunction } = await import("@/lib/createStudentWithEdgeFunction");
+        await createStudentWithEdgeFunction({
           nombre_completo: finalName,
           grupo_id: grupoId,
           numero_lista: numeroLista ? parseInt(numeroLista) : null,
-          user_id: user!.id,
         });
-        if (error) throw error;
       }
     },
     onSuccess: (_, vars) => {
