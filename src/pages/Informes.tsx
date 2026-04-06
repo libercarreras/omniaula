@@ -153,7 +153,7 @@ export default function Informes() {
             </SelectContent>
           </Select>
           {estudianteSeleccionado ? (
-            <AIFullReport studentId={estudianteSeleccionado} claseId={claseSeleccionada} claseLabel={getClaseLabel(claseSeleccionada)} estudiantes={estudiantes} />
+            <AIFullReport studentId={estudianteSeleccionado} claseId={claseSeleccionada} claseLabel={getClaseLabel(claseSeleccionada)} estudiantes={estudiantesClase} />
           ) : (
             <p className="text-sm text-muted-foreground">Selecciona un estudiante para generar un informe.</p>
           )}
@@ -167,7 +167,7 @@ export default function Informes() {
             </SelectContent>
           </Select>
           {estudianteSeleccionado ? (
-            <BulletinCommentGenerator studentId={estudianteSeleccionado} claseId={claseSeleccionada} claseLabel={getClaseLabel(claseSeleccionada)} estudiantes={estudiantes} />
+            <BulletinCommentGenerator studentId={estudianteSeleccionado} claseId={claseSeleccionada} claseLabel={getClaseLabel(claseSeleccionada)} estudiantes={estudiantesClase} />
           ) : (
             <p className="text-sm text-muted-foreground">Selecciona un estudiante.</p>
           )}
