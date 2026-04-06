@@ -17,12 +17,13 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
-      registerType: "autoUpdate",
+      registerType: "prompt",
       includeAssets: ["favicon.ico", "pwa-icon-192.png", "pwa-icon-512.png"],
       manifest: {
         id: "/",
         name: "OmniAula — Aula inteligente",
         short_name: "OmniAula",
+        description: "Aula inteligente para Profesores",
         theme_color: "#2B5EA7",
         background_color: "#f5f7fa",
         display: "standalone",
