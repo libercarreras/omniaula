@@ -28,13 +28,15 @@ ${evaluaciones?.length ? `- Evaluaciones: ${evaluaciones.map((e: any) => `${e.no
 ${desempeno ? `- Desempeño (escala 0-3): Tarea ${desempeno.tarea >= 0 ? desempeno.tarea.toFixed(1) : "N/A"}, Participación oral ${desempeno.participacion_oral >= 0 ? desempeno.participacion_oral.toFixed(1) : "N/A"}, Rendimiento en aula ${desempeno.rendimiento_aula >= 0 ? desempeno.rendimiento_aula.toFixed(1) : "N/A"}, Conducta ${desempeno.conducta >= 0 ? desempeno.conducta.toFixed(1) : "N/A"}` : ""}
 
 ${wordCount === 30
-  ? `Genera un informe de aproximadamente 30 palabras: una oración concisa que resuma el nivel de asistencia, el rendimiento académico general y una fortaleza o área de mejora clave.`
+  ? `Genera un informe de aproximadamente 30 palabras: una oración concisa que resuma el nivel de asistencia, el rendimiento académico general y una fortaleza o área de mejora clave. No superes las 30 palabras bajo ninguna circunstancia. Contá las palabras mientras escribís y detenete al llegar al límite.`
   : wordCount === 90
-  ? `Genera un informe de aproximadamente 90 palabras que incluya: (1) resumen general del desempeño, (2) fortalezas observadas, (3) áreas de mejora y (4) una recomendación para el siguiente período.`
-  : `Genera un informe de aproximadamente 60 palabras: 1-2 párrafos breves que cubran un resumen del desempeño y una fortaleza o área de mejora, mencionando las tareas entregadas.`
+  ? `Genera un informe de aproximadamente 90 palabras que incluya: (1) resumen general del desempeño, (2) fortalezas observadas, (3) áreas de mejora y (4) una recomendación para el siguiente período. No superes las 90 palabras bajo ninguna circunstancia. Contá las palabras mientras escribís y detenete al llegar al límite.`
+  : `Genera un informe de aproximadamente 60 palabras: 1-2 párrafos breves que cubran un resumen del desempeño y una fortaleza o área de mejora, mencionando las tareas entregadas. No superes las 60 palabras bajo ninguna circunstancia. Contá las palabras mientras escribís y detenete al llegar al límite.`
 }
 
 Escribí el informe directamente sin preámbulos, introducciones ni títulos. Comenzá con el contenido del informe desde la primera palabra.
+
+Es obligatorio respetar el límite de palabras exacto. Un informe más largo que el solicitado es un error.
 
 Escribe en español, en tercera persona, con tono profesional y constructivo.`;
 
