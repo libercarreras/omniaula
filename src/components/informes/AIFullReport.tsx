@@ -24,6 +24,7 @@ interface Props {
 export function AIFullReport({ studentId, claseId, claseLabel, estudiantes }: Props) {
   const [reportsByStudent, setReportsByStudent] = useState<Record<string, string>>({});
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
+  const [generatingProgress, setGeneratingProgress] = useState({ done: 0, total: 0 });
   const [report, setReport] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [wordCount, setWordCount] = useState(60);
@@ -62,35 +63,52 @@ export function AIFullReport({ studentId, claseId, claseLabel, estudiantes }: Pr
     } finally { setIsGenerating(false); }
   };
 
+  const generateSingleReport = async (s: any): Promise<{ id: string; report: string }> => {
+    try {
+      const metrics = await fetchMetrics(s.id, claseId);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      const response = await supabase.functions.invoke("generate-student-report", {
+        body: {
+          studentName: s.nombre_completo,
+          claseLabel,
+          asistencia: metrics.asistencia,
+          promedio: metrics.promedio,
+          participacion: metrics.participacion,
+          observaciones: metrics.observaciones,
+          tareasEntregadas: metrics.tareasEntregadas,
+          tareasTotal: metrics.tareasTotal,
+          evaluaciones: metrics.evaluaciones,
+          desempeno: metrics.desempeno,
+          wordCount,
+        },
+      });
+      clearTimeout(timeout);
+      if (response.error) throw new Error(response.error.message);
+      const raw = response.data?.report || "";
+      return { id: s.id, report: truncateToWords(raw, wordCount) };
+    } catch {
+      return { id: s.id, report: `Informe de ${s.nombre_completo} — ${claseLabel}\n\nSe requieren más datos para generar un informe completo.` };
+    }
+  };
+
   const generateAllReports = async () => {
     setIsGeneratingAll(true);
+    const total = estudiantes.length;
+    setGeneratingProgress({ done: 0, total });
     const allReports: Record<string, string> = {};
-    for (const s of estudiantes) {
-      try {
-        const metrics = await fetchMetrics(s.id, claseId);
-        const response = await supabase.functions.invoke("generate-student-report", {
-          body: {
-            studentName: s.nombre_completo,
-            claseLabel,
-            asistencia: metrics.asistencia,
-            promedio: metrics.promedio,
-            participacion: metrics.participacion,
-            observaciones: metrics.observaciones,
-            tareasEntregadas: metrics.tareasEntregadas,
-            tareasTotal: metrics.tareasTotal,
-            evaluaciones: metrics.evaluaciones,
-            desempeno: metrics.desempeno,
-            wordCount,
-          },
-        });
-        if (response.error) throw new Error(response.error.message);
-        const raw = response.data?.report || "";
-        allReports[s.id] = truncateToWords(raw, wordCount);
-      } catch {
-        allReports[s.id] = `Informe de ${s.nombre_completo} — ${claseLabel}\n\nSe requieren más datos para generar un informe completo.`;
+
+    const BATCH_SIZE = 3;
+    for (let i = 0; i < estudiantes.length; i += BATCH_SIZE) {
+      const batch = estudiantes.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(batch.map(s => generateSingleReport(s)));
+      for (const r of results) {
+        allReports[r.id] = r.report;
       }
+      setGeneratingProgress({ done: Math.min(i + BATCH_SIZE, total), total });
+      setReportsByStudent({ ...allReports });
     }
-    setReportsByStudent(allReports);
+
     toast.success("Informes generados para todos los alumnos");
     setIsGeneratingAll(false);
   };
