@@ -144,7 +144,7 @@ export function AIFullReport({ studentId, claseId, claseLabel, estudiantes }: Pr
           {isGenerating ? <><Loader2 className="h-4 w-4 animate-spin" /> Generando...</> : <><Sparkles className="h-4 w-4" /> Generar informe individual</>}
         </Button>
         <Button variant="secondary" className="gap-2" onClick={generateAllReports} disabled={isGeneratingAll || estudiantes.length === 0}>
-          {isGeneratingAll ? <><Loader2 className="h-4 w-4 animate-spin" /> Generando todos...</> : <><Sparkles className="h-4 w-4" /> Generar todos los informes</>}
+          {isGeneratingAll ? <><Loader2 className="h-4 w-4 animate-spin" /> {generatingProgress.done}/{generatingProgress.total} generados...</> : <><Sparkles className="h-4 w-4" /> Generar todos los informes</>}
         </Button>
       </div>
 
