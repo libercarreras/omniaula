@@ -126,12 +126,12 @@ export default function Grupos() {
   // ── Mutations ─────────────────────────────────────────────────────────────
 
   const grupoMutation = useMutation({
-    mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: object }) => {
+mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any }) => {
       if (editing) {
         const { error } = await supabase.from("grupos").update(payload).eq("id", editing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("grupos").insert(payload);
+        const { error } = await supabase.from("grupos").insert(payload as any);
         if (error) throw error;
       }
     },
