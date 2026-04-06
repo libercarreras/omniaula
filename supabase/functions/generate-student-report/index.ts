@@ -34,6 +34,8 @@ ${wordCount === 30
   : `Genera un informe de aproximadamente 60 palabras: 1-2 párrafos breves que cubran un resumen del desempeño y una fortaleza o área de mejora, mencionando las tareas entregadas.`
 }
 
+Escribí el informe directamente sin preámbulos, introducciones ni títulos. Comenzá con el contenido del informe desde la primera palabra.
+
 Escribe en español, en tercera persona, con tono profesional y constructivo.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
