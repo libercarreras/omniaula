@@ -387,9 +387,36 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="clase-horario">Horario (opcional)</Label>
-              <Input id="clase-horario" placeholder="Ej: Lunes 8:00-9:30" value={claseHorario} onChange={e => setClaseHorario(e.target.value)} />
-              <p className="text-[11px] text-muted-foreground">Formato sugerido: Día HH:MM-HH:MM</p>
+              <Label>Días de clase</Label>
+              <div className="flex flex-wrap gap-2">
+                {DIAS_SEMANA.map(dia => (
+                  <button key={dia.key} type="button"
+                    onClick={() => setClaseDias(prev => prev.includes(dia.key) ? prev.filter(d => d !== dia.key) : [...prev, dia.key])}
+                    className={cn("px-3 py-2 rounded-lg text-sm font-medium border transition-all active:scale-95",
+                      claseDias.includes(dia.key) ? "bg-primary text-primary-foreground border-primary" : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted"
+                    )}>
+                    {dia.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Horario (opcional)</Label>
+              <div className="flex items-center gap-2">
+                <Select value={claseHoraInicio} onValueChange={setClaseHoraInicio}>
+                  <SelectTrigger className="flex-1"><SelectValue placeholder="Inicio" /></SelectTrigger>
+                  <SelectContent>
+                    {HORA_OPTIONS.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <span className="text-muted-foreground">—</span>
+                <Select value={claseHoraFin} onValueChange={setClaseHoraFin}>
+                  <SelectTrigger className="flex-1"><SelectValue placeholder="Fin" /></SelectTrigger>
+                  <SelectContent>
+                    {HORA_OPTIONS.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="clase-aula">Aula (opcional)</Label>
