@@ -1,5 +1,5 @@
 import { createRoot } from "react-dom/client";
-import { supabase } from "@/integrations/supabase/client";
+
 import App from "./App.tsx";
 import "./index.css";
 
