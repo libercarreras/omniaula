@@ -66,43 +66,50 @@ export default function Dashboard() {
     queryKey: qk.dashboard(institucionActiva?.id ?? ""),
     enabled: !!user && !!institucionActiva,
     queryFn: async (): Promise<DashboardData> => {
-      const { data: gruposData } = await supabase
-        .from("grupos").select("id, nombre").eq("institucion_id", institucionActiva!.id);
-      const grupoIds = (gruposData || []).map(g => g.id);
-      const grpMap: Record<string, string> = {};
-      (gruposData || []).forEach(g => { grpMap[g.id] = g.nombre; });
+      try {
+        const { data: gruposData, error: gruposError } = await supabase
+          .from("grupos").select("id, nombre").eq("institucion_id", institucionActiva!.id);
+        if (gruposError) throw gruposError;
 
-      if (grupoIds.length === 0) {
-        return { ...EMPTY_DATA, grupos: grpMap };
+        const grupoIds = (gruposData || []).map(g => g.id);
+        const grpMap: Record<string, string> = {};
+        (gruposData || []).forEach(g => { grpMap[g.id] = g.nombre; });
+
+        if (grupoIds.length === 0) {
+          return { ...EMPTY_DATA, grupos: grpMap };
+        }
+
+        const [clasesRes, materiasRes, estudiantesRes, evaluacionesRes] = await Promise.all([
+          supabase.from("clases").select("*").in("grupo_id", grupoIds),
+          supabase.from("materias").select("id, nombre"),
+          supabase.from("estudiantes").select("id, grupo_id").in("grupo_id", grupoIds),
+          supabase.from("evaluaciones").select("id, clase_id"),
+        ]);
+
+        const matMap: Record<string, string> = {};
+        (materiasRes.data || []).forEach(m => { matMap[m.id] = m.nombre; });
+
+        const epg: Record<string, number> = {};
+        (estudiantesRes.data || []).forEach(e => { epg[e.grupo_id] = (epg[e.grupo_id] || 0) + 1; });
+
+        const clasesInst = clasesRes.data || [];
+        const claseIds = new Set(clasesInst.map(c => c.id));
+        const evsFiltered = (evaluacionesRes.data || []).filter(e => claseIds.has(e.clase_id));
+
+        return {
+          clases: clasesInst,
+          totalEstudiantes: (estudiantesRes.data || []).length,
+          totalEvaluaciones: evsFiltered.length,
+          materias: matMap,
+          grupos: grpMap,
+          estudiantesPorGrupo: epg,
+          totalMaterias: (materiasRes.data || []).length,
+          totalGrupos: grupoIds.length,
+        };
+      } catch (err) {
+        console.error("[OmniAula][Dashboard] queryFn error:", err);
+        return EMPTY_DATA;
       }
-
-      const [clasesRes, materiasRes, estudiantesRes, evaluacionesRes] = await Promise.all([
-        supabase.from("clases").select("*").in("grupo_id", grupoIds),
-        supabase.from("materias").select("id, nombre"),
-        supabase.from("estudiantes").select("id, grupo_id").in("grupo_id", grupoIds),
-        supabase.from("evaluaciones").select("id, clase_id"),
-      ]);
-
-      const matMap: Record<string, string> = {};
-      (materiasRes.data || []).forEach(m => { matMap[m.id] = m.nombre; });
-
-      const epg: Record<string, number> = {};
-      (estudiantesRes.data || []).forEach(e => { epg[e.grupo_id] = (epg[e.grupo_id] || 0) + 1; });
-
-      const clasesInst = clasesRes.data || [];
-      const claseIds = new Set(clasesInst.map(c => c.id));
-      const evsFiltered = (evaluacionesRes.data || []).filter(e => claseIds.has(e.clase_id));
-
-      return {
-        clases: clasesInst,
-        totalEstudiantes: (estudiantesRes.data || []).length,
-        totalEvaluaciones: evsFiltered.length,
-        materias: matMap,
-        grupos: grpMap,
-        estudiantesPorGrupo: epg,
-        totalMaterias: (materiasRes.data || []).length,
-        totalGrupos: grupoIds.length,
-      };
     },
   });
 
