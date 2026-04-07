@@ -35,7 +35,7 @@ createRoot(document.getElementById("root")!).render(<App />);
 
 // Dynamic manifest injection: if custom PWA icons exist in app_settings,
 // replace the static manifest link with the dynamic-manifest Edge Function URL.
-setTimeout(async () => {
+(async () => {
   try {
     const { supabase } = await import("@/integrations/supabase/client");
     const { data } = await supabase
@@ -57,4 +57,4 @@ setTimeout(async () => {
   } catch (e) {
     console.warn("[OmniAula] Dynamic manifest check failed:", e);
   }
-}, 3000);
+})();
