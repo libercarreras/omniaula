@@ -182,10 +182,11 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
 
   const claseMutation = useMutation({
     mutationFn: async () => {
+      const horario = buildHorarioString(claseDias, claseHoraInicio, claseHoraFin);
       const { error } = await supabase.from("clases").insert({
         materia_id: claseMateriaId,
         grupo_id: claseGrupoId,
-        horario: claseHorario.trim() || null,
+        horario,
         aula: claseAula.trim() || null,
         user_id: user!.id,
       });
@@ -227,7 +228,7 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
 
   const openClaseDialog = (grupoId: string) => {
     setClaseGrupoId(grupoId);
-    setClaseMateriaId(""); setClaseHorario(""); setClaseAula("");
+    setClaseMateriaId(""); setClaseDias([]); setClaseHoraInicio(""); setClaseHoraFin(""); setClaseAula("");
     setClaseDialogOpen(true);
   };
 
