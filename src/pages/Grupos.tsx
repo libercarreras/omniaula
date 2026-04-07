@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Users, UserPlus, Share2, Loader2, FolderOpen, Pencil, Trash2, BookOpen, MapPin, Clock, Wand2 } from "lucide-react";
+import { Plus, Users, UserPlus, Share2, Loader2, FolderOpen, Pencil, Trash2, BookOpen, MapPin, Clock, Wand2, Settings2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,9 @@ import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { qk } from "@/lib/queryKeys";
+import { cn } from "@/lib/utils";
+import { EditClaseDialog } from "@/components/clase/EditClaseDialog";
+import { DIAS_SEMANA, HORA_OPTIONS, buildHorarioString } from "@/components/clase/EditClaseDialog";
 
 interface GrupoDB {
   id: string;
