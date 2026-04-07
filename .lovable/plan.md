@@ -1,34 +1,48 @@
 
 
-## Diagnóstico
+## Diagnóstico: Por qué el icono personalizado no funciona al instalar
 
-Actualmente hay dos problemas relacionados:
+El problema es una desconexión entre dos sistemas:
 
-1. **Crear clase** (en Grupos): usa un `<Input>` de texto libre para el horario ("Ej: Lunes 8:00-9:30"), lo cual es propenso a errores de formato y no coincide con el selector estructurado de días + horas que ya existe en `EditClaseDialog`.
+1. **Build time**: `vite-plugin-pwa` genera el manifest estáticamente con rutas fijas (`/pwa-icon-192.png`, `/pwa-icon-512.png`) que apuntan a los iconos por defecto en `/public`.
 
-2. **Editar clase** (horario/aula): solo es posible desde Modo Clase (`EditClaseDialog`). Desde Grupos no hay forma de editar una clase existente — solo se puede crear.
+2. **Runtime**: El icono que subís en Configuración se guarda en Supabase Storage y se registra en `app_settings`, pero **nada conecta eso con el manifest que el navegador usa para instalar**.
 
-Lo correcto es tener ambas opciones: poder editar desde Grupos (donde ves todas las clases de un vistazo) y desde Modo Clase (donde estás trabajando con esa clase).
+3. **Edge Function `dynamic-manifest`**: Existe y lee los iconos personalizados de `app_settings`, pero **nunca se usa** — ningún código en la app apunta al manifest dinámico.
 
-## Plan
+En resumen: subís el icono, se guarda bien, se muestra en la preview de Configuración, pero el manifest real que Chrome lee al instalar sigue teniendo los iconos por defecto.
 
-### Archivo: `src/pages/Grupos.tsx`
+## Plan de corrección
 
-**A. Mejorar el diálogo "Crear clase"** (líneas 380-383)
-- Reemplazar el `<Input>` de texto libre por el mismo sistema de chips de días + selectores de hora que usa `EditClaseDialog` (días como botones toggle + `<Select>` para hora inicio/fin).
-- Reutilizar las constantes `DIAS_SEMANA` y `HORA_OPTIONS` de `EditClaseDialog`, extrayéndolas a un archivo compartido o importándolas.
+### 1. `src/main.tsx` — Inyectar manifest dinámico al arrancar
 
-**B. Agregar botón "Editar" en cada clase**
-- En cada badge de clase (línea 293-300), agregar un ícono de edición (lápiz) que abra el `EditClaseDialog` existente para esa clase.
-- Agregar estado `editClaseTarget` para trackear qué clase se está editando.
-- Importar y renderizar `<EditClaseDialog>` con los datos de la clase seleccionada.
+Después de renderizar la app, agregar lógica que:
+- Consulte `app_settings` para ver si hay iconos personalizados (`pwa_icon_192`, `pwa_icon_512`)
+- Si existen, reemplace el `href` del `<link rel="manifest">` existente (generado por vite-plugin-pwa) por la URL de la Edge Function `dynamic-manifest`
+- Si no existen, dejar el manifest estático por defecto (no tocar nada)
 
-### Archivo: `src/components/clase/EditClaseDialog.tsx`
+```text
+Flujo:
+1. App carga → vite-plugin-pwa inyecta manifest estático
+2. main.tsx consulta app_settings → ¿hay iconos custom?
+   SÍ → reemplaza <link rel="manifest"> href → Edge Function URL
+   NO → no hace nada (usa iconos por defecto)
+```
 
-- Exportar `DIAS_SEMANA`, `HORA_OPTIONS` y `buildHorarioString` para reutilizarlos en el diálogo de creación de Grupos.
+### 2. `supabase/functions/dynamic-manifest/index.ts` — Sin cambios
+
+Ya funciona correctamente: lee los iconos de `app_settings` y genera el manifest con las URLs de Storage.
+
+### 3. `src/components/admin/ConfiguracionTab.tsx` — Pequeña mejora
+
+Después de subir el icono exitosamente, agregar una nota informativa al usuario: "El nuevo icono se aplicará la próxima vez que alguien instale la app" (ya que los dispositivos que ya instalaron no actualizan el icono automáticamente).
+
+### Archivos a modificar
+- `src/main.tsx` — agregar inyección dinámica del manifest
+- `src/components/admin/ConfiguracionTab.tsx` — mensaje informativo post-upload
 
 ### Resultado
-- **Crear clase**: usa selector estructurado de días y horas (consistente con el resto de la app)
-- **Editar clase**: posible tanto desde Grupos (clic en clase → editar) como desde Modo Clase (como ya funciona)
-- El formato de horario queda estandarizado en ambos flujos
+- Al instalar la app, Chrome usará el icono personalizado subido desde Configuración
+- Si no hay icono personalizado, sigue usando los por defecto sin cambios
+- La Edge Function ya desplegada hace el trabajo pesado
 
