@@ -86,7 +86,7 @@ export default function ConfiguracionTab() {
       }
 
       setIconUrl(publicUrl512 + "?t=" + Date.now());
-      toast.success("Icono PWA actualizado correctamente");
+      toast.success("Icono PWA actualizado. Se aplicará en nuevas instalaciones de la app.", { duration: 5000 });
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Error al subir el icono");

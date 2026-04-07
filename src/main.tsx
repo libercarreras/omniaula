@@ -32,3 +32,29 @@ window.onunhandledrejection = (event) => {
 // PWA manifest is handled by VitePWA plugin
 
 createRoot(document.getElementById("root")!).render(<App />);
+
+// Dynamic manifest injection: if custom PWA icons exist in app_settings,
+// replace the static manifest link with the dynamic-manifest Edge Function URL.
+setTimeout(async () => {
+  try {
+    const { supabase } = await import("@/integrations/supabase/client");
+    const { data } = await supabase
+      .from("app_settings")
+      .select("key")
+      .in("key", ["pwa_icon_192", "pwa_icon_512"])
+      .limit(1);
+
+    if (data && data.length > 0) {
+      const manifestLink = document.querySelector('link[rel="manifest"]');
+      if (manifestLink) {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        manifestLink.setAttribute(
+          "href",
+          `${supabaseUrl}/functions/v1/dynamic-manifest`
+        );
+      }
+    }
+  } catch (e) {
+    console.warn("[OmniAula] Dynamic manifest check failed:", e);
+  }
+}, 3000);
