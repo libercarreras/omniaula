@@ -64,8 +64,13 @@ export default function Grupos() {
   const [claseDialogOpen, setClaseDialogOpen] = useState(false);
   const [claseGrupoId, setClaseGrupoId] = useState("");
   const [claseMateriaId, setClaseMateriaId] = useState("");
-  const [claseHorario, setClaseHorario] = useState("");
+  const [claseDias, setClaseDias] = useState<string[]>([]);
+  const [claseHoraInicio, setClaseHoraInicio] = useState("");
+  const [claseHoraFin, setClaseHoraFin] = useState("");
   const [claseAula, setClaseAula] = useState("");
+
+  // Clase edit state
+  const [editClaseTarget, setEditClaseTarget] = useState<ClaseDB | null>(null);
 
   // AI student upload state
   const [aiUploadOpen, setAiUploadOpen] = useState(false);
