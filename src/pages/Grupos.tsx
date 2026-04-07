@@ -53,7 +53,7 @@ export default function Grupos() {
   const [nombre, setNombre] = useState("");
   const [anio, setAnio] = useState("");
   const [turno, setTurno] = useState("");
-  const [institucionId, setInstitucionId] = useState("");
+  
   const [editingGrupo, setEditingGrupo] = useState<GrupoDB | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<GrupoDB | null>(null);
 
@@ -147,7 +147,7 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
           ? `"${nombre.trim()}" fue actualizado correctamente.`
           : `"${nombre.trim()}" fue agregado correctamente.`,
       });
-      setNombre(""); setAnio(""); setTurno(""); setInstitucionId("");
+      setNombre(""); setAnio(""); setTurno("");
       setEditingGrupo(null);
       setDialogOpen(false);
       invalidateGrupos();
@@ -198,7 +198,6 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
   const openCreate = () => {
     setEditingGrupo(null);
     setNombre(""); setAnio(""); setTurno("");
-    setInstitucionId(instId);
     setDialogOpen(true);
   };
 
@@ -207,15 +206,14 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
     setNombre(grupo.nombre);
     setAnio(grupo.anio || "");
     setTurno(grupo.turno || "");
-    setInstitucionId(grupo.institucion_id);
     setDialogOpen(true);
   };
 
   const handleSave = () => {
-    if (!user || !nombre.trim() || !institucionId) return;
+    if (!user || !nombre.trim() || !instId) return;
     const payload = editingGrupo
-      ? { nombre: nombre.trim(), anio: anio.trim() || null, turno: turno.trim() || null, institucion_id: institucionId }
-      : { nombre: nombre.trim(), anio: anio.trim() || null, turno: turno.trim() || null, user_id: user.id, institucion_id: institucionId };
+      ? { nombre: nombre.trim(), anio: anio.trim() || null, turno: turno.trim() || null, institucion_id: instId }
+      : { nombre: nombre.trim(), anio: anio.trim() || null, turno: turno.trim() || null, user_id: user.id, institucion_id: instId };
     grupoMutation.mutate({ editing: editingGrupo, payload });
   };
 
@@ -333,17 +331,12 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
               <Label htmlFor="grupo-nombre">Nombre del grupo *</Label>
               <Input id="grupo-nombre" placeholder="Ej: 3°A" value={nombre} onChange={e => setNombre(e.target.value)} />
             </div>
-            <div className="space-y-2">
-              <Label>Institución *</Label>
-              <Select value={institucionId} onValueChange={setInstitucionId}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar institución" /></SelectTrigger>
-                <SelectContent>
-                  {instituciones.map(inst => (
-                    <SelectItem key={inst.id} value={inst.id}>{inst.nombre}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {institucionActiva && (
+              <div className="space-y-1">
+                <Label>Institución</Label>
+                <p className="text-sm text-muted-foreground bg-muted rounded-md px-3 py-2">{institucionActiva.nombre}</p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="grupo-anio">Año</Label>
               <Input id="grupo-anio" placeholder="Ej: 2026" value={anio} onChange={e => setAnio(e.target.value)} />
@@ -355,7 +348,7 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={!nombre.trim() || !institucionId || grupoMutation.isPending}>
+            <Button onClick={handleSave} disabled={!nombre.trim() || !instId || grupoMutation.isPending}>
               {grupoMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               {editingGrupo ? "Guardar cambios" : "Crear grupo"}
             </Button>
