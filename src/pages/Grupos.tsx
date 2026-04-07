@@ -470,6 +470,20 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
           invalidateGrupos();
         }}
       />
+
+      {editClaseTarget && (
+        <EditClaseDialog
+          open={!!editClaseTarget}
+          horario={editClaseTarget.horario}
+          aula={editClaseTarget.aula}
+          claseId={editClaseTarget.id}
+          onClose={() => setEditClaseTarget(null)}
+          onSaved={(patch) => {
+            invalidateClases();
+            setEditClaseTarget(null);
+          }}
+        />
+      )}
     </div>
   );
 }
