@@ -1,24 +1,32 @@
 
 
-## Plan: Auto-update silencioso con toast breve
+## Diagnóstico
 
-### Situacion actual
-- `vite.config.ts` ya tiene `skipWaiting: true` y `clientsClaim: true` en workbox, pero `registerType: "prompt"` fuerza el popup manual.
-- `UpdatePrompt.tsx` muestra un banner grande con botones "Actualizar" / "Mas tarde".
+El campo "Institución" en el diálogo de editar grupo es **redundante** y además tiene un bug visual:
 
-### Cambios
+1. **Redundancia**: La página Grupos ya filtra por la institución activa seleccionada en el selector global. Todos los grupos que ves pertenecen a esa institución. No tiene sentido poder "cambiar" la institución de un grupo existente — eso rompería la relación con los estudiantes y clases que ya tiene.
 
-**1. `vite.config.ts`** — Cambiar `registerType` de `"prompt"` a `"autoUpdate"`
-- Esto hace que el SW se active automaticamente sin intervencion del usuario.
+2. **Bug visual**: Aunque `openEdit` setea `institucionId` con el valor correcto del grupo, el `<Select>` muestra vacío porque la lista `instituciones` viene de `useInstitucion()` y el valor puede no coincidir exactamente, o el componente no refleja el valor pre-seleccionado correctamente.
 
-**2. `src/components/UpdatePrompt.tsx`** — Reemplazar el banner completo por un componente que:
-- Usa `useRegisterSW` con `onRegisteredSW` para detectar cuando hay un SW esperando.
-- Llama `updateServiceWorker(true)` automaticamente al detectar nueva version.
-- Muestra un `toast.success("App actualizada")` breve via sonner despues de recargar.
-- Ya no renderiza ningun UI (return null siempre).
+## Plan de corrección
 
-**3. Sin otros archivos afectados** — `App.tsx` ya importa `<UpdatePrompt />` y `<Sonner />`.
+### Archivo: `src/pages/Grupos.tsx`
+
+**Al crear un grupo**: Asignar automáticamente la institución activa, sin mostrar selector (ya que estás viendo los grupos de esa institución).
+
+**Al editar un grupo**: No permitir cambiar la institución. Mostrarla como texto informativo de solo lectura, o directamente no mostrarla.
+
+Cambios concretos:
+
+1. **En `openCreate()`**: Setear `institucionId = instId` (ya lo hace) y eliminar el selector del dialog.
+
+2. **En el dialog de crear/editar**: Reemplazar el `<Select>` de institución por un `<p>` que muestre el nombre de la institución activa como información de contexto (no editable). Esto aplica tanto para crear como para editar.
+
+3. **En `handleSave()`**: Usar siempre `instId` (la institución activa) en lugar del estado `institucionId`, eliminando la variable de estado `institucionId` por completo.
 
 ### Resultado
-Al detectar nueva version, el SW se activa solo y la pagina se recarga. Al volver, aparece un toast breve "App actualizada a la ultima version" que desaparece en 3 segundos.
+- Al crear: se asigna la institución activa automáticamente
+- Al editar: no se puede cambiar la institución (comportamiento correcto)
+- El campo nunca aparece vacío
+- Se elimina código innecesario (estado `institucionId`, `setInstitucionId`)
 
