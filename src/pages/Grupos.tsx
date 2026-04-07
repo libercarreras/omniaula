@@ -300,13 +300,22 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
                   {grupoClases.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {grupoClases.map(clase => (
-                        <Link key={clase.id} to={`/clase/${clase.id}`}>
-                          <Badge variant="secondary" className="gap-1 cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors">
-                            <BookOpen className="h-3 w-3" />
-                            {materiaMap[clase.materia_id] || "?"}
-                            {clase.horario && <span className="text-[10px] opacity-70">· {clase.horario}</span>}
-                          </Badge>
-                        </Link>
+                        <div key={clase.id} className="flex items-center gap-0.5">
+                          <Link to={`/clase/${clase.id}`}>
+                            <Badge variant="secondary" className="gap-1 cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors">
+                              <BookOpen className="h-3 w-3" />
+                              {materiaMap[clase.materia_id] || "?"}
+                              {clase.horario && <span className="text-[10px] opacity-70">· {clase.horario}</span>}
+                            </Badge>
+                          </Link>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setEditClaseTarget(clase); }}
+                            className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                            title="Editar clase"
+                          >
+                            <Settings2 className="h-3 w-3" />
+                          </button>
+                        </div>
                       ))}
                     </div>
                   )}
