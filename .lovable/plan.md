@@ -2,31 +2,33 @@
 
 ## Diagnóstico
 
-El campo "Institución" en el diálogo de editar grupo es **redundante** y además tiene un bug visual:
+Actualmente hay dos problemas relacionados:
 
-1. **Redundancia**: La página Grupos ya filtra por la institución activa seleccionada en el selector global. Todos los grupos que ves pertenecen a esa institución. No tiene sentido poder "cambiar" la institución de un grupo existente — eso rompería la relación con los estudiantes y clases que ya tiene.
+1. **Crear clase** (en Grupos): usa un `<Input>` de texto libre para el horario ("Ej: Lunes 8:00-9:30"), lo cual es propenso a errores de formato y no coincide con el selector estructurado de días + horas que ya existe en `EditClaseDialog`.
 
-2. **Bug visual**: Aunque `openEdit` setea `institucionId` con el valor correcto del grupo, el `<Select>` muestra vacío porque la lista `instituciones` viene de `useInstitucion()` y el valor puede no coincidir exactamente, o el componente no refleja el valor pre-seleccionado correctamente.
+2. **Editar clase** (horario/aula): solo es posible desde Modo Clase (`EditClaseDialog`). Desde Grupos no hay forma de editar una clase existente — solo se puede crear.
 
-## Plan de corrección
+Lo correcto es tener ambas opciones: poder editar desde Grupos (donde ves todas las clases de un vistazo) y desde Modo Clase (donde estás trabajando con esa clase).
+
+## Plan
 
 ### Archivo: `src/pages/Grupos.tsx`
 
-**Al crear un grupo**: Asignar automáticamente la institución activa, sin mostrar selector (ya que estás viendo los grupos de esa institución).
+**A. Mejorar el diálogo "Crear clase"** (líneas 380-383)
+- Reemplazar el `<Input>` de texto libre por el mismo sistema de chips de días + selectores de hora que usa `EditClaseDialog` (días como botones toggle + `<Select>` para hora inicio/fin).
+- Reutilizar las constantes `DIAS_SEMANA` y `HORA_OPTIONS` de `EditClaseDialog`, extrayéndolas a un archivo compartido o importándolas.
 
-**Al editar un grupo**: No permitir cambiar la institución. Mostrarla como texto informativo de solo lectura, o directamente no mostrarla.
+**B. Agregar botón "Editar" en cada clase**
+- En cada badge de clase (línea 293-300), agregar un ícono de edición (lápiz) que abra el `EditClaseDialog` existente para esa clase.
+- Agregar estado `editClaseTarget` para trackear qué clase se está editando.
+- Importar y renderizar `<EditClaseDialog>` con los datos de la clase seleccionada.
 
-Cambios concretos:
+### Archivo: `src/components/clase/EditClaseDialog.tsx`
 
-1. **En `openCreate()`**: Setear `institucionId = instId` (ya lo hace) y eliminar el selector del dialog.
-
-2. **En el dialog de crear/editar**: Reemplazar el `<Select>` de institución por un `<p>` que muestre el nombre de la institución activa como información de contexto (no editable). Esto aplica tanto para crear como para editar.
-
-3. **En `handleSave()`**: Usar siempre `instId` (la institución activa) en lugar del estado `institucionId`, eliminando la variable de estado `institucionId` por completo.
+- Exportar `DIAS_SEMANA`, `HORA_OPTIONS` y `buildHorarioString` para reutilizarlos en el diálogo de creación de Grupos.
 
 ### Resultado
-- Al crear: se asigna la institución activa automáticamente
-- Al editar: no se puede cambiar la institución (comportamiento correcto)
-- El campo nunca aparece vacío
-- Se elimina código innecesario (estado `institucionId`, `setInstitucionId`)
+- **Crear clase**: usa selector estructurado de días y horas (consistente con el resto de la app)
+- **Editar clase**: posible tanto desde Grupos (clic en clase → editar) como desde Modo Clase (como ya funciona)
+- El formato de horario queda estandarizado en ambos flujos
 
