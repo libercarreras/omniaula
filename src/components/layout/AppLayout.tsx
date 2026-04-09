@@ -18,7 +18,7 @@ import { InstallPWAButton } from "@/components/InstallPWAButton";
 
 export function AppLayout() {
   const isMobile = useIsMobile();
-  const { profile, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const location = useLocation();
