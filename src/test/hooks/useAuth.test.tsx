@@ -55,16 +55,13 @@ function renderAuth() {
 
 function setupProfileMocks(opts?: { roles?: any[]; skipLimits?: boolean }) {
   const roles = opts?.roles ?? [{ role: "docente" }];
-  const mocks = [
-    createBuilder({ data: PROFILE_ROW, error: null }),       // profiles
-    createBuilder({ data: roles, error: null }),              // user_roles
-  ];
+  // Order matters: limitsPromise is evaluated BEFORE Promise.all,
+  // so plan_limits mock must come first, then profiles, then user_roles
   if (!opts?.skipLimits) {
-    mocks.push(createBuilder({ data: [PLAN_LIMITS_ROW], error: null })); // plan_limits
+    fromMock.mockReturnValueOnce(createBuilder({ data: [PLAN_LIMITS_ROW], error: null })); // plan_limits (1st from() call)
   }
-  for (const m of mocks) {
-    fromMock.mockReturnValueOnce(m);
-  }
+  fromMock.mockReturnValueOnce(createBuilder({ data: PROFILE_ROW, error: null }));       // profiles (2nd)
+  fromMock.mockReturnValueOnce(createBuilder({ data: roles, error: null }));              // user_roles (3rd)
 }
 
 async function fireSignIn(session = MOCK_SESSION) {
