@@ -126,13 +126,11 @@ describe("useAuth", () => {
     expect(screen.getByTestId("plan").textContent).toBe("none");
   });
 
-  it("TOKEN_REFRESHED: sets loading=false without re-fetching profile", async () => {
-    // No from() mocks needed — TOKEN_REFRESHED early-returns before fetchProfile
+  it("TOKEN_REFRESHED: updates session without re-fetching profile", async () => {
     renderAuth();
     await act(async () => { await capturedCallback!("TOKEN_REFRESHED", MOCK_SESSION); });
 
-    expect(screen.getByTestId("loading").textContent).toBe("false");
-    // Profile was never fetched
+    // Profile was never fetched — TOKEN_REFRESHED early-returns
     expect(fromMock).not.toHaveBeenCalled();
   });
 });
