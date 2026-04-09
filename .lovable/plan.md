@@ -1,56 +1,60 @@
 
 
-## Diagnóstico
+## Problem
 
-El flujo actual tiene una ventana de tiempo donde el usuario queda en estado "medio cargado":
+Two issues causing the auth to appear broken:
 
-```text
-t=0ms    onAuthStateChange(INITIAL_SESSION) fires
-         → setUser(user) ← ¡se ejecuta inmediatamente!
-         → fetchProfile() empieza (3 queries en paralelo)
-t=8000ms timeout fires → setLoading(false)
-         → ProtectedRoute ve user ≠ null, deja pasar
-         → AppLayout muestra profile?.nombre → "??" porque profile es null todavía
-t=???    fetchProfile completa → profile se setea → "??" desaparece
-         (o nunca completa si el servicio estaba reiniciándose)
-```
+1. **Stale closure in timeout**: The 8-second safety timeout at line 128 reads `user`, `profile`, and `loading` from the React closure, which are always their initial values (`null`, `null`, `true`). This means the timeout **always fires** even if bootstrap completed successfully, logging a misleading warning. It's harmless now (since `user` is null in the closure, it won't signOut), but it creates confusion and could interfere with edge cases.
 
-El problema: `setUser()` ocurre ANTES de que `fetchProfile()` termine. El timeout corta la espera y muestra la app con perfil incompleto.
+2. **No database triggers**: Despite multiple migration attempts, the triggers that auto-create profiles/roles/institutions for new users still don't exist. Current users have data (backfill worked), but any new signup will break.
 
-## Solución
+## Changes
 
-### `src/hooks/useAuth.tsx` — 2 cambios
+### 1. `src/hooks/useAuth.tsx` — Fix stale closure with refs
 
-1. **No setear `user`/`session` hasta que `fetchProfile` termine**: En ambos paths (onAuthStateChange y getSession), mover los `setUser`/`setSession` después del `fetchProfile` exitoso. Así, si el timeout corta, `user` sigue siendo `null` y ProtectedRoute redirige a login limpiamente.
+Replace direct state reads in the timeout with `useRef` values that stay current:
 
-2. **Timeout inteligente**: Cuando el timeout dispara, si hay un `user` seteado pero no hay `profile`, forzar signOut en vez de solo `setLoading(false)`.
-
-Cambio concreto en el bootstrap (getSession):
 ```typescript
-supabase.auth.getSession().then(async ({ data: { session: sess } }) => {
-  if (!mounted) return;
-  bootstrapDone = true;
-  if (sess?.user) {
-    try {
-      const ok = await fetchProfile(sess.user.id);
-      if (ok && mounted) {
-        // Solo setear user/session DESPUÉS de confirmar el perfil
-        setSession(sess);
-        setUser(sess.user);
-      } else if (mounted) {
-        toast.error("La cuenta no terminó de configurarse.");
-        await signOut();
-      }
-    } catch { /* ... */ }
+const mountedRef = useRef(true);
+const bootstrapCompleteRef = useRef(false);
+
+// In the timeout:
+const timeout = setTimeout(() => {
+  if (mountedRef.current && !bootstrapCompleteRef.current) {
+    console.warn("[OmniAula][useAuth] Auth timeout");
+    setLoading(false);
   }
-  if (mounted) { clearTimeout(timeout); setLoading(false); }
-});
+}, 8000);
+
+// In bootstrap finally:
+bootstrapCompleteRef.current = true;
+clearTimeout(timeout);
+setLoading(false);
 ```
 
-Mismo patrón en el callback de `onAuthStateChange` para eventos distintos a INITIAL_SESSION (como SIGNED_IN).
+This ensures the timeout only fires if bootstrap genuinely hasn't completed, and never fires spuriously after success.
 
-### Resultado
-- Si fetchProfile tarda >8s: timeout dispara, `user` es null, redirect a login (en vez de mostrar "??")
-- Si fetchProfile funciona: user + profile se setean juntos, sin estado intermedio inconsistente
-- Si fetchProfile falla: signOut limpio
+### 2. Database migration — Create triggers (idempotent)
+
+```sql
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+DROP TRIGGER IF EXISTS on_auth_user_created_role ON auth.users;
+CREATE TRIGGER on_auth_user_created_role
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user_role();
+
+DROP TRIGGER IF EXISTS on_auth_user_created_institucion ON auth.users;
+CREATE TRIGGER on_auth_user_created_institucion
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user_institucion();
+```
+
+### Result
+- The timeout stops firing spuriously — no more misleading console warnings
+- Bootstrap completes cleanly, profile loads, "Karen Carreras" shows immediately
+- New user signups automatically get profile + role + institution
 
