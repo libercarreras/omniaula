@@ -95,7 +95,7 @@ describe("useAuth", () => {
   });
 
   it("admin role takes priority when user has both admin and docente entries", async () => {
-    setupProfileMocks({ roles: [{ role: "docente" }, { role: "admin" }] });
+    setupProfileMocks({ roles: [{ role: "docente" }, { role: "admin" }], skipLimits: true });
     renderAuth();
     await fireSignIn();
 
