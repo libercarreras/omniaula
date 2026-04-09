@@ -28,6 +28,7 @@ export function AppLayout() {
     : "??";
 
   const handleSignOut = async () => {
+    localStorage.removeItem("institucion_activa_id");
     await signOut();
     navigate("/login");
   };
