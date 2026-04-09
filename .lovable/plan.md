@@ -1,68 +1,36 @@
 
 
-## Plan: Wire student creation through Edge Function (corrected)
+## Problem
 
-### Problem
-The previous plan used `supabase.functions.invoke()` which doesn't work correctly in the client. Must use `fetch()` with manual JWT Authorization header.
+`AuthProvider` only subscribes to `onAuthStateChange` but never calls `supabase.auth.getSession()` first. This is a known race condition: the `INITIAL_SESSION` event from `onAuthStateChange` can fail to fire (or fire before the listener is ready), leaving the app stuck on the loading spinner forever.
 
-### Changes
+The session replay confirms the app is stuck showing the `Loader2` spinner from `ProtectedRoute`.
 
-**1. Create `src/lib/createStudentWithEdgeFunction.ts`**
+## Fix
 
-```typescript
-import { supabase } from "@/integrations/supabase/client";
+### `src/hooks/useAuth.tsx` — Add `getSession()` bootstrap
 
-interface CreateStudentParams {
-  nombre_completo: string;
-  grupo_id: string;
-  numero_lista: number | null;
-}
+Inside the `useEffect`, call `supabase.auth.getSession()` BEFORE setting up `onAuthStateChange`. This ensures the session is restored from storage immediately:
 
-export async function createStudentWithEdgeFunction(params: CreateStudentParams) {
-  const { data: { session } } = await supabase.auth.getSession();
-  
-  if (!session?.access_token) {
-    throw new Error("No authenticated session");
-  }
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  
-  const response = await fetch(
-    `${supabaseUrl}/functions/v1/create-student`,
-    {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(params),
-    }
-  );
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || "Error al crear estudiante");
-  }
-
-  return data.student;
-}
+```text
+useEffect:
+  1. Set up onAuthStateChange listener (for future events)
+  2. Call getSession() → if session exists, fetchProfile → setLoading(false)
+     → if no session, setLoading(false) immediately
+  3. Keep the 10s timeout as a safety net (reduce to 8s)
 ```
 
-**2. Edit `src/pages/Estudiantes.tsx` (lines ~105-112)**
+Key rules:
+- Do NOT `await` inside `onAuthStateChange` callback for the initial bootstrap — use `getSession()` separately
+- `onAuthStateChange` still handles `TOKEN_REFRESHED`, `SIGNED_IN`, `SIGNED_OUT` events for ongoing session management
+- The `getSession()` call sets loading=false on its own path, and `onAuthStateChange` only sets loading=false if loading is still true (avoid double-setting)
 
-Replace the direct `supabase.from("estudiantes").insert(...)` else branch with:
+### No other files need changes
 
-```typescript
-} else {
-  const { createStudentWithEdgeFunction } = await import("@/lib/createStudentWithEdgeFunction");
-  await createStudentWithEdgeFunction({
-    nombre_completo: finalName,
-    grupo_id: grupoId,
-    numero_lista: numeroLista ? parseInt(numeroLista) : null,
-  });
-}
-```
+`ProtectedRoute`, `AppLayout`, and `App.tsx` are fine — they just need `loading` to resolve to `false`.
 
-No other files affected. The Edge Function already handles JWT validation, name normalization, and duplicate checking server-side.
+## Result
+- App loads immediately instead of waiting up to 10 seconds
+- Session is correctly restored from localStorage on page refresh
+- No more infinite loading spinner
 
