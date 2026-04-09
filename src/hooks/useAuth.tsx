@@ -95,21 +95,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // Timeout: if onAuthStateChange hasn't fired in 10s, stop loading
+    let mounted = true;
+
+    // Safety-net timeout
     const timeout = setTimeout(() => {
-      if (loading) {
+      if (mounted && loading) {
         console.warn("[OmniAula][useAuth] Auth timeout — forcing loading=false");
         setLoading(false);
       }
-    }, 10000);
+    }, 8000);
 
+    // 1. Listener for ongoing auth events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        clearTimeout(timeout);
+        if (!mounted) return;
         setSession(session);
         setUser(session?.user ?? null);
         if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
-          setLoading(false);
           return;
         }
         try {
@@ -125,13 +127,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setProfile(null);
           setPlanLimits(null);
           setRole(null);
-        } finally {
-          setLoading(false);
         }
       }
     );
 
+    // 2. Bootstrap: restore session from storage immediately
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!mounted) return;
+      setSession(session);
+      setUser(session?.user ?? null);
+      try {
+        if (session?.user) {
+          await fetchProfile(session.user.id);
+        }
+      } catch (err) {
+        console.error("[OmniAula][useAuth] bootstrap fetchProfile falló:", err);
+      } finally {
+        if (mounted) {
+          clearTimeout(timeout);
+          setLoading(false);
+        }
+      }
+    });
+
     return () => {
+      mounted = false;
       clearTimeout(timeout);
       subscription.unsubscribe();
     };
