@@ -1,6 +1,7 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +17,12 @@ export default function Login() {
   const [videoFading, setVideoFading] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  // Reactive redirect: once AuthProvider sets user, navigate to dashboard
+  useEffect(() => {
+    if (user) navigate("/", { replace: true });
+  }, [user, navigate]);
 
   const handleVideoEnd = () => {
     setVideoFading(true);
@@ -43,9 +50,8 @@ export default function Login() {
         : error.message === "Signups not allowed for this instance"
         ? "El registro no está disponible. Contacta al administrador."
         : error.message);
-    } else {
-      navigate("/");
     }
+    // No navigate here — the useEffect above handles redirect once AuthProvider sets user
   };
 
   return (

@@ -151,6 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Don't set user/session yet — wait for profile
         if (sess?.user) {
+          setLoading(true); // Prevent ProtectedRoute from redirecting during fetchProfile
           try {
             const ok = await fetchProfile(sess.user.id);
             if (ok && mountedRef_.current) {
