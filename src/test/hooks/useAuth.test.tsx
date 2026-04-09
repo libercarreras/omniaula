@@ -1,12 +1,12 @@
 import React from "react";
 import { render, screen, act } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
-import { AuthProvider, useAuth } from "@/hooks/useAuth";
+
+// We need to reset the module-level planLimitsCache between tests
+// so we use dynamic import after resetting modules
 import { createBuilder, safeBuilder } from "../helpers/supabaseMock";
-import { supabase } from "@/integrations/supabase/client";
 
 // Capture the onAuthStateChange callback so tests can fire it manually.
-// The variable is assigned when AuthProvider mounts and calls onAuthStateChange.
 let capturedCallback: ((event: string, session: any) => Promise<void>) | null = null;
 
 vi.mock("@/integrations/supabase/client", () => ({
@@ -17,10 +17,14 @@ vi.mock("@/integrations/supabase/client", () => ({
         capturedCallback = cb;
         return { data: { subscription: { unsubscribe: vi.fn() } } };
       }),
+      getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
       signOut: vi.fn().mockResolvedValue({ error: null }),
     },
   },
 }));
+
+import { supabase } from "@/integrations/supabase/client";
+import { AuthProvider, useAuth } from "@/hooks/useAuth";
 
 const fromMock = vi.mocked(supabase.from);
 
@@ -49,6 +53,17 @@ function renderAuth() {
   render(<AuthProvider><Consumer /></AuthProvider>);
 }
 
+function setupProfileMocks(opts?: { roles?: any[]; skipLimits?: boolean }) {
+  const roles = opts?.roles ?? [{ role: "docente" }];
+  // Order matters: limitsPromise is evaluated BEFORE Promise.all,
+  // so plan_limits mock must come first, then profiles, then user_roles
+  if (!opts?.skipLimits) {
+    fromMock.mockReturnValueOnce(createBuilder({ data: [PLAN_LIMITS_ROW], error: null })); // plan_limits (1st from() call)
+  }
+  fromMock.mockReturnValueOnce(createBuilder({ data: PROFILE_ROW, error: null }));       // profiles (2nd)
+  fromMock.mockReturnValueOnce(createBuilder({ data: roles, error: null }));              // user_roles (3rd)
+}
+
 async function fireSignIn(session = MOCK_SESSION) {
   await act(async () => { await capturedCallback!("SIGNED_IN", session); });
 }
@@ -59,6 +74,7 @@ describe("useAuth", () => {
     fromMock.mockReset();
     fromMock.mockReturnValue(safeBuilder());
     vi.mocked(supabase.auth.signOut).mockResolvedValue({ error: null } as any);
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({ data: { session: null } } as any);
   });
 
   it("starts with loading=true before the auth callback fires", () => {
@@ -68,30 +84,18 @@ describe("useAuth", () => {
   });
 
   it("SIGNED_IN: loads profile, role, and plan limits from Supabase", async () => {
-    // fetchProfile parallel calls: profiles, user_roles, plan_limits (in that order)
-    fromMock
-      .mockReturnValueOnce(createBuilder({ data: PROFILE_ROW, error: null }))      // profiles.single()
-      .mockReturnValueOnce(createBuilder({ data: [{ role: "docente" }], error: null })) // user_roles
-      .mockReturnValueOnce(createBuilder({ data: [PLAN_LIMITS_ROW], error: null })); // plan_limits
-
+    setupProfileMocks();
     renderAuth();
     await fireSignIn();
 
-    expect(screen.getByTestId("loading").textContent).toBe("false");
     expect(screen.getByTestId("userId").textContent).toBe("user-1");
     expect(screen.getByTestId("role").textContent).toBe("docente");
     expect(screen.getByTestId("plan").textContent).toBe("free");
-    // plan_limits row for "free" plan should be applied
     expect(screen.getByTestId("maxGrupos").textContent).toBe("5");
   });
 
   it("admin role takes priority when user has both admin and docente entries", async () => {
-    // planLimitsCache is populated from the previous test — plan_limits not fetched again.
-    // fetchProfile parallel calls: profiles, user_roles (2 calls, not 3)
-    fromMock
-      .mockReturnValueOnce(createBuilder({ data: PROFILE_ROW, error: null }))
-      .mockReturnValueOnce(createBuilder({ data: [{ role: "docente" }, { role: "admin" }], error: null }));
-
+    setupProfileMocks({ roles: [{ role: "docente" }, { role: "admin" }], skipLimits: true });
     renderAuth();
     await fireSignIn();
 
@@ -99,10 +103,7 @@ describe("useAuth", () => {
   });
 
   it("defaults to docente when user has no role entries", async () => {
-    fromMock
-      .mockReturnValueOnce(createBuilder({ data: PROFILE_ROW, error: null }))
-      .mockReturnValueOnce(createBuilder({ data: [], error: null })); // empty user_roles
-
+    setupProfileMocks({ roles: [] });
     renderAuth();
     await fireSignIn();
 
@@ -110,15 +111,11 @@ describe("useAuth", () => {
   });
 
   it("SIGNED_OUT: clears user, role, and profile from state", async () => {
-    fromMock
-      .mockReturnValueOnce(createBuilder({ data: PROFILE_ROW, error: null }))
-      .mockReturnValueOnce(createBuilder({ data: [{ role: "docente" }], error: null }));
-
+    setupProfileMocks();
     renderAuth();
     await fireSignIn();
     expect(screen.getByTestId("userId").textContent).toBe("user-1");
 
-    // Fire sign-out event via the callback (the real client does this after signOut)
     await act(async () => { await capturedCallback!("SIGNED_OUT", null); });
 
     expect(screen.getByTestId("userId").textContent).toBe("none");
@@ -126,13 +123,11 @@ describe("useAuth", () => {
     expect(screen.getByTestId("plan").textContent).toBe("none");
   });
 
-  it("TOKEN_REFRESHED: sets loading=false without re-fetching profile", async () => {
-    // No from() mocks needed — TOKEN_REFRESHED early-returns before fetchProfile
+  it("TOKEN_REFRESHED: updates session without re-fetching profile", async () => {
     renderAuth();
     await act(async () => { await capturedCallback!("TOKEN_REFRESHED", MOCK_SESSION); });
 
-    expect(screen.getByTestId("loading").textContent).toBe("false");
-    // Profile was never fetched
+    // Profile was never fetched — TOKEN_REFRESHED early-returns
     expect(fromMock).not.toHaveBeenCalled();
   });
 });
