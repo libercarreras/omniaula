@@ -1,66 +1,48 @@
 
 
-## Diagnóstico
+## Problema
 
-El flujo de auth tiene demasiadas condiciones de carrera acumuladas por los intentos previos de fix. El problema fundamental: `onAuthStateChange` es un callback async pero Supabase no lo awaita, lo que significa que múltiples eventos pueden ejecutarse concurrentemente y pisar estado entre sí. Además, condicionar `setUser` a que `fetchProfile` termine crea un acoplamiento frágil.
+El PWA dejó de ser instalable. Hay dos conflictos:
 
-Los logs confirman:
-- El timeout de 8s dispara en el boot inicial (Supabase tarda en responder)
-- Después del login, el handler de `SIGNED_IN` setea `loading=true` y espera `fetchProfile`, pero si hay cualquier error silencioso o race condition, `user` nunca se setea y la app queda cargando
+1. **Manifest duplicado**: `index.html` tiene `<link rel="manifest" href="/manifest.webmanifest" />` que apunta al archivo estático, pero `vite-plugin-pwa` genera su propio manifest en build. Dos manifests compiten y confunden al navegador.
 
-## Solución: Simplificar radicalmente
+2. **Sin guard para preview/iframe**: El service worker se registra dentro del iframe de Lovable, lo que rompe el PWA en desarrollo y puede contaminar caches.
 
-Separar la carga de auth en dos capas independientes:
+## Cambios
 
-### 1. `src/hooks/useAuth.tsx` — Reescribir el useEffect
+### 1. `index.html` — Quitar el manifest link manual
 
-**Capa 1: Auth state** — Setear `user`/`session` INMEDIATAMENTE desde `onAuthStateChange`, sin esperar nada:
+Eliminar la línea `<link rel="manifest" href="/manifest.webmanifest" />`. `vite-plugin-pwa` inyecta el suyo automáticamente en el build.
 
-```typescript
-onAuthStateChange((event, sess) => {
-  if (event === "SIGNED_OUT") { clearState(); setLoading(false); return; }
-  setSession(sess);
-  setUser(sess?.user ?? null);
-  setLoading(false);
-});
-```
+### 2. `vite.config.ts` — Agregar `devOptions: { enabled: false }`
 
-**Capa 2: Profile** — Un `useEffect` separado que depende de `user`:
+Asegurar que el SW no se registre en desarrollo (preview de Lovable).
+
+### 3. `src/main.tsx` — Guard contra iframe/preview
+
+Agregar la lógica estándar para desregistrar service workers cuando se ejecuta dentro del iframe de Lovable o en dominios de preview:
 
 ```typescript
-useEffect(() => {
-  if (!user) { setProfile(null); setRole(null); return; }
-  fetchProfile(user.id);
-}, [user?.id]);
+const isInIframe = (() => {
+  try { return window.self !== window.top; } catch { return true; }
+})();
+const isPreviewHost =
+  window.location.hostname.includes("id-preview--") ||
+  window.location.hostname.includes("lovableproject.com");
+
+if (isPreviewHost || isInIframe) {
+  navigator.serviceWorker?.getRegistrations().then(regs =>
+    regs.forEach(r => r.unregister())
+  );
+}
 ```
 
-**Bootstrap**: `getSession()` sigue corriendo antes del listener, pero solo para restaurar la sesión. No necesita lógica compleja.
+### 4. Eliminar `manifest.webmanifest` (archivo raíz)
 
-### 2. `src/components/auth/ProtectedRoute.tsx` — Verificar profile
-
-Cambiar la condición para que también espere el perfil:
-
-```typescript
-const { user, profile, loading } = useAuth();
-if (loading) return <spinner>;
-if (!user) return <Navigate to="/login">;
-if (!profile) return <spinner>; // esperando fetchProfile
-return children;
-```
-
-### 3. `src/components/layout/AppLayout.tsx` — Fallback seguro
-
-Si `profile?.nombre` es falsy, mostrar el email del usuario en vez de "??".
+Ya no se usa — todo sale de `vite-plugin-pwa`.
 
 ### Resultado
-- Auth state siempre sincronizado con Supabase (sin esperar queries)
-- Profile se carga en paralelo, ProtectedRoute espera ambos
-- No hay ventana donde `user` existe pero `profile` no (el spinner cubre esa transición)
-- Imposible quedar en loading infinito: el auth state se resuelve inmediatamente
-- El "??" desaparece porque nunca se renderiza la app sin profile
-
-### Archivos a modificar
-- `src/hooks/useAuth.tsx`
-- `src/components/auth/ProtectedRoute.tsx`
-- `src/components/layout/AppLayout.tsx` (fallback menor)
+- En producción (`omniaula.lovable.app`): manifest correcto, SW activo, `beforeinstallprompt` se dispara, botón "Instalar app" aparece
+- En preview de Lovable: SW desactivado, sin interferencia
+- `UpdatePrompt` e `InstallBanner`/`InstallPWAButton` siguen funcionando como antes
 
