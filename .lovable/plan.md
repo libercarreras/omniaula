@@ -1,36 +1,37 @@
 
 
-## Problem
+## Diagnostico
 
-`AuthProvider` only subscribes to `onAuthStateChange` but never calls `supabase.auth.getSession()` first. This is a known race condition: the `INITIAL_SESSION` event from `onAuthStateChange` can fail to fire (or fire before the listener is ready), leaving the app stuck on the loading spinner forever.
+Hay dos problemas relacionados:
 
-The session replay confirms the app is stuck showing the `Loader2` spinner from `ProtectedRoute`.
+1. **"??" como nombre**: El perfil no se cargó correctamente (probablemente por un refresh token inválido que impide las queries a Supabase). `AppLayout` muestra `??` cuando `profile?.nombre` es falsy.
 
-## Fix
+2. **No puede cerrar sesión**: La función `signOut` (línea 160-167) hace `await supabase.auth.signOut()` ANTES de limpiar el estado. Si el token es inválido, `signOut()` lanza un error y la limpieza del estado nunca se ejecuta. El usuario queda atrapado.
 
-### `src/hooks/useAuth.tsx` — Add `getSession()` bootstrap
+## Plan
 
-Inside the `useEffect`, call `supabase.auth.getSession()` BEFORE setting up `onAuthStateChange`. This ensures the session is restored from storage immediately:
+### `src/hooks/useAuth.tsx` — Hacer signOut resiliente
 
-```text
-useEffect:
-  1. Set up onAuthStateChange listener (for future events)
-  2. Call getSession() → if session exists, fetchProfile → setLoading(false)
-     → if no session, setLoading(false) immediately
-  3. Keep the 10s timeout as a safety net (reduce to 8s)
+Envolver `supabase.auth.signOut()` en try/catch para que la limpieza del estado local siempre ocurra, incluso si el backend rechaza el token:
+
+```typescript
+const signOut = async () => {
+  try {
+    await supabase.auth.signOut();
+  } catch (err) {
+    console.error("[OmniAula][useAuth] signOut error (ignored):", err);
+  }
+  // Always clear local state
+  setUser(null);
+  setSession(null);
+  setProfile(null);
+  setPlanLimits(null);
+  setRole(null);
+};
 ```
 
-Key rules:
-- Do NOT `await` inside `onAuthStateChange` callback for the initial bootstrap — use `getSession()` separately
-- `onAuthStateChange` still handles `TOKEN_REFRESHED`, `SIGNED_IN`, `SIGNED_OUT` events for ongoing session management
-- The `getSession()` call sets loading=false on its own path, and `onAuthStateChange` only sets loading=false if loading is still true (avoid double-setting)
-
-### No other files need changes
-
-`ProtectedRoute`, `AppLayout`, and `App.tsx` are fine — they just need `loading` to resolve to `false`.
-
-## Result
-- App loads immediately instead of waiting up to 10 seconds
-- Session is correctly restored from localStorage on page refresh
-- No more infinite loading spinner
+### Resultado
+- Cerrar sesión siempre funciona, incluso con tokens expirados/inválidos
+- El usuario es redirigido a `/login` correctamente
+- No se requieren cambios en otros archivos
 
