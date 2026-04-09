@@ -17,8 +17,9 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
-      registerType: "prompt",
-      includeAssets: ["favicon.ico", "pwa-icon-192.png", "pwa-icon-512.png"],
+      registerType: "autoUpdate",
+      includeAssets: ["favicon.ico"],
+      devOptions: { enabled: false },
       manifest: {
         id: "/",
         name: "OmniAula — Aula inteligente",

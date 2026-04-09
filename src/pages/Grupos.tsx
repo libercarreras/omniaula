@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Users, UserPlus, Share2, Loader2, FolderOpen, Pencil, Trash2, BookOpen, MapPin, Clock, Wand2 } from "lucide-react";
+import { Plus, Users, UserPlus, Share2, Loader2, FolderOpen, Pencil, Trash2, BookOpen, MapPin, Clock, Wand2, Settings2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,9 @@ import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { qk } from "@/lib/queryKeys";
+import { cn } from "@/lib/utils";
+import { EditClaseDialog } from "@/components/clase/EditClaseDialog";
+import { DIAS_SEMANA, HORA_OPTIONS, buildHorarioString } from "@/components/clase/EditClaseDialog";
 
 interface GrupoDB {
   id: string;
@@ -53,7 +56,7 @@ export default function Grupos() {
   const [nombre, setNombre] = useState("");
   const [anio, setAnio] = useState("");
   const [turno, setTurno] = useState("");
-  const [institucionId, setInstitucionId] = useState("");
+  
   const [editingGrupo, setEditingGrupo] = useState<GrupoDB | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<GrupoDB | null>(null);
 
@@ -61,8 +64,13 @@ export default function Grupos() {
   const [claseDialogOpen, setClaseDialogOpen] = useState(false);
   const [claseGrupoId, setClaseGrupoId] = useState("");
   const [claseMateriaId, setClaseMateriaId] = useState("");
-  const [claseHorario, setClaseHorario] = useState("");
+  const [claseDias, setClaseDias] = useState<string[]>([]);
+  const [claseHoraInicio, setClaseHoraInicio] = useState("");
+  const [claseHoraFin, setClaseHoraFin] = useState("");
   const [claseAula, setClaseAula] = useState("");
+
+  // Clase edit state
+  const [editClaseTarget, setEditClaseTarget] = useState<ClaseDB | null>(null);
 
   // AI student upload state
   const [aiUploadOpen, setAiUploadOpen] = useState(false);
@@ -147,7 +155,7 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
           ? `"${nombre.trim()}" fue actualizado correctamente.`
           : `"${nombre.trim()}" fue agregado correctamente.`,
       });
-      setNombre(""); setAnio(""); setTurno(""); setInstitucionId("");
+      setNombre(""); setAnio(""); setTurno("");
       setEditingGrupo(null);
       setDialogOpen(false);
       invalidateGrupos();
@@ -174,10 +182,11 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
 
   const claseMutation = useMutation({
     mutationFn: async () => {
+      const horario = buildHorarioString(claseDias, claseHoraInicio, claseHoraFin);
       const { error } = await supabase.from("clases").insert({
         materia_id: claseMateriaId,
         grupo_id: claseGrupoId,
-        horario: claseHorario.trim() || null,
+        horario,
         aula: claseAula.trim() || null,
         user_id: user!.id,
       });
@@ -198,7 +207,6 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
   const openCreate = () => {
     setEditingGrupo(null);
     setNombre(""); setAnio(""); setTurno("");
-    setInstitucionId(instId);
     setDialogOpen(true);
   };
 
@@ -207,21 +215,20 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
     setNombre(grupo.nombre);
     setAnio(grupo.anio || "");
     setTurno(grupo.turno || "");
-    setInstitucionId(grupo.institucion_id);
     setDialogOpen(true);
   };
 
   const handleSave = () => {
-    if (!user || !nombre.trim() || !institucionId) return;
+    if (!user || !nombre.trim() || !instId) return;
     const payload = editingGrupo
-      ? { nombre: nombre.trim(), anio: anio.trim() || null, turno: turno.trim() || null, institucion_id: institucionId }
-      : { nombre: nombre.trim(), anio: anio.trim() || null, turno: turno.trim() || null, user_id: user.id, institucion_id: institucionId };
+      ? { nombre: nombre.trim(), anio: anio.trim() || null, turno: turno.trim() || null, institucion_id: instId }
+      : { nombre: nombre.trim(), anio: anio.trim() || null, turno: turno.trim() || null, user_id: user.id, institucion_id: instId };
     grupoMutation.mutate({ editing: editingGrupo, payload });
   };
 
   const openClaseDialog = (grupoId: string) => {
     setClaseGrupoId(grupoId);
-    setClaseMateriaId(""); setClaseHorario(""); setClaseAula("");
+    setClaseMateriaId(""); setClaseDias([]); setClaseHoraInicio(""); setClaseHoraFin(""); setClaseAula("");
     setClaseDialogOpen(true);
   };
 
@@ -293,13 +300,22 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
                   {grupoClases.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {grupoClases.map(clase => (
-                        <Link key={clase.id} to={`/clase/${clase.id}`}>
-                          <Badge variant="secondary" className="gap-1 cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors">
-                            <BookOpen className="h-3 w-3" />
-                            {materiaMap[clase.materia_id] || "?"}
-                            {clase.horario && <span className="text-[10px] opacity-70">· {clase.horario}</span>}
-                          </Badge>
-                        </Link>
+                        <div key={clase.id} className="flex items-center gap-0.5">
+                          <Link to={`/clase/${clase.id}`}>
+                            <Badge variant="secondary" className="gap-1 cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors">
+                              <BookOpen className="h-3 w-3" />
+                              {materiaMap[clase.materia_id] || "?"}
+                              {clase.horario && <span className="text-[10px] opacity-70">· {clase.horario}</span>}
+                            </Badge>
+                          </Link>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setEditClaseTarget(clase); }}
+                            className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                            title="Editar clase"
+                          >
+                            <Settings2 className="h-3 w-3" />
+                          </button>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -333,17 +349,12 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
               <Label htmlFor="grupo-nombre">Nombre del grupo *</Label>
               <Input id="grupo-nombre" placeholder="Ej: 3°A" value={nombre} onChange={e => setNombre(e.target.value)} />
             </div>
-            <div className="space-y-2">
-              <Label>Institución *</Label>
-              <Select value={institucionId} onValueChange={setInstitucionId}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar institución" /></SelectTrigger>
-                <SelectContent>
-                  {instituciones.map(inst => (
-                    <SelectItem key={inst.id} value={inst.id}>{inst.nombre}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {institucionActiva && (
+              <div className="space-y-1">
+                <Label>Institución</Label>
+                <p className="text-sm text-muted-foreground bg-muted rounded-md px-3 py-2">{institucionActiva.nombre}</p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="grupo-anio">Año</Label>
               <Input id="grupo-anio" placeholder="Ej: 2026" value={anio} onChange={e => setAnio(e.target.value)} />
@@ -355,7 +366,7 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={!nombre.trim() || !institucionId || grupoMutation.isPending}>
+            <Button onClick={handleSave} disabled={!nombre.trim() || !instId || grupoMutation.isPending}>
               {grupoMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               {editingGrupo ? "Guardar cambios" : "Crear grupo"}
             </Button>
@@ -385,9 +396,36 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="clase-horario">Horario (opcional)</Label>
-              <Input id="clase-horario" placeholder="Ej: Lunes 8:00-9:30" value={claseHorario} onChange={e => setClaseHorario(e.target.value)} />
-              <p className="text-[11px] text-muted-foreground">Formato sugerido: Día HH:MM-HH:MM</p>
+              <Label>Días de clase</Label>
+              <div className="flex flex-wrap gap-2">
+                {DIAS_SEMANA.map(dia => (
+                  <button key={dia.key} type="button"
+                    onClick={() => setClaseDias(prev => prev.includes(dia.key) ? prev.filter(d => d !== dia.key) : [...prev, dia.key])}
+                    className={cn("px-3 py-2 rounded-lg text-sm font-medium border transition-all active:scale-95",
+                      claseDias.includes(dia.key) ? "bg-primary text-primary-foreground border-primary" : "bg-muted/50 text-muted-foreground border-transparent hover:bg-muted"
+                    )}>
+                    {dia.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Horario (opcional)</Label>
+              <div className="flex items-center gap-2">
+                <Select value={claseHoraInicio} onValueChange={setClaseHoraInicio}>
+                  <SelectTrigger className="flex-1"><SelectValue placeholder="Inicio" /></SelectTrigger>
+                  <SelectContent>
+                    {HORA_OPTIONS.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <span className="text-muted-foreground">—</span>
+                <Select value={claseHoraFin} onValueChange={setClaseHoraFin}>
+                  <SelectTrigger className="flex-1"><SelectValue placeholder="Fin" /></SelectTrigger>
+                  <SelectContent>
+                    {HORA_OPTIONS.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="clase-aula">Aula (opcional)</Label>
@@ -432,6 +470,20 @@ mutationFn: async ({ editing, payload }: { editing: GrupoDB | null; payload: any
           invalidateGrupos();
         }}
       />
+
+      {editClaseTarget && (
+        <EditClaseDialog
+          open={!!editClaseTarget}
+          horario={editClaseTarget.horario}
+          aula={editClaseTarget.aula}
+          claseId={editClaseTarget.id}
+          onClose={() => setEditClaseTarget(null)}
+          onSaved={(patch) => {
+            invalidateClases();
+            setEditClaseTarget(null);
+          }}
+        />
+      )}
     </div>
   );
 }

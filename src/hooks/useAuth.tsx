@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from "react";
+import { useState, useEffect, createContext, useContext, ReactNode, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 
@@ -54,33 +54,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [planLimits, setPlanLimits] = useState<PlanLimits | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
+  const bootstrapDone = useRef(false);
 
   const fetchProfile = async (userId: string) => {
-    const limitsPromise = planLimitsCache
-      ? Promise.resolve({ data: planLimitsCache, error: null })
-      : supabase.from("plan_limits").select("*");
+    try {
+      const limitsPromise = planLimitsCache
+        ? Promise.resolve({ data: planLimitsCache, error: null })
+        : supabase.from("plan_limits").select("*");
 
-    const [profileRes, roleRes, allLimitsRes] = await Promise.all([
-      supabase.from("profiles").select("*").eq("user_id", userId).single(),
-      supabase.from("user_roles").select("role").eq("user_id", userId),
-      limitsPromise,
-    ]);
+      const [profileRes, roleRes, allLimitsRes] = await Promise.all([
+        supabase.from("profiles").select("*").eq("user_id", userId).single(),
+        supabase.from("user_roles").select("role").eq("user_id", userId),
+        limitsPromise,
+      ]);
 
-    if (profileRes.data) {
-      const p = profileRes.data as Profile;
-      setProfile(p);
-      if (allLimitsRes.data && !planLimitsCache) {
-        planLimitsCache = allLimitsRes.data as PlanLimits[];
+      if (profileRes.data) {
+        const p = profileRes.data as Profile;
+        setProfile(p);
+        if (allLimitsRes.data && !planLimitsCache) {
+          planLimitsCache = allLimitsRes.data as PlanLimits[];
+        }
+        const limits = (planLimitsCache || []).find((l) => l.plan === p.plan) ?? null;
+        if (limits) setPlanLimits(limits as PlanLimits);
       }
-      const limits = (planLimitsCache || []).find((l) => l.plan === p.plan) ?? null;
-      if (limits) setPlanLimits(limits as PlanLimits);
-    }
 
-    if (roleRes.data && roleRes.data.length > 0) {
-      // Admin takes priority
-      const roles = roleRes.data.map((r) => r.role);
-      setRole(roles.includes("admin") ? "admin" : "docente");
-    } else {
+      if (roleRes.data && roleRes.data.length > 0) {
+        const roles = roleRes.data.map((r) => r.role);
+        setRole(roles.includes("admin") ? "admin" : "docente");
+      } else {
+        setRole("docente");
+      }
+    } catch (err) {
+      console.error("[OmniAula][useAuth] fetchProfile error:", err);
+      setProfile(null);
+      setPlanLimits(null);
       setRole("docente");
     }
   };
@@ -95,41 +102,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // Timeout: if onAuthStateChange hasn't fired in 10s, stop loading
-    const timeout = setTimeout(() => {
-      if (loading) {
-        console.warn("[OmniAula][useAuth] Auth timeout — forcing loading=false");
+    // 1. Bootstrap: restore session from storage
+    supabase.auth.getSession().then(async ({ data: { session: restored } }) => {
+      if (bootstrapDone.current) return;
+      bootstrapDone.current = true;
+
+      setSession(restored);
+      setUser(restored?.user ?? null);
+
+      if (restored?.user) {
+        await fetchProfile(restored.user.id);
+      }
+      setLoading(false);
+    }).catch(() => {
+      if (!bootstrapDone.current) {
+        bootstrapDone.current = true;
         setLoading(false);
       }
-    }, 10000);
+    });
 
+    // 2. Listen for subsequent auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        clearTimeout(timeout);
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
-          setLoading(false);
+      async (event, newSession) => {
+        // If bootstrap already resolved this initial event, skip the first INITIAL_SESSION
+        if (!bootstrapDone.current) {
+          // getSession hasn't resolved yet; let it handle bootstrap
           return;
         }
-        try {
-          if (session?.user) {
-            await fetchProfile(session.user.id);
-          } else {
-            setProfile(null);
-            setPlanLimits(null);
-            setRole(null);
-          }
-        } catch (err) {
-          console.error("[OmniAula][useAuth] fetchProfile falló:", err);
+
+        if (event === "TOKEN_REFRESHED") return;
+
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+
+        if (newSession?.user) {
+          await fetchProfile(newSession.user.id);
+        } else {
           setProfile(null);
           setPlanLimits(null);
           setRole(null);
-        } finally {
-          setLoading(false);
         }
+        setLoading(false);
       }
     );
+
+    // 3. Safety timeout
+    const timeout = setTimeout(() => {
+      if (!bootstrapDone.current) {
+        console.warn("[OmniAula][useAuth] Auth timeout — forcing loading=false");
+        bootstrapDone.current = true;
+        setLoading(false);
+      }
+    }, 8000);
 
     return () => {
       clearTimeout(timeout);
