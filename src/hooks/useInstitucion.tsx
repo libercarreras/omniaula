@@ -43,50 +43,36 @@ export function InstitucionProvider({ children }: { children: ReactNode }) {
       return;
     }
     setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("profesor_institucion")
-        .select("institucion_id, rol, instituciones(id, nombre, direccion, ciudad, user_id)")
-        .eq("user_id", user.id);
+    const { data } = await supabase
+      .from("profesor_institucion")
+      .select("institucion_id, rol, instituciones(id, nombre, direccion, ciudad, user_id)")
+      .eq("user_id", user.id);
 
-      if (error) {
-        console.error("[OmniAula][useInstitucion] fetch error:", error);
-        setLoading(false);
-        return;
-      }
+    type ProfesorInstitucionRow = {
+      institucion_id: string;
+      rol: string;
+      instituciones: { id: string; nombre: string; direccion: string | null; ciudad: string | null; user_id: string } | null;
+    };
+    const mapped: Institucion[] = (data || []).map((row: ProfesorInstitucionRow) => ({
+      id: row.instituciones.id,
+      nombre: row.instituciones.nombre,
+      direccion: row.instituciones.direccion,
+      ciudad: row.instituciones.ciudad,
+      user_id: row.instituciones.user_id,
+      rol: row.rol,
+    }));
 
-      type ProfesorInstitucionRow = {
-        institucion_id: string;
-        rol: string;
-        instituciones: { id: string; nombre: string; direccion: string | null; ciudad: string | null; user_id: string } | null;
-      };
+    setInstituciones(mapped);
 
-      const mapped: Institucion[] = (data || [])
-        .filter((row: ProfesorInstitucionRow) => row.instituciones != null)
-        .map((row: ProfesorInstitucionRow) => ({
-          id: row.instituciones!.id,
-          nombre: row.instituciones!.nombre,
-          direccion: row.instituciones!.direccion,
-          ciudad: row.instituciones!.ciudad,
-          user_id: row.instituciones!.user_id,
-          rol: row.rol,
-        }));
-
-      setInstituciones(mapped);
-
-      const savedId = localStorage.getItem(STORAGE_KEY);
-      const saved = mapped.find(i => i.id === savedId);
-      if (saved) {
-        setInstitucionActivaState(saved);
-      } else if (mapped.length > 0) {
-        setInstitucionActivaState(mapped[0]);
-        localStorage.setItem(STORAGE_KEY, mapped[0].id);
-      }
-    } catch (err) {
-      console.error("[OmniAula][useInstitucion] unexpected error:", err);
-    } finally {
-      setLoading(false);
+    const savedId = localStorage.getItem(STORAGE_KEY);
+    const saved = mapped.find(i => i.id === savedId);
+    if (saved) {
+      setInstitucionActivaState(saved);
+    } else if (mapped.length > 0) {
+      setInstitucionActivaState(mapped[0]);
+      localStorage.setItem(STORAGE_KEY, mapped[0].id);
     }
+    setLoading(false);
   };
 
   useEffect(() => {

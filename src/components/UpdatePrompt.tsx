@@ -1,44 +1,61 @@
-import { useEffect, useRef } from "react";
 import { useRegisterSW } from "virtual:pwa-register/react";
-import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { RefreshCw, X } from "lucide-react";
 
 export function UpdatePrompt() {
-  const toastShown = useRef(false);
-
-  useRegisterSW({
+  const {
+    needRefresh: [needRefresh, setNeedRefresh],
+    updateServiceWorker,
+  } = useRegisterSW({
     onRegisteredSW(swUrl, registration) {
-      console.log("[OmniAula][SW] Registrado:", swUrl);
-      // Poll for updates every 60s
-      if (registration) {
-        setInterval(() => registration.update(), 60_000);
+      console.log("[OmniAula][SW] Registrado:", swUrl, "| Scope:", registration?.scope, "| Timestamp:", new Date().toISOString());
+      if (registration?.waiting) {
+        console.warn("[OmniAula][SW] Nueva versión esperando activación");
       }
     },
     onRegisterError(error) {
-      console.error("[OmniAula][SW] Error de registro:", error);
+      console.error("[OmniAula][SW] Error de registro:", error, "| Timestamp:", new Date().toISOString());
     },
   });
 
-  // Show toast once after a SW-triggered reload
-  useEffect(() => {
-    if (toastShown.current) return;
-    const updated = sessionStorage.getItem("omniaula_sw_updated");
-    if (updated) {
-      sessionStorage.removeItem("omniaula_sw_updated");
-      toastShown.current = true;
-      toast.success("App actualizada a la última versión", { duration: 3000 });
-    }
-  }, []);
+  if (!needRefresh) return null;
 
-  // Set flag before SW reload so toast shows after
-  useEffect(() => {
-    const onControllerChange = () => {
-      sessionStorage.setItem("omniaula_sw_updated", "1");
-    };
-    navigator.serviceWorker?.addEventListener("controllerchange", onControllerChange);
-    return () => {
-      navigator.serviceWorker?.removeEventListener("controllerchange", onControllerChange);
-    };
-  }, []);
-
-  return null;
+  return (
+    <div className="fixed bottom-4 left-4 right-4 z-[9999] mx-auto max-w-md animate-in slide-in-from-bottom-4 fade-in duration-300">
+      <div className="flex items-start gap-3 rounded-xl border bg-card p-4 shadow-lg">
+        <RefreshCw className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+        <div className="flex-1 space-y-2">
+          <p className="text-sm font-medium text-foreground">
+            Hay una nueva versión disponible de la aplicación.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Presiona actualizar para cargar la versión más reciente.
+          </p>
+          <div className="flex gap-2 pt-1">
+            <Button
+              size="sm"
+              onClick={() => updateServiceWorker(true)}
+              className="gap-1.5"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Actualizar
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setNeedRefresh(false)}
+            >
+              Más tarde
+            </Button>
+          </div>
+        </div>
+        <button
+          onClick={() => setNeedRefresh(false)}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
 }

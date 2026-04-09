@@ -9,12 +9,12 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
-export const DIAS_SEMANA = [
+const DIAS_SEMANA = [
   { key: "Lun", label: "Lun" }, { key: "Mar", label: "Mar" }, { key: "Mié", label: "Mié" },
   { key: "Jue", label: "Jue" }, { key: "Vie", label: "Vie" }, { key: "Sáb", label: "Sáb" },
 ];
 
-export const HORA_OPTIONS = (() => {
+const HORA_OPTIONS = (() => {
   const opts: string[] = [];
   for (let h = 7; h <= 22; h++) {
     opts.push(`${h}:00`);
@@ -37,7 +37,7 @@ const parseHorarioToState = (horario: string | null) => {
   return { dias: diasFound, horaInicio: singleMatch ? singleMatch[1] : "", horaFin: "" };
 };
 
-export const buildHorarioString = (dias: string[], horaInicio: string, horaFin: string) => {
+const buildHorarioString = (dias: string[], horaInicio: string, horaFin: string) => {
   if (dias.length === 0) return null;
   const ordered = DIAS_SEMANA.filter(d => dias.includes(d.key)).map(d => d.key);
   const horaPart = horaInicio && horaFin ? `${horaInicio}-${horaFin}` : horaInicio || "";
