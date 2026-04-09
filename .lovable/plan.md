@@ -2,51 +2,65 @@
 
 ## Diagnóstico
 
-El problema es una **carrera de condiciones entre Login.tsx y el AuthProvider**:
+El flujo de auth tiene demasiadas condiciones de carrera acumuladas por los intentos previos de fix. El problema fundamental: `onAuthStateChange` es un callback async pero Supabase no lo awaita, lo que significa que múltiples eventos pueden ejecutarse concurrentemente y pisar estado entre sí. Además, condicionar `setUser` a que `fetchProfile` termine crea un acoplamiento frágil.
 
-1. App monta → bootstrap corre → no hay sesión → `loading = false`
-2. Usuario hace login → `signInWithPassword` devuelve 200 → Login.tsx llama `navigate("/")` **inmediatamente**
-3. `ProtectedRoute` evalúa: `loading=false`, `user=null` → redirige a `/login`
-4. Recién después `onAuthStateChange(SIGNED_IN)` dispara → `fetchProfile` empieza → eventualmente setea user/session
-5. Pero el usuario ya fue devuelto a `/login`
+Los logs confirman:
+- El timeout de 8s dispara en el boot inicial (Supabase tarda en responder)
+- Después del login, el handler de `SIGNED_IN` setea `loading=true` y espera `fetchProfile`, pero si hay cualquier error silencioso o race condition, `user` nunca se setea y la app queda cargando
 
-El resultado: loop infinito en la pantalla de login.
+## Solución: Simplificar radicalmente
 
-## Solución
+Separar la carga de auth en dos capas independientes:
 
-### 1. `src/pages/auth/Login.tsx` — No navegar manualmente
+### 1. `src/hooks/useAuth.tsx` — Reescribir el useEffect
 
-Quitar el `navigate("/")` después del login exitoso. En su lugar, usar `useAuth()` para detectar cuando `user` se setea y redirigir reactivamente:
+**Capa 1: Auth state** — Setear `user`/`session` INMEDIATAMENTE desde `onAuthStateChange`, sin esperar nada:
 
 ```typescript
-const { user } = useAuth();
+onAuthStateChange((event, sess) => {
+  if (event === "SIGNED_OUT") { clearState(); setLoading(false); return; }
+  setSession(sess);
+  setUser(sess?.user ?? null);
+  setLoading(false);
+});
+```
 
+**Capa 2: Profile** — Un `useEffect` separado que depende de `user`:
+
+```typescript
 useEffect(() => {
-  if (user) navigate("/", { replace: true });
-}, [user, navigate]);
+  if (!user) { setProfile(null); setRole(null); return; }
+  fetchProfile(user.id);
+}, [user?.id]);
 ```
 
-En `handleLogin`, simplemente no hacer nada después del éxito (la redirección ocurre sola cuando el AuthProvider actualiza `user`).
+**Bootstrap**: `getSession()` sigue corriendo antes del listener, pero solo para restaurar la sesión. No necesita lógica compleja.
 
-### 2. `src/hooks/useAuth.tsx` — Reactivar loading durante login
+### 2. `src/components/auth/ProtectedRoute.tsx` — Verificar profile
 
-Cuando `onAuthStateChange` recibe un `SIGNED_IN` y el bootstrap ya terminó, setear `loading = true` antes de fetchProfile. Esto hace que `ProtectedRoute` muestre el spinner en vez de redirigir a login mientras se carga el perfil.
+Cambiar la condición para que también espere el perfil:
 
 ```typescript
-if (sess?.user) {
-  setLoading(true); // ← evita que ProtectedRoute redirija durante fetchProfile
-  try {
-    const ok = await fetchProfile(sess.user.id);
-    // ...
-  }
-}
+const { user, profile, loading } = useAuth();
+if (loading) return <spinner>;
+if (!user) return <Navigate to="/login">;
+if (!profile) return <spinner>; // esperando fetchProfile
+return children;
 ```
 
-### Archivos a modificar
-- `src/pages/auth/Login.tsx`
-- `src/hooks/useAuth.tsx`
+### 3. `src/components/layout/AppLayout.tsx` — Fallback seguro
+
+Si `profile?.nombre` es falsy, mostrar el email del usuario en vez de "??".
 
 ### Resultado
-- Login exitoso → AuthProvider procesa el evento → setea loading=true → fetchProfile → setea user+profile → loading=false → ProtectedRoute deja pasar → Dashboard muestra "Karen Carreras"
-- No hay ventana de tiempo donde user=null y loading=false después de un login exitoso
+- Auth state siempre sincronizado con Supabase (sin esperar queries)
+- Profile se carga en paralelo, ProtectedRoute espera ambos
+- No hay ventana donde `user` existe pero `profile` no (el spinner cubre esa transición)
+- Imposible quedar en loading infinito: el auth state se resuelve inmediatamente
+- El "??" desaparece porque nunca se renderiza la app sin profile
+
+### Archivos a modificar
+- `src/hooks/useAuth.tsx`
+- `src/components/auth/ProtectedRoute.tsx`
+- `src/components/layout/AppLayout.tsx` (fallback menor)
 
