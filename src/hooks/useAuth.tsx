@@ -121,17 +121,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    let mounted = true;
-    let bootstrapDone = false;
+    const mountedRef_ = { current: true };
+    const bootstrapCompleteRef_ = { current: false };
 
-    // Safety-net timeout — if profile never loaded, force to login
+    // Safety-net timeout — if bootstrap never completed, force to login
     const timeout = setTimeout(() => {
-      if (mounted && loading) {
-        console.warn("[OmniAula][useAuth] Auth timeout — forcing loading=false");
-        // If we have a user but no profile, the session is incomplete
-        if (user && !profile) {
-          signOut();
-        }
+      if (mountedRef_.current && !bootstrapCompleteRef_.current) {
+        console.warn("[OmniAula][useAuth] Auth timeout — bootstrap incomplete, forcing loading=false");
         setLoading(false);
       }
     }, 8000);
@@ -139,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // 1. Listener for ongoing auth events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, sess) => {
-        if (!mounted) return;
+        if (!mountedRef_.current) return;
         if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
           setSession(sess);
           setUser(sess?.user ?? null);
@@ -151,40 +147,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         // Skip INITIAL_SESSION if bootstrap already handled it
-        if (event === "INITIAL_SESSION" && bootstrapDone) return;
+        if (event === "INITIAL_SESSION" && bootstrapCompleteRef_.current) return;
 
         // Don't set user/session yet — wait for profile
         if (sess?.user) {
           try {
             const ok = await fetchProfile(sess.user.id);
-            if (ok && mounted) {
+            if (ok && mountedRef_.current) {
               setSession(sess);
               setUser(sess.user);
-            } else if (mounted) {
+            } else if (mountedRef_.current) {
               toast.error("La cuenta no terminó de configurarse. Intentá de nuevo.");
               await signOut();
             }
           } catch (err) {
             console.error("[OmniAula][useAuth] fetchProfile falló:", err);
-            // Don't clearState on transient errors — keep existing profile
           }
         }
-        if (mounted) setLoading(false);
+        if (mountedRef_.current) setLoading(false);
       }
     );
 
     // 2. Bootstrap: restore session from storage
     supabase.auth.getSession().then(async ({ data: { session: sess } }) => {
-      if (!mounted) return;
-      bootstrapDone = true;
+      if (!mountedRef_.current) return;
+      bootstrapCompleteRef_.current = true;
       try {
         if (sess?.user) {
           const ok = await fetchProfile(sess.user.id);
-          if (ok && mounted) {
-            // Only set user/session AFTER profile is confirmed
+          if (ok && mountedRef_.current) {
             setSession(sess);
             setUser(sess.user);
-          } else if (mounted) {
+          } else if (mountedRef_.current) {
             console.warn("[OmniAula][useAuth] No profile found on bootstrap — signing out");
             toast.error("La cuenta no terminó de configurarse. Intentá de nuevo.");
             await signOut();
@@ -193,7 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.error("[OmniAula][useAuth] bootstrap fetchProfile falló:", err);
       } finally {
-        if (mounted) {
+        if (mountedRef_.current) {
           clearTimeout(timeout);
           setLoading(false);
         }
@@ -201,7 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
-      mounted = false;
+      mountedRef_.current = false;
       clearTimeout(timeout);
       subscription.unsubscribe();
     };
