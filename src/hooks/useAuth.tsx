@@ -122,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
+    let bootstrapDone = false;
 
     // Safety-net timeout
     const timeout = setTimeout(() => {
@@ -142,23 +143,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         if (event === "SIGNED_OUT") {
           clearState();
+          setLoading(false);
           return;
         }
+        // Skip INITIAL_SESSION if bootstrap already handled it
+        if (event === "INITIAL_SESSION" && bootstrapDone) return;
+
         setSession(sess);
         setUser(sess?.user ?? null);
-        try {
-          if (sess?.user) {
+        if (sess?.user) {
+          try {
             const ok = await fetchProfile(sess.user.id);
             if (!ok && mounted) {
               toast.error("La cuenta no terminó de configurarse. Intentá de nuevo.");
               await signOut();
             }
-          } else {
-            clearState();
+          } catch (err) {
+            console.error("[OmniAula][useAuth] fetchProfile falló:", err);
+            // Don't clearState on transient errors — keep existing profile
           }
-        } catch (err) {
-          console.error("[OmniAula][useAuth] fetchProfile falló:", err);
-          clearState();
         }
       }
     );
@@ -166,6 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // 2. Bootstrap: restore session from storage
     supabase.auth.getSession().then(async ({ data: { session: sess } }) => {
       if (!mounted) return;
+      bootstrapDone = true;
       setSession(sess);
       setUser(sess?.user ?? null);
       try {

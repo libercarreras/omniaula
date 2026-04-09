@@ -1,0 +1,18 @@
+-- Re-create triggers (the previous migration may have failed silently)
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_new_user();
+
+DROP TRIGGER IF EXISTS on_auth_user_created_role ON auth.users;
+CREATE TRIGGER on_auth_user_created_role
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_new_user_role();
+
+DROP TRIGGER IF EXISTS on_auth_user_created_institucion ON auth.users;
+CREATE TRIGGER on_auth_user_created_institucion
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_new_user_institucion();
