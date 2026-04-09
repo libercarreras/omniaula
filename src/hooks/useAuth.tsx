@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, createContext, useContext, ReactNode } from "react";
+import { useState, useEffect, createContext, useContext, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 import { toast } from "sonner";
@@ -64,49 +64,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRole(null);
   };
 
-  const fetchProfile = async (userId: string): Promise<boolean> => {
-    const limitsPromise = planLimitsCache
-      ? Promise.resolve({ data: planLimitsCache, error: null })
-      : supabase.from("plan_limits").select("*");
+  const fetchProfile = async (userId: string) => {
+    try {
+      const limitsPromise = planLimitsCache
+        ? Promise.resolve({ data: planLimitsCache, error: null })
+        : supabase.from("plan_limits").select("*");
 
-    const [profileRes, roleRes, allLimitsRes] = await Promise.all([
-      supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
-      supabase.from("user_roles").select("role").eq("user_id", userId),
-      limitsPromise,
-    ]);
+      const [profileRes, roleRes, allLimitsRes] = await Promise.all([
+        supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
+        supabase.from("user_roles").select("role").eq("user_id", userId),
+        limitsPromise,
+      ]);
 
-    if (!profileRes.data) {
-      // Profile missing — session is incomplete
-      console.error("[OmniAula][useAuth] Profile not found for user:", userId);
-      return false;
+      if (!profileRes.data) {
+        console.error("[OmniAula][useAuth] Profile not found for user:", userId);
+        toast.error("La cuenta no terminó de configurarse. Intentá de nuevo.");
+        await signOut();
+        return;
+      }
+
+      const p = profileRes.data as Profile;
+      setProfile(p);
+
+      if (allLimitsRes.data && !planLimitsCache) {
+        planLimitsCache = allLimitsRes.data as PlanLimits[];
+      }
+      const limits = (planLimitsCache || []).find((l) => l.plan === p.plan) ?? null;
+      if (limits) setPlanLimits(limits as PlanLimits);
+
+      if (roleRes.data && roleRes.data.length > 0) {
+        const roles = roleRes.data.map((r) => r.role);
+        setRole(roles.includes("admin") ? "admin" : "docente");
+      } else {
+        setRole("docente");
+      }
+    } catch (err) {
+      console.error("[OmniAula][useAuth] fetchProfile error:", err);
     }
-
-    const p = profileRes.data as Profile;
-    setProfile(p);
-
-    if (allLimitsRes.data && !planLimitsCache) {
-      planLimitsCache = allLimitsRes.data as PlanLimits[];
-    }
-    const limits = (planLimitsCache || []).find((l) => l.plan === p.plan) ?? null;
-    if (limits) setPlanLimits(limits as PlanLimits);
-
-    if (roleRes.data && roleRes.data.length > 0) {
-      const roles = roleRes.data.map((r) => r.role);
-      setRole(roles.includes("admin") ? "admin" : "docente");
-    } else {
-      setRole("docente");
-    }
-
-    return true;
   };
 
   const refreshProfile = async () => {
     if (!user) return;
-    try {
-      await fetchProfile(user.id);
-    } catch (err) {
-      console.error("[OmniAula][useAuth] refreshProfile falló:", err);
-    }
+    await fetchProfile(user.id);
   };
 
   const signOut = async () => {
@@ -115,92 +114,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error("[OmniAula][useAuth] signOut error (ignored):", err);
     }
-    // Always clear local state
     clearState();
     localStorage.removeItem("institucion_activa_id");
   };
 
+  // Layer 1: Auth state — immediate, no async work
   useEffect(() => {
-    const mountedRef_ = { current: true };
-    const bootstrapCompleteRef_ = { current: false };
+    let mounted = true;
 
-    // Safety-net timeout — if bootstrap never completed, force to login
-    const timeout = setTimeout(() => {
-      if (mountedRef_.current && !bootstrapCompleteRef_.current) {
-        console.warn("[OmniAula][useAuth] Auth timeout — bootstrap incomplete, forcing loading=false");
-        setLoading(false);
-      }
-    }, 8000);
-
-    // 1. Listener for ongoing auth events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, sess) => {
-        if (!mountedRef_.current) return;
-        if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
-          setSession(sess);
-          setUser(sess?.user ?? null);
-          return;
-        }
+      (event, sess) => {
+        if (!mounted) return;
         if (event === "SIGNED_OUT") {
           clearState();
           setLoading(false);
           return;
         }
-        // Skip INITIAL_SESSION if bootstrap already handled it
-        if (event === "INITIAL_SESSION" && bootstrapCompleteRef_.current) return;
-
-        // Don't set user/session yet — wait for profile
-        if (sess?.user) {
-          setLoading(true); // Prevent ProtectedRoute from redirecting during fetchProfile
-          try {
-            const ok = await fetchProfile(sess.user.id);
-            if (ok && mountedRef_.current) {
-              setSession(sess);
-              setUser(sess.user);
-            } else if (mountedRef_.current) {
-              toast.error("La cuenta no terminó de configurarse. Intentá de nuevo.");
-              await signOut();
-            }
-          } catch (err) {
-            console.error("[OmniAula][useAuth] fetchProfile falló:", err);
-          }
-        }
-        if (mountedRef_.current) setLoading(false);
+        setSession(sess);
+        setUser(sess?.user ?? null);
+        setLoading(false);
       }
     );
 
-    // 2. Bootstrap: restore session from storage
-    supabase.auth.getSession().then(async ({ data: { session: sess } }) => {
-      if (!mountedRef_.current) return;
-      bootstrapCompleteRef_.current = true;
-      try {
-        if (sess?.user) {
-          const ok = await fetchProfile(sess.user.id);
-          if (ok && mountedRef_.current) {
-            setSession(sess);
-            setUser(sess.user);
-          } else if (mountedRef_.current) {
-            console.warn("[OmniAula][useAuth] No profile found on bootstrap — signing out");
-            toast.error("La cuenta no terminó de configurarse. Intentá de nuevo.");
-            await signOut();
-          }
-        }
-      } catch (err) {
-        console.error("[OmniAula][useAuth] bootstrap fetchProfile falló:", err);
-      } finally {
-        if (mountedRef_.current) {
-          clearTimeout(timeout);
-          setLoading(false);
-        }
-      }
+    // Bootstrap: restore session from storage
+    supabase.auth.getSession().then(({ data: { session: sess } }) => {
+      if (!mounted) return;
+      setSession(sess);
+      setUser(sess?.user ?? null);
+      setLoading(false);
     });
 
     return () => {
-      mountedRef_.current = false;
-      clearTimeout(timeout);
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
+
+  // Layer 2: Profile — runs whenever user changes
+  useEffect(() => {
+    if (!user) {
+      setProfile(null);
+      setPlanLimits(null);
+      setRole(null);
+      return;
+    }
+    fetchProfile(user.id);
+  }, [user?.id]);
 
   return (
     <AuthContext.Provider value={{ user, session, profile, planLimits, role, loading, signOut, refreshProfile }}>

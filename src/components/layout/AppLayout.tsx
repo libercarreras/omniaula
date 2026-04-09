@@ -18,14 +18,15 @@ import { InstallPWAButton } from "@/components/InstallPWAButton";
 
 export function AppLayout() {
   const isMobile = useIsMobile();
-  const { profile, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const location = useLocation();
 
+  const displayName = profile?.nombre || user?.email || "Docente";
   const initials = profile?.nombre
     ? profile.nombre.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
-    : "??";
+    : (user?.email?.[0]?.toUpperCase() || "D");
 
   const handleSignOut = async () => {
     localStorage.removeItem("institucion_activa_id");
@@ -72,7 +73,7 @@ export function AppLayout() {
                   </Avatar>
                   {!isMobile && (
                     <span className="text-sm font-medium max-w-[120px] truncate">
-                      {profile?.nombre || "Docente"}
+                      {displayName}
                     </span>
                   )}
                 </Button>
