@@ -1,60 +1,52 @@
 
 
-## Problem
+## Diagnóstico
 
-Two issues causing the auth to appear broken:
+El problema es una **carrera de condiciones entre Login.tsx y el AuthProvider**:
 
-1. **Stale closure in timeout**: The 8-second safety timeout at line 128 reads `user`, `profile`, and `loading` from the React closure, which are always their initial values (`null`, `null`, `true`). This means the timeout **always fires** even if bootstrap completed successfully, logging a misleading warning. It's harmless now (since `user` is null in the closure, it won't signOut), but it creates confusion and could interfere with edge cases.
+1. App monta → bootstrap corre → no hay sesión → `loading = false`
+2. Usuario hace login → `signInWithPassword` devuelve 200 → Login.tsx llama `navigate("/")` **inmediatamente**
+3. `ProtectedRoute` evalúa: `loading=false`, `user=null` → redirige a `/login`
+4. Recién después `onAuthStateChange(SIGNED_IN)` dispara → `fetchProfile` empieza → eventualmente setea user/session
+5. Pero el usuario ya fue devuelto a `/login`
 
-2. **No database triggers**: Despite multiple migration attempts, the triggers that auto-create profiles/roles/institutions for new users still don't exist. Current users have data (backfill worked), but any new signup will break.
+El resultado: loop infinito en la pantalla de login.
 
-## Changes
+## Solución
 
-### 1. `src/hooks/useAuth.tsx` — Fix stale closure with refs
+### 1. `src/pages/auth/Login.tsx` — No navegar manualmente
 
-Replace direct state reads in the timeout with `useRef` values that stay current:
+Quitar el `navigate("/")` después del login exitoso. En su lugar, usar `useAuth()` para detectar cuando `user` se setea y redirigir reactivamente:
 
 ```typescript
-const mountedRef = useRef(true);
-const bootstrapCompleteRef = useRef(false);
+const { user } = useAuth();
 
-// In the timeout:
-const timeout = setTimeout(() => {
-  if (mountedRef.current && !bootstrapCompleteRef.current) {
-    console.warn("[OmniAula][useAuth] Auth timeout");
-    setLoading(false);
+useEffect(() => {
+  if (user) navigate("/", { replace: true });
+}, [user, navigate]);
+```
+
+En `handleLogin`, simplemente no hacer nada después del éxito (la redirección ocurre sola cuando el AuthProvider actualiza `user`).
+
+### 2. `src/hooks/useAuth.tsx` — Reactivar loading durante login
+
+Cuando `onAuthStateChange` recibe un `SIGNED_IN` y el bootstrap ya terminó, setear `loading = true` antes de fetchProfile. Esto hace que `ProtectedRoute` muestre el spinner en vez de redirigir a login mientras se carga el perfil.
+
+```typescript
+if (sess?.user) {
+  setLoading(true); // ← evita que ProtectedRoute redirija durante fetchProfile
+  try {
+    const ok = await fetchProfile(sess.user.id);
+    // ...
   }
-}, 8000);
-
-// In bootstrap finally:
-bootstrapCompleteRef.current = true;
-clearTimeout(timeout);
-setLoading(false);
+}
 ```
 
-This ensures the timeout only fires if bootstrap genuinely hasn't completed, and never fires spuriously after success.
+### Archivos a modificar
+- `src/pages/auth/Login.tsx`
+- `src/hooks/useAuth.tsx`
 
-### 2. Database migration — Create triggers (idempotent)
-
-```sql
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
-DROP TRIGGER IF EXISTS on_auth_user_created_role ON auth.users;
-CREATE TRIGGER on_auth_user_created_role
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user_role();
-
-DROP TRIGGER IF EXISTS on_auth_user_created_institucion ON auth.users;
-CREATE TRIGGER on_auth_user_created_institucion
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user_institucion();
-```
-
-### Result
-- The timeout stops firing spuriously — no more misleading console warnings
-- Bootstrap completes cleanly, profile loads, "Karen Carreras" shows immediately
-- New user signups automatically get profile + role + institution
+### Resultado
+- Login exitoso → AuthProvider procesa el evento → setea loading=true → fetchProfile → setea user+profile → loading=false → ProtectedRoute deja pasar → Dashboard muestra "Karen Carreras"
+- No hay ventana de tiempo donde user=null y loading=false después de un login exitoso
 
