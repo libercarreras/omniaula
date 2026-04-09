@@ -73,7 +73,7 @@ export function AppLayout() {
                   </Avatar>
                   {!isMobile && (
                     <span className="text-sm font-medium max-w-[120px] truncate">
-                      {profile?.nombre || "Docente"}
+                      {displayName}
                     </span>
                   )}
                 </Button>
