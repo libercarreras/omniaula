@@ -124,10 +124,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let mounted = true;
     let bootstrapDone = false;
 
-    // Safety-net timeout
+    // Safety-net timeout — if profile never loaded, force to login
     const timeout = setTimeout(() => {
       if (mounted && loading) {
         console.warn("[OmniAula][useAuth] Auth timeout — forcing loading=false");
+        // If we have a user but no profile, the session is incomplete
+        if (user && !profile) {
+          signOut();
+        }
         setLoading(false);
       }
     }, 8000);
@@ -149,12 +153,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Skip INITIAL_SESSION if bootstrap already handled it
         if (event === "INITIAL_SESSION" && bootstrapDone) return;
 
-        setSession(sess);
-        setUser(sess?.user ?? null);
+        // Don't set user/session yet — wait for profile
         if (sess?.user) {
           try {
             const ok = await fetchProfile(sess.user.id);
-            if (!ok && mounted) {
+            if (ok && mounted) {
+              setSession(sess);
+              setUser(sess.user);
+            } else if (mounted) {
               toast.error("La cuenta no terminó de configurarse. Intentá de nuevo.");
               await signOut();
             }
@@ -163,6 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // Don't clearState on transient errors — keep existing profile
           }
         }
+        if (mounted) setLoading(false);
       }
     );
 
@@ -170,12 +177,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(async ({ data: { session: sess } }) => {
       if (!mounted) return;
       bootstrapDone = true;
-      setSession(sess);
-      setUser(sess?.user ?? null);
       try {
         if (sess?.user) {
           const ok = await fetchProfile(sess.user.id);
-          if (!ok && mounted) {
+          if (ok && mounted) {
+            // Only set user/session AFTER profile is confirmed
+            setSession(sess);
+            setUser(sess.user);
+          } else if (mounted) {
             console.warn("[OmniAula][useAuth] No profile found on bootstrap — signing out");
             toast.error("La cuenta no terminó de configurarse. Intentá de nuevo.");
             await signOut();
